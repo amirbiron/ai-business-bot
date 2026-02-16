@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2 class="mb-4"><i class="bi bi-chat-dots"></i> Conversation Logs</h2>
+
+<div class="row">
+    <!-- User List -->
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-header"><strong>Users</strong></div>
+            <div class="list-group list-group-flush" style="max-height: 70vh; overflow-y: auto;">
+                <a href="/conversations" 
+                   class="list-group-item list-group-item-action {% if not selected_user %}active{% endif %}">
+                    <i class="bi bi-chat-dots"></i> All Messages
+                </a>
+                {% for user in users %}
+                <a href="/conversations?user_id={{ user.user_id }}" 
+                   class="list-group-item list-group-item-action {% if selected_user == user.user_id %}active{% endif %}">
+                    <div class="d-flex justify-content-between">
+                        <strong>{{ user.username or 'Unknown' }}</strong>
+                        <span class="badge bg-secondary">{{ user.message_count }}</span>
+                    </div>
+                    <small class="text-muted">Last: {{ user.last_active }}</small>
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Messages -->
+    <div class="col-md-9">
+        <div class="card">
+            <div class="card-header">
+                <strong>
+                    {% if selected_user %}
+                    Messages with User {{ selected_user }}
+                    {% else %}
+                    All Recent Messages
+                    {% endif %}
+                </strong>
+            </div>
+            <div class="card-body" style="max-height: 70vh; overflow-y: auto;">
+                {% if messages %}
+                {% for msg in messages %}
+                <div class="mb-3 p-3 rounded {% if msg.role == 'user' %}bg-light{% else %}bg-white border{% endif %}">
+                    <div class="d-flex justify-content-between mb-1">
+                        <strong>
+                            {% if msg.role == 'user' %}
+                            <i class="bi bi-person-circle text-primary"></i>
+                            {{ msg.get('username', 'Customer') if msg.get('username') else 'Customer' }}
+                            {% else %}
+                            <i class="bi bi-robot text-success"></i> Bot
+                            {% endif %}
+                        </strong>
+                        <small class="text-muted">{{ msg.created_at }}</small>
+                    </div>
+                    <p class="mb-1">{{ msg.message }}</p>
+                    {% if msg.sources %}
+                    <small class="text-muted"><i class="bi bi-link-45deg"></i> Sources: {{ msg.sources }}</small>
+                    {% endif %}
+                </div>
+                {% endfor %}
+                {% else %}
+                <p class="text-muted text-center py-4">No messages yet.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

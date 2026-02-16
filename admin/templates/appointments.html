@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2 class="mb-4"><i class="bi bi-calendar-check"></i> Appointments</h2>
+
+<div class="card">
+    <div class="card-body">
+        {% if appointments %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Customer</th>
+                        <th>Service</th>
+                        <th>Date</th>
+                        <th>Time</th>
+                        <th>Notes</th>
+                        <th>Status</th>
+                        <th>Created</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for appt in appointments %}
+                    <tr>
+                        <td>{{ appt.id }}</td>
+                        <td>
+                            <strong>{{ appt.username }}</strong>
+                            <br><small class="text-muted">ID: {{ appt.user_id }}</small>
+                        </td>
+                        <td>{{ appt.service }}</td>
+                        <td>{{ appt.preferred_date }}</td>
+                        <td>{{ appt.preferred_time }}</td>
+                        <td>{{ appt.notes }}</td>
+                        <td>
+                            {% if appt.status == 'pending' %}
+                            <span class="badge bg-warning text-dark">Pending</span>
+                            {% elif appt.status == 'confirmed' %}
+                            <span class="badge bg-success">Confirmed</span>
+                            {% elif appt.status == 'cancelled' %}
+                            <span class="badge bg-danger">Cancelled</span>
+                            {% endif %}
+                        </td>
+                        <td><small>{{ appt.created_at }}</small></td>
+                        <td>
+                            {% if appt.status == 'pending' %}
+                            <form method="POST" action="/appointments/{{ appt.id }}/update" class="d-inline">
+                                <input type="hidden" name="status" value="confirmed">
+                                <button type="submit" class="btn btn-sm btn-success">
+                                    <i class="bi bi-check-lg"></i> Confirm
+                                </button>
+                            </form>
+                            <form method="POST" action="/appointments/{{ appt.id }}/update" class="d-inline">
+                                <input type="hidden" name="status" value="cancelled">
+                                <button type="submit" class="btn btn-sm btn-outline-danger">
+                                    <i class="bi bi-x-lg"></i> Cancel
+                                </button>
+                            </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted text-center py-4">No appointments yet.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

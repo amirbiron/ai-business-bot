@@ -1,0 +1,18 @@
+# ─── Core Libraries ───────────────────────────────────────────────────────────
+
+# Telegram Bot
+python-telegram-bot[ext]
+
+# LLM & Embeddings
+openai
+
+# Vector Store
+faiss-cpu
+numpy
+
+# Web Admin Panel
+flask
+gunicorn
+
+# Configuration
+python-dotenv

@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ business_name }} — Admin Panel</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #6c5ce7;
+            --primary-light: #a29bfe;
+            --sidebar-bg: #2d3436;
+            --sidebar-text: #dfe6e9;
+        }
+        body { background-color: #f8f9fa; }
+        .sidebar {
+            min-height: 100vh;
+            background-color: var(--sidebar-bg);
+            padding-top: 1rem;
+        }
+        .sidebar .nav-link {
+            color: var(--sidebar-text);
+            padding: 0.75rem 1.25rem;
+            border-radius: 0.5rem;
+            margin: 0.15rem 0.5rem;
+        }
+        .sidebar .nav-link:hover,
+        .sidebar .nav-link.active {
+            background-color: var(--primary);
+            color: white;
+        }
+        .sidebar .brand {
+            color: white;
+            font-size: 1.25rem;
+            font-weight: 700;
+            padding: 0.75rem 1.25rem;
+            margin-bottom: 1rem;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .stat-card {
+            border: none;
+            border-radius: 1rem;
+            transition: transform 0.2s;
+        }
+        .stat-card:hover { transform: translateY(-2px); }
+        .badge-pending { background-color: #fdcb6e; color: #2d3436; }
+        .badge-handled { background-color: #00b894; color: white; }
+        .content-area { padding: 2rem; }
+        .notification-badge {
+            position: absolute;
+            top: 5px;
+            right: 10px;
+            font-size: 0.7rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar -->
+            <nav class="col-md-3 col-lg-2 d-md-block sidebar collapse">
+                <div class="brand">
+                    <i class="bi bi-robot"></i> {{ business_name }}
+                </div>
+                <ul class="nav flex-column">
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint == 'dashboard' %}active{% endif %}" href="/">
+                            <i class="bi bi-speedometer2"></i> Dashboard
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint in ['kb_list', 'kb_add', 'kb_edit'] %}active{% endif %}" href="/kb">
+                            <i class="bi bi-book"></i> Knowledge Base
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint == 'conversations' %}active{% endif %}" href="/conversations">
+                            <i class="bi bi-chat-dots"></i> Conversations
+                        </a>
+                    </li>
+                    <li class="nav-item position-relative">
+                        <a class="nav-link {% if request.endpoint == 'agent_requests' %}active{% endif %}" href="/requests">
+                            <i class="bi bi-bell"></i> Agent Requests
+                            <span id="request-badge" class="badge bg-danger notification-badge" style="display:none;"></span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint == 'appointments' %}active{% endif %}" href="/appointments">
+                            <i class="bi bi-calendar-check"></i> Appointments
+                        </a>
+                    </li>
+                    <li class="nav-item mt-4">
+                        <a class="nav-link text-danger" href="/logout">
+                            <i class="bi bi-box-arrow-left"></i> Logout
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+
+            <!-- Main Content -->
+            <main class="col-md-9 ms-sm-auto col-lg-10 content-area">
+                <!-- Flash Messages -->
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                <div class="mb-3">
+                    {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                {% endwith %}
+
+                {% block content %}{% endblock %}
+            </main>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Auto-refresh notification badge -->
+    <script>
+        async function updateBadge() {
+            try {
+                const resp = await fetch('/api/stats');
+                const data = await resp.json();
+                const badge = document.getElementById('request-badge');
+                if (data.pending_requests > 0) {
+                    badge.textContent = data.pending_requests;
+                    badge.style.display = 'inline';
+                } else {
+                    badge.style.display = 'none';
+                }
+            } catch (e) {}
+        }
+        updateBadge();
+        setInterval(updateBadge, 30000);
+    </script>
+    
+    {% block scripts %}{% endblock %}
+</body>
+</html>
