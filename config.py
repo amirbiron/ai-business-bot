@@ -12,12 +12,17 @@ load_dotenv()
 
 # ─── Paths ───────────────────────────────────────────────────────────────────
 BASE_DIR = Path(__file__).resolve().parent
-DATA_DIR = BASE_DIR / "data"
-DB_PATH = DATA_DIR / "chatbot.db"
-FAISS_INDEX_PATH = DATA_DIR / "faiss_index"
+# Render-friendly storage configuration:
+# - Render provides a dynamic `PORT` env var for web services.
+# - For persistence you can mount a disk and set `DATA_DIR` to the mount path.
+DATA_DIR = Path(os.getenv("DATA_DIR", str(BASE_DIR / "data"))).resolve()
+DB_PATH = Path(os.getenv("DB_PATH", str(DATA_DIR / "chatbot.db"))).resolve()
+FAISS_INDEX_PATH = Path(os.getenv("FAISS_INDEX_PATH", str(DATA_DIR / "faiss_index"))).resolve()
 
-# Ensure data directory exists
-DATA_DIR.mkdir(exist_ok=True)
+# Ensure data directories exist
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+FAISS_INDEX_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 # ─── Telegram ────────────────────────────────────────────────────────────────
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
@@ -37,7 +42,7 @@ ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "changeme123")
 ADMIN_SECRET_KEY = os.getenv("ADMIN_SECRET_KEY", "super-secret-key-change-me")
 ADMIN_HOST = os.getenv("ADMIN_HOST", "0.0.0.0")
-ADMIN_PORT = int(os.getenv("ADMIN_PORT", "5000"))
+ADMIN_PORT = int(os.getenv("ADMIN_PORT") or os.getenv("PORT") or "5000")
 
 # ─── Business Info (defaults for demo) ───────────────────────────────────────
 BUSINESS_NAME = os.getenv("BUSINESS_NAME", "Dana's Beauty Salon")
