@@ -51,7 +51,7 @@ def create_bot_application():
     # ─── Conversation handler for appointment booking ─────────────────────
     booking_handler = ConversationHandler(
         entry_points=[
-            MessageHandler(filters.Regex(r"^📅 Book Appointment$"), booking_start),
+            MessageHandler(filters.Regex(r"^📅 קביעת תור$"), booking_start),
             CommandHandler("book", booking_start),
         ],
         states={
