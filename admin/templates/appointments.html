@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h2 class="mb-4"><i class="bi bi-calendar-check"></i> Appointments</h2>
+<h2 class="mb-4"><i class="bi bi-calendar-check"></i> תורים</h2>
 
 <div class="card">
     <div class="card-body">
@@ -10,15 +10,15 @@
             <table class="table table-hover">
                 <thead>
                     <tr>
-                        <th>ID</th>
-                        <th>Customer</th>
-                        <th>Service</th>
-                        <th>Date</th>
-                        <th>Time</th>
-                        <th>Notes</th>
-                        <th>Status</th>
-                        <th>Created</th>
-                        <th>Actions</th>
+                        <th>מזהה</th>
+                        <th>לקוח/ה</th>
+                        <th>שירות</th>
+                        <th>תאריך</th>
+                        <th>שעה</th>
+                        <th>הערות</th>
+                        <th>סטטוס</th>
+                        <th>נוצר</th>
+                        <th>פעולות</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -27,7 +27,7 @@
                         <td>{{ appt.id }}</td>
                         <td>
                             <strong>{{ appt.username }}</strong>
-                            <br><small class="text-muted">ID: {{ appt.user_id }}</small>
+                            <br><small class="text-muted">מזהה: {{ appt.user_id }}</small>
                         </td>
                         <td>{{ appt.service }}</td>
                         <td>{{ appt.preferred_date }}</td>
@@ -35,11 +35,11 @@
                         <td>{{ appt.notes }}</td>
                         <td>
                             {% if appt.status == 'pending' %}
-                            <span class="badge bg-warning text-dark">Pending</span>
+                            <span class="badge bg-warning text-dark">ממתין</span>
                             {% elif appt.status == 'confirmed' %}
-                            <span class="badge bg-success">Confirmed</span>
+                            <span class="badge bg-success">מאושר</span>
                             {% elif appt.status == 'cancelled' %}
-                            <span class="badge bg-danger">Cancelled</span>
+                            <span class="badge bg-danger">בוטל</span>
                             {% endif %}
                         </td>
                         <td><small>{{ appt.created_at }}</small></td>
@@ -48,13 +48,13 @@
                             <form method="POST" action="/appointments/{{ appt.id }}/update" class="d-inline">
                                 <input type="hidden" name="status" value="confirmed">
                                 <button type="submit" class="btn btn-sm btn-success">
-                                    <i class="bi bi-check-lg"></i> Confirm
+                                    <i class="bi bi-check-lg"></i> אשר
                                 </button>
                             </form>
                             <form method="POST" action="/appointments/{{ appt.id }}/update" class="d-inline">
                                 <input type="hidden" name="status" value="cancelled">
                                 <button type="submit" class="btn btn-sm btn-outline-danger">
-                                    <i class="bi bi-x-lg"></i> Cancel
+                                    <i class="bi bi-x-lg"></i> בטל
                                 </button>
                             </form>
                             {% endif %}
@@ -65,7 +65,7 @@
             </table>
         </div>
         {% else %}
-        <p class="text-muted text-center py-4">No appointments yet.</p>
+        <p class="text-muted text-center py-4">אין עדיין תורים.</p>
         {% endif %}
     </div>
 </div>

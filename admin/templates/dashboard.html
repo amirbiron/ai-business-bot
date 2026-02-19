@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h2 class="mb-4"><i class="bi bi-speedometer2"></i> Dashboard</h2>
+<h2 class="mb-4"><i class="bi bi-speedometer2"></i> לוח בקרה</h2>
 
 <!-- Stats Cards -->
 <div class="row g-4 mb-4">
@@ -10,7 +10,7 @@
             <div class="card-body text-center">
                 <i class="bi bi-book" style="font-size: 2rem;"></i>
                 <h3 class="mt-2">{{ stats.kb_entries }}</h3>
-                <p class="mb-0">KB Entries</p>
+                <p class="mb-0">רשומות בסיס ידע</p>
             </div>
         </div>
     </div>
@@ -19,7 +19,7 @@
             <div class="card-body text-center">
                 <i class="bi bi-tags" style="font-size: 2rem;"></i>
                 <h3 class="mt-2">{{ stats.categories }}</h3>
-                <p class="mb-0">Categories</p>
+                <p class="mb-0">קטגוריות</p>
             </div>
         </div>
     </div>
@@ -28,7 +28,7 @@
             <div class="card-body text-center">
                 <i class="bi bi-people" style="font-size: 2rem;"></i>
                 <h3 class="mt-2">{{ stats.users }}</h3>
-                <p class="mb-0">Users</p>
+                <p class="mb-0">משתמשים</p>
             </div>
         </div>
     </div>
@@ -37,7 +37,7 @@
             <div class="card-body text-center">
                 <i class="bi bi-bell" style="font-size: 2rem;"></i>
                 <h3 class="mt-2">{{ stats.pending_requests }}</h3>
-                <p class="mb-0">Pending Requests</p>
+                <p class="mb-0">בקשות ממתינות</p>
             </div>
         </div>
     </div>
@@ -46,7 +46,7 @@
             <div class="card-body text-center">
                 <i class="bi bi-calendar-check" style="font-size: 2rem;"></i>
                 <h3 class="mt-2">{{ stats.pending_appointments }}</h3>
-                <p class="mb-0">Pending Appointments</p>
+                <p class="mb-0">תורים ממתינים</p>
             </div>
         </div>
     </div>
@@ -57,8 +57,8 @@
     <div class="col-md-6">
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
-                <strong><i class="bi bi-bell"></i> Recent Agent Requests</strong>
-                <a href="/requests" class="btn btn-sm btn-outline-primary">View All</a>
+                <strong><i class="bi bi-bell"></i> בקשות נציג אחרונות</strong>
+                <a href="/requests" class="btn btn-sm btn-outline-primary">הצג הכל</a>
             </div>
             <div class="card-body">
                 {% if recent_requests %}
@@ -69,12 +69,12 @@
                             <strong>{{ req.username }}</strong>
                             <br><small class="text-muted">{{ req.created_at }}</small>
                         </div>
-                        <span class="badge badge-pending">Pending</span>
+                        <span class="badge badge-pending">ממתין</span>
                     </div>
                     {% endfor %}
                 </div>
                 {% else %}
-                <p class="text-muted mb-0">No pending requests.</p>
+                <p class="text-muted mb-0">אין בקשות ממתינות.</p>
                 {% endif %}
             </div>
         </div>
@@ -84,8 +84,8 @@
     <div class="col-md-6">
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
-                <strong><i class="bi bi-calendar-check"></i> Recent Appointments</strong>
-                <a href="/appointments" class="btn btn-sm btn-outline-primary">View All</a>
+                <strong><i class="bi bi-calendar-check"></i> תורים אחרונים</strong>
+                <a href="/appointments" class="btn btn-sm btn-outline-primary">הצג הכל</a>
             </div>
             <div class="card-body">
                 {% if recent_appointments %}
@@ -96,12 +96,12 @@
                             <strong>{{ appt.username }}</strong>
                             <span class="badge badge-pending">{{ appt.status }}</span>
                         </div>
-                        <small>{{ appt.service }} — {{ appt.preferred_date }} at {{ appt.preferred_time }}</small>
+                        <small>{{ appt.service }} — {{ appt.preferred_date }} בשעה {{ appt.preferred_time }}</small>
                     </div>
                     {% endfor %}
                 </div>
                 {% else %}
-                <p class="text-muted mb-0">No pending appointments.</p>
+                <p class="text-muted mb-0">אין תורים ממתינים.</p>
                 {% endif %}
             </div>
         </div>

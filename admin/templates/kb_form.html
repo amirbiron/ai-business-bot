@@ -3,57 +3,57 @@
 {% block content %}
 <div class="mb-4">
     <a href="/kb" class="btn btn-outline-secondary btn-sm">
-        <i class="bi bi-arrow-left"></i> Back to Knowledge Base
+        <i class="bi bi-arrow-right"></i> חזרה לבסיס הידע
     </a>
 </div>
 
-<h2><i class="bi bi-pencil-square"></i> {{ action }} Knowledge Base Entry</h2>
+<h2><i class="bi bi-pencil-square"></i> {% if entry %}עריכת{% else %}הוספת{% endif %} רשומת בסיס ידע</h2>
 
 <div class="card mt-4">
     <div class="card-body">
         <form method="POST">
             <div class="mb-3">
-                <label for="category" class="form-label"><strong>Category</strong></label>
-                <input type="text" class="form-control" id="category" name="category" 
+                <label for="category" class="form-label"><strong>קטגוריה</strong></label>
+                <input type="text" class="form-control" id="category" name="category"
                        value="{{ entry.category if entry else '' }}"
                        list="category-list" required
-                       placeholder="e.g., Services, Pricing, FAQ, Policies, Hours, Staff, Location">
+                       placeholder="לדוגמה: שירותים, מחירון, שאלות נפוצות, מדיניות, שעות, צוות, מיקום">
                 <datalist id="category-list">
                     {% for cat in categories %}
                     <option value="{{ cat }}">
                     {% endfor %}
-                    <option value="Services">
-                    <option value="Pricing">
-                    <option value="FAQ">
-                    <option value="Policies">
-                    <option value="Hours">
-                    <option value="Staff">
-                    <option value="Location">
-                    <option value="General">
+                    <option value="שירותים">
+                    <option value="מחירון">
+                    <option value="שאלות נפוצות">
+                    <option value="מדיניות">
+                    <option value="שעות">
+                    <option value="צוות">
+                    <option value="מיקום">
+                    <option value="כללי">
                 </datalist>
-                <div class="form-text">Type a new category or select an existing one.</div>
+                <div class="form-text">הקלידו קטגוריה חדשה או בחרו קיימת.</div>
             </div>
 
             <div class="mb-3">
-                <label for="title" class="form-label"><strong>Title</strong></label>
-                <input type="text" class="form-control" id="title" name="title" 
+                <label for="title" class="form-label"><strong>כותרת</strong></label>
+                <input type="text" class="form-control" id="title" name="title"
                        value="{{ entry.title if entry else '' }}" required
-                       placeholder="e.g., Summer 2025 Price List">
+                       placeholder="לדוגמה: מחירון קיץ 2025">
             </div>
 
             <div class="mb-3">
-                <label for="content" class="form-label"><strong>Content</strong></label>
+                <label for="content" class="form-label"><strong>תוכן</strong></label>
                 <textarea class="form-control" id="content" name="content" rows="12" required
-                          placeholder="Enter the full content here. Include all details — the system will automatically chunk it for the AI.">{{ entry.content if entry else '' }}</textarea>
+                          placeholder="הכניסו את התוכן המלא כאן. כללו את כל הפרטים — המערכת תפרק אותו אוטומטית עבור הבינה המלאכותית.">{{ entry.content if entry else '' }}</textarea>
                 <div class="form-text">
-                    Write naturally. The system will split long content into smaller chunks for better AI retrieval.
+                    כתבו בצורה טבעית. המערכת תפרק תוכן ארוך לחלקים קטנים לאחזור AI טוב יותר.
                 </div>
             </div>
 
             <div class="d-flex justify-content-between">
-                <a href="/kb" class="btn btn-outline-secondary">Cancel</a>
+                <a href="/kb" class="btn btn-outline-secondary">ביטול</a>
                 <button type="submit" class="btn btn-primary" style="background-color: #6c5ce7; border: none;">
-                    <i class="bi bi-check-lg"></i> {{ action }} Entry
+                    <i class="bi bi-check-lg"></i> {% if entry %}עריכת{% else %}הוספת{% endif %} רשומה
                 </button>
             </div>
         </form>
