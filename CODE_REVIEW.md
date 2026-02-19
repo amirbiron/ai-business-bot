@@ -1,48 +1,48 @@
-# Code Review — AI Business Bot
+# סקירת קוד — AI Business Bot
 
-**Date:** 2026-02-19
-**Reviewer:** Claude (Automated Code Review)
-**Project:** AI Business Chatbot (Telegram Bot + Admin Panel + RAG Pipeline)
-
----
-
-## Summary
-
-The project is a well-structured AI-powered customer service chatbot for small businesses, featuring a Telegram bot interface, a Flask admin panel, and a RAG (Retrieval-Augmented Generation) pipeline backed by FAISS. The codebase is clean, modular, and demonstrates good software engineering practices. Below is a detailed review organized by severity.
+**תאריך:** 2026-02-19
+**סוקר:** Claude (סקירת קוד אוטומטית)
+**פרויקט:** צ'אטבוט עסקי מבוסס AI (בוט טלגרם + פאנל ניהול + מנוע RAG)
 
 ---
 
-## Critical Issues
+## תקציר
 
-### 1. Security: Plaintext Password Comparison (admin/app.py:66)
+הפרויקט הוא צ'אטבוט שירות לקוחות מבוסס AI לעסקים קטנים, הכולל ממשק בוט טלגרם, פאנל ניהול Flask, ומנוע RAG (Retrieval-Augmented Generation) מבוסס FAISS. הקוד נקי, מודולרי, ומדגים פרקטיקות הנדסת תוכנה טובות. להלן סקירה מפורטת לפי רמת חומרה.
+
+---
+
+## ממצאים קריטיים
+
+### 1. אבטחה: השוואת סיסמאות בטקסט גלוי (admin/app.py:66)
 
 ```python
 if username == ADMIN_USERNAME and password == ADMIN_PASSWORD:
 ```
 
-**Problem:** Passwords are compared using direct string equality (`==`), which is vulnerable to timing attacks. Moreover, the password is stored in plaintext in config/environment variables.
+**בעיה:** סיסמאות מושוות באמצעות השוואת מחרוזות ישירה (`==`), מה שחושף את המערכת למתקפות תזמון (timing attacks). בנוסף, הסיסמה נשמרת כטקסט גלוי במשתני סביבה.
 
-**Recommendation:**
-- Use `hmac.compare_digest()` for constant-time comparison.
-- Hash passwords with `bcrypt` or `werkzeug.security.check_password_hash()`.
+**המלצה:**
+- להשתמש ב-`hmac.compare_digest()` להשוואה בזמן קבוע.
+- לאחסן סיסמאות עם hash באמצעות `bcrypt` או `werkzeug.security.check_password_hash()`.
 
 ```python
 from werkzeug.security import check_password_hash
 if username == ADMIN_USERNAME and check_password_hash(stored_hash, password):
 ```
 
-### 2. Security: Hardcoded Default Secrets (config.py:42-43)
+### 2. אבטחה: סודות ברירת מחדל מוטמעים בקוד (config.py:42-43)
 
 ```python
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "changeme123")
 ADMIN_SECRET_KEY = os.getenv("ADMIN_SECRET_KEY", "super-secret-key-change-me")
 ```
 
-**Problem:** Default passwords and secret keys are hardcoded. If `.env` is missing or incomplete, the app runs with known credentials accessible to anyone who reads the source code.
+**בעיה:** סיסמאות ומפתחות סודיים מוטמעים בקוד כברירת מחדל. אם קובץ `.env` חסר או חלקי, האפליקציה תרוץ עם פרטי גישה ידועים לכל מי שקורא את קוד המקור.
 
-**Recommendation:**
-- Remove default values for sensitive fields or raise an error if not configured.
-- Add a startup check that refuses to run with default credentials in production.
+**המלצה:**
+- להסיר ערכי ברירת מחדל לשדות רגישים או לזרוק שגיאה אם לא הוגדרו.
+- להוסיף בדיקה בעלייה שמסרבת לרוץ עם פרטי גישה ברירת מחדל בסביבת ייצור.
 
 ```python
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
@@ -50,60 +50,60 @@ if not ADMIN_PASSWORD:
     raise ValueError("ADMIN_PASSWORD must be set in environment variables")
 ```
 
-### 3. Security: Pickle Deserialization (vector_store.py:148-149)
+### 3. אבטחה: Deserialization לא בטוח עם Pickle (vector_store.py:148-149)
 
 ```python
 with open(metadata_file, "rb") as f:
     self.metadata = pickle.load(f)
 ```
 
-**Problem:** `pickle.load()` can execute arbitrary code. If the metadata file is tampered with (e.g., by an attacker with write access to the data directory), this is a remote code execution vector.
+**בעיה:** `pickle.load()` יכול להריץ קוד שרירותי. אם קובץ ה-metadata שונה בזדון (למשל על ידי תוקף עם הרשאות כתיבה לתיקיית הנתונים), זהו וקטור להרצת קוד מרחוק (RCE).
 
-**Recommendation:** Replace pickle with a safer serialization format like JSON.
+**המלצה:** להחליף pickle בפורמט סריאליזציה בטוח יותר כמו JSON.
 
 ```python
 with open(metadata_file, "r") as f:
     self.metadata = json.load(f)
 ```
 
-### 4. Security: No CSRF Protection (admin/app.py)
+### 4. אבטחה: אין הגנת CSRF (admin/app.py)
 
-**Problem:** The Flask admin panel uses POST forms for data modification (KB CRUD, status updates, index rebuild) but has no CSRF protection.
+**בעיה:** פאנל הניהול של Flask משתמש בטפסי POST לשינוי נתונים (CRUD של בסיס ידע, עדכוני סטטוס, בניית אינדקס מחדש) אך ללא הגנת CSRF כלל.
 
-**Recommendation:** Integrate `Flask-WTF` for CSRF token generation and validation.
+**המלצה:** לשלב `Flask-WTF` ליצירה ואימות של CSRF tokens.
 
 ```python
 from flask_wtf.csrf import CSRFProtect
 csrf = CSRFProtect(app)
 ```
 
-### 5. Security: No Input Sanitization on Status Updates (admin/app.py:229, 249)
+### 5. אבטחה: אין ולידציה על קלט בעדכוני סטטוס (admin/app.py:229, 249)
 
 ```python
 status = request.form.get("status", "handled")
 db.update_agent_request_status(request_id, status)
 ```
 
-**Problem:** The `status` value comes directly from user input without validation. While SQLite CHECK constraints provide some protection, the app should validate status values before passing them to the database.
+**בעיה:** ערך ה-`status` מגיע ישירות מקלט המשתמש ללא ולידציה. למרות ש-CHECK constraints ב-SQLite מספקים הגנה מסוימת, האפליקציה צריכה לוודא ערכי סטטוס לפני העברתם לבסיס הנתונים.
 
-**Recommendation:**
+**המלצה:**
 ```python
 VALID_REQUEST_STATUSES = {"pending", "handled", "dismissed"}
 status = request.form.get("status", "handled")
 if status not in VALID_REQUEST_STATUSES:
-    flash("Invalid status.", "danger")
+    flash("סטטוס לא חוקי.", "danger")
     return redirect(url_for("agent_requests"))
 ```
 
 ---
 
-## High Priority Issues
+## ממצאים בעדיפות גבוהה
 
-### 6. Reliability: No Connection Pooling / Context Manager for DB (database.py)
+### 6. אמינות: אין Connection Pooling / Context Manager לבסיס הנתונים (database.py)
 
-**Problem:** Every database function opens a new connection, does work, and closes it. There's no connection pooling and no use of context managers (`with` statements). If an exception occurs between `get_connection()` and `conn.close()`, the connection leaks.
+**בעיה:** כל פונקציית בסיס נתונים פותחת חיבור חדש, מבצעת פעולה, וסוגרת אותו. אין connection pooling ואין שימוש ב-context managers (פקודות `with`). אם חריגה מתרחשת בין `get_connection()` ל-`conn.close()`, החיבור "דולף".
 
-**Recommendation:** Use a context manager pattern:
+**המלצה:** להשתמש בתבנית context manager:
 
 ```python
 from contextlib import contextmanager
@@ -124,15 +124,15 @@ def get_connection():
         conn.close()
 ```
 
-### 7. Reliability: Global OpenAI Client Initialization (llm.py:24, embeddings.py:22)
+### 7. אמינות: אתחול גלובלי של OpenAI Client בזמן Import (llm.py:24, embeddings.py:22)
 
 ```python
 client = OpenAI()
 ```
 
-**Problem:** The OpenAI client is instantiated at module import time. If `OPENAI_API_KEY` is not set, the import itself will fail (or the client will be created in an invalid state), blocking the entire application — even when only the admin panel is needed.
+**בעיה:** לקוח OpenAI מאותחל בזמן ייבוא המודול. אם `OPENAI_API_KEY` לא מוגדר, הייבוא עצמו ייכשל (או שהלקוח ייווצר במצב לא תקין), מה שחוסם את כל האפליקציה — גם כשצריך רק את פאנל הניהול.
 
-**Recommendation:** Use lazy initialization:
+**המלצה:** להשתמש באתחול עצלן (lazy initialization):
 
 ```python
 _client = None
@@ -144,7 +144,7 @@ def get_client():
     return _client
 ```
 
-### 8. Reliability: Synchronous LLM Calls in Async Handlers (bot/handlers.py:357)
+### 8. אמינות: קריאות LLM סינכרוניות בתוך Handlers אסינכרוניים (bot/handlers.py:357)
 
 ```python
 result = generate_answer(
@@ -153,9 +153,9 @@ result = generate_answer(
 )
 ```
 
-**Problem:** `generate_answer()` makes synchronous HTTP calls to the OpenAI API inside an `async` handler. This blocks the entire event loop, preventing the bot from processing other users' messages during the API call (which can take seconds).
+**בעיה:** `generate_answer()` מבצע קריאות HTTP סינכרוניות ל-API של OpenAI בתוך handler אסינכרוני (`async`). זה חוסם את כל לולאת האירועים ומונע מהבוט לעבד הודעות של משתמשים אחרים במהלך קריאת ה-API (שיכולה לקחת שניות).
 
-**Recommendation:** Run the blocking call in a thread executor:
+**המלצה:** להריץ את הקריאה החוסמת ב-thread executor:
 
 ```python
 import asyncio
@@ -167,31 +167,31 @@ result = await loop.run_in_executor(None, lambda: generate_answer(
 ))
 ```
 
-### 9. Data Integrity: RAG Index Not Rebuilt After KB Changes (admin/app.py:133, 162)
+### 9. שלמות נתונים: אינדקס RAG לא נבנה מחדש אחרי שינויים ב-KB (admin/app.py:133, 162)
 
-**Problem:** When a KB entry is added, edited, or deleted via the admin panel, the FAISS index is NOT automatically rebuilt. The bot will continue using stale data until someone manually clicks "Rebuild Index."
+**בעיה:** כאשר רשומת KB נוספת, נערכת או נמחקת דרך פאנל הניהול, אינדקס FAISS לא נבנה מחדש אוטומטית. הבוט ימשיך להשתמש בנתונים ישנים עד שמישהו ילחץ ידנית על "בנה אינדקס מחדש".
 
-**Recommendation:** Either:
-- Auto-rebuild after KB changes (may be slow).
-- Show a clear warning banner when the index is stale.
-- Queue a background rebuild task.
+**המלצה:** אחת מהאפשרויות הבאות:
+- בנייה מחדש אוטומטית אחרי שינויים ב-KB (עלול להיות איטי).
+- הצגת באנר אזהרה ברור כשהאינדקס לא מעודכן.
+- תזמון משימת בנייה מחדש ברקע.
 
-### 10. Reliability: `booking_start` Return Value Not Handled Properly (bot/handlers.py:339-340)
+### 10. אמינות: ערך ההחזרה של `booking_start` לא מטופל כראוי (bot/handlers.py:339-340)
 
 ```python
 elif user_message == "📅 קביעת תור":
     return await booking_start(update, context)
 ```
 
-**Problem:** When the booking button text is caught by `message_handler`, calling `booking_start` returns `BOOKING_SERVICE` state, but the `ConversationHandler` doesn't know about this since the message was routed through the general handler. This means the booking flow may not work correctly in this edge case.
+**בעיה:** כאשר טקסט כפתור ההזמנה נתפס על ידי `message_handler`, הקריאה ל-`booking_start` מחזירה את מצב `BOOKING_SERVICE`, אבל ה-`ConversationHandler` לא מודע לכך מכיוון שההודעה הונתבה דרך ה-handler הכללי. זה אומר שתהליך ההזמנה עלול לא לעבוד נכון במקרה קצה זה.
 
-**Recommendation:** Remove this fallback routing from `message_handler` — the `ConversationHandler` should handle it exclusively. Add a comment explaining why.
+**המלצה:** להסיר את הניתוב החלופי הזה מ-`message_handler` — ה-`ConversationHandler` צריך לטפל בו באופן בלעדי.
 
 ---
 
-## Medium Priority Issues
+## ממצאים בעדיפות בינונית
 
-### 11. Performance: Dashboard Loads All Data to Count (admin/app.py:84-88)
+### 11. ביצועים: הדשבורד טוען את כל הנתונים רק כדי לספור (admin/app.py:84-88)
 
 ```python
 kb_entries = db.get_all_kb_entries()
@@ -204,9 +204,9 @@ stats = {
 }
 ```
 
-**Problem:** The dashboard fetches all records just to count them. As data grows, this is inefficient.
+**בעיה:** הדשבורד מביא את כל הרשומות רק כדי לספור אותן. ככל שהנתונים גדלים, זה לא יעיל.
 
-**Recommendation:** Add dedicated count functions in `database.py`:
+**המלצה:** להוסיף פונקציות ספירה ייעודיות ב-`database.py`:
 
 ```python
 def count_kb_entries() -> int:
@@ -216,7 +216,7 @@ def count_kb_entries() -> int:
     return count
 ```
 
-### 12. Robustness: Markdown Parse Errors Not Handled (bot/handlers.py:366)
+### 12. עמידות: שגיאות Markdown לא מטופלות (bot/handlers.py:366)
 
 ```python
 await update.message.reply_text(
@@ -226,9 +226,9 @@ await update.message.reply_text(
 )
 ```
 
-**Problem:** If the LLM response contains invalid Markdown characters (e.g., unmatched `*`, `_`, `[`), Telegram will reject the message with a `BadRequest` error.
+**בעיה:** אם תשובת ה-LLM מכילה תווי Markdown לא תקינים (למשל `*`, `_`, `[` ללא סגירה), טלגרם ידחה את ההודעה עם שגיאת `BadRequest`.
 
-**Recommendation:** Wrap in a try/except and fall back to plain text:
+**המלצה:** לעטוף ב-try/except ולחזור לטקסט רגיל:
 
 ```python
 try:
@@ -237,16 +237,16 @@ except telegram.error.BadRequest:
     await update.message.reply_text(result["answer"], reply_markup=_get_main_keyboard())
 ```
 
-### 13. Architecture: Token Estimation Is Inaccurate for Hebrew (rag/chunker.py:11)
+### 13. ארכיטקטורה: הערכת טוקנים לא מדויקת לעברית (rag/chunker.py:11)
 
 ```python
 def estimate_tokens(text: str) -> int:
     return len(text) // 4
 ```
 
-**Problem:** The "4 characters per token" heuristic is for English. Hebrew text typically has ~2-3 characters per token with most tokenizers, meaning chunks could be significantly larger than intended.
+**בעיה:** ההיוריסטיקה "4 תווים לכל טוקן" מתאימה לאנגלית. טקסט בעברית מייצר בדרך כלל 2-3 תווים לכל טוקן ברוב ה-tokenizers, מה שאומר שהצ'אנקים עלולים להיות גדולים משמעותית מהמתוכנן.
 
-**Recommendation:** Use `tiktoken` for accurate token counting:
+**המלצה:** להשתמש ב-`tiktoken` לספירת טוקנים מדויקת:
 
 ```python
 import tiktoken
@@ -255,35 +255,35 @@ def estimate_tokens(text: str) -> int:
     return len(enc.encode(text))
 ```
 
-### 14. Observability: f-string in Logger Calls (multiple files)
+### 14. ניטור: שימוש ב-f-string בקריאות Logger (קבצים מרובים)
 
 ```python
 logger.warning(f"Quality check failed — ...")
 logger.error(f"LLM API error: {e}")
 ```
 
-**Problem:** Using f-strings in logging calls means the string is always formatted, even if the log level is disabled. This is a minor performance issue and also loses structured logging capabilities.
+**בעיה:** שימוש ב-f-strings בקריאות logging גורם לעיצוב המחרוזת תמיד, גם אם רמת הלוג מבוטלת. זו בעיית ביצועים קלה ומאבדת יכולות structured logging.
 
-**Recommendation:** Use lazy formatting:
+**המלצה:** להשתמש בעיצוב עצלן (lazy formatting):
 
 ```python
 logger.warning("Quality check failed — no source citation. Response: '%s...'", response_text[:100])
 ```
 
-### 15. Architecture: Thread Safety of Flask Admin + Telegram Bot (main.py:85)
+### 15. ארכיטקטורה: בטיחות תהליכונים של Flask Admin + Telegram Bot (main.py:85)
 
 ```python
 admin_thread = threading.Thread(target=run_admin_panel, daemon=True)
 admin_thread.start()
 ```
 
-**Problem:** Flask's development server and the Telegram bot share the same process. SQLite, while supporting WAL mode, can have issues with concurrent writes from multiple threads. Additionally, Flask's dev server is not thread-safe by default.
+**בעיה:** שרת הפיתוח של Flask ובוט הטלגרם חולקים את אותו תהליך. SQLite, למרות תמיכה במצב WAL, עלול להיתקל בבעיות עם כתיבות מקביליות ממספר תהליכונים. בנוסף, שרת הפיתוח של Flask אינו thread-safe כברירת מחדל.
 
-**Recommendation:**
-- Use Gunicorn for the admin panel (as configured in `render.yaml` for production).
-- Consider using `check_same_thread=False` explicitly in the SQLite connection when running in multi-threaded mode.
+**המלצה:**
+- להשתמש ב-Gunicorn עבור פאנל הניהול (כפי שמוגדר ב-`render.yaml` לסביבת ייצור).
+- לשקול שימוש מפורש ב-`check_same_thread=False` בחיבור SQLite בהרצה מרובת תהליכונים.
 
-### 16. Data: Conversation History Ordering Bug (database.py:215-222)
+### 16. נתונים: באג בסדר היסטוריית שיחות (database.py:215-222)
 
 ```python
 rows = conn.execute(
@@ -293,9 +293,9 @@ rows = conn.execute(
 return [dict(r) for r in reversed(rows)]
 ```
 
-**Problem:** The query sorts by `created_at DESC` then reverses in Python to get chronological order. However, `created_at` uses `datetime('now')` which has second-level precision. If two messages are saved in the same second (e.g., user message and bot response), their order within that second is undefined.
+**בעיה:** השאילתה ממיינת לפי `created_at DESC` ואז הופכת ב-Python לסדר כרונולוגי. אולם, `created_at` משתמש ב-`datetime('now')` שיש לו דיוק ברמת שנייה. אם שתי הודעות נשמרות באותה שנייה (למשל הודעת משתמש ותשובת בוט), הסדר ביניהן אינו מוגדר.
 
-**Recommendation:** Order by `id` instead of `created_at`, as the autoincrement ID guarantees insertion order:
+**המלצה:** למיין לפי `id` במקום `created_at`, מכיוון ש-autoincrement מבטיח סדר הכנסה:
 
 ```python
 ORDER BY id DESC LIMIT ?
@@ -303,15 +303,15 @@ ORDER BY id DESC LIMIT ?
 
 ---
 
-## Low Priority / Code Quality
+## ממצאים בעדיפות נמוכה / איכות קוד
 
-### 17. Configuration: `ADMIN_HOST = "0.0.0.0"` (config.py:44)
+### 17. קונפיגורציה: `ADMIN_HOST = "0.0.0.0"` (config.py:44)
 
-**Problem:** Binding to `0.0.0.0` makes the admin panel accessible from any network interface, which is fine for production behind a reverse proxy but risky during development.
+**בעיה:** הקשרה (binding) ל-`0.0.0.0` הופכת את פאנל הניהול לנגיש מכל ממשק רשת, מה שמתאים לייצור מאחורי reverse proxy אבל מסוכן בפיתוח.
 
-**Recommendation:** Default to `127.0.0.1` for development and override in production.
+**המלצה:** ברירת מחדל `127.0.0.1` לפיתוח ודריסה בייצור.
 
-### 18. Code Quality: Unused Import Potential (bot/handlers.py:19-20)
+### 18. איכות קוד: ייבואים שאינם בשימוש (bot/handlers.py:19-20)
 
 ```python
 from telegram import (
@@ -321,11 +321,11 @@ from telegram import (
 )
 ```
 
-**Problem:** `InlineKeyboardButton` and `InlineKeyboardMarkup` are imported but never used in the handlers.
+**בעיה:** `InlineKeyboardButton` ו-`InlineKeyboardMarkup` מיובאים אך לא נמצאים בשימוש ב-handlers.
 
-**Recommendation:** Remove unused imports.
+**המלצה:** להסיר ייבואים שאינם בשימוש.
 
-### 19. Code Quality: Magic Numbers (llm.py:62, 139-140)
+### 19. איכות קוד: מספרי קסם (llm.py:62, 139-140)
 
 ```python
 for msg in conversation_history[-10:]:  # Keep last 10 messages
@@ -334,9 +334,9 @@ temperature=0.3,
 max_tokens=500,
 ```
 
-**Problem:** Magic numbers for history limit, temperature, and max tokens are hardcoded.
+**בעיה:** מספרי קסם עבור מגבלת היסטוריה, טמפרטורה ומקסימום טוקנים מוטמעים בקוד.
 
-**Recommendation:** Move to `config.py` as named constants:
+**המלצה:** להעביר ל-`config.py` כקבועים בעלי שם:
 
 ```python
 CONVERSATION_HISTORY_LIMIT = 10
@@ -344,37 +344,37 @@ LLM_TEMPERATURE = 0.3
 LLM_MAX_TOKENS = 500
 ```
 
-### 20. Code Quality: `admin/app.py` Static Folder Doesn't Exist (admin/app.py:45)
+### 20. איכות קוד: תיקיית static לא קיימת (admin/app.py:45)
 
 ```python
 app = Flask(__name__, template_folder="templates", static_folder="static")
 ```
 
-**Problem:** The `static` folder doesn't exist in the `admin/` directory. Flask will silently handle this but will log 404 errors if any template references static files.
+**בעיה:** תיקיית `static` לא קיימת בתיקיית `admin/`. Flask יטפל בכך בשקט אך ירשום שגיאות 404 אם תבנית כלשהי מפנה לקבצים סטטיים.
 
-**Recommendation:** Either create the `static/` directory or remove the `static_folder` parameter.
+**המלצה:** ליצור את תיקיית `static/` או להסיר את הפרמטר `static_folder`.
 
-### 21. Architecture: Duplicate Package Structure
+### 21. ארכיטקטורה: מבנה חבילה כפול
 
-**Problem:** The repository has both root-level directories (`admin/`, `bot/`, `rag/`, `utils/`) and an `ai_chatbot/` package with the same structure. Imports use `ai_chatbot.*`, suggesting the root-level directories may be stale artifacts from a refactor.
+**בעיה:** ב-repository יש גם תיקיות ברמת השורש (`admin/`, `bot/`, `rag/`, `utils/`) וגם חבילת `ai_chatbot/` עם אותו מבנה. הייבואים משתמשים ב-`ai_chatbot.*`, מה שמרמז שתיקיות רמת השורש הן כנראה שרידים ישנים מ-refactor.
 
-**Recommendation:** Remove the duplicate root-level directories if they are not the primary code, or consolidate into one structure.
+**המלצה:** להסיר את תיקיות רמת השורש הכפולות אם אינן הקוד הראשי, או לאחד למבנה אחד.
 
-### 22. Testing: No Test Suite
+### 22. בדיקות: אין סט בדיקות
 
-**Problem:** There are no tests in the project. The RAG pipeline, LLM integration, database operations, and bot handlers all lack unit or integration tests.
+**בעיה:** אין בדיקות בפרויקט. מנוע ה-RAG, אינטגרציית ה-LLM, פעולות בסיס הנתונים ו-handlers של הבוט — כולם חסרים בדיקות יחידה או אינטגרציה.
 
-**Recommendation:** Add at minimum:
-- Unit tests for `chunker.py` (pure logic, easy to test).
-- Unit tests for `database.py` with an in-memory SQLite DB.
-- Integration tests for the RAG pipeline with mocked embeddings.
-- Handler tests using `python-telegram-bot`'s test utilities.
+**המלצה:** להוסיף לפחות:
+- בדיקות יחידה ל-`chunker.py` (לוגיקה טהורה, קל לבדוק).
+- בדיקות יחידה ל-`database.py` עם SQLite בזיכרון.
+- בדיקות אינטגרציה למנוע ה-RAG עם embeddings מדומים.
+- בדיקות handlers באמצעות כלי הבדיקה של `python-telegram-bot`.
 
-### 23. Error Handling: `error_handler` Logs but Doesn't Differentiate (bot/handlers.py:375-384)
+### 23. טיפול בשגיאות: `error_handler` מתעד אך לא מבדיל (bot/handlers.py:375-384)
 
-**Problem:** All errors are logged at the same level with the same user-facing message. Network errors, API errors, and programming bugs all look the same.
+**בעיה:** כל השגיאות מתועדות באותה רמה עם אותה הודעה למשתמש. שגיאות רשת, שגיאות API ובאגים בתכנות — כולם נראים אותו דבר.
 
-**Recommendation:** Add error type differentiation:
+**המלצה:** להוסיף הבחנה לפי סוג שגיאה:
 
 ```python
 async def error_handler(update, context):
@@ -388,54 +388,54 @@ async def error_handler(update, context):
 
 ---
 
-## Strengths
+## חוזקות
 
-The project has several notable strengths worth highlighting:
+לפרויקט מספר חוזקות בולטות שראוי לציין:
 
-1. **Three-Layer Architecture** — The separation of System Prompt (Layer A), RAG Context (Layer B), and Quality Check (Layer C) is a solid pattern for preventing hallucinations and ensuring response quality.
+1. **ארכיטקטורת שלוש שכבות** — ההפרדה בין System Prompt (שכבה A), הקשר RAG (שכבה B), ובדיקת איכות (שכבה C) היא תבנית מוצקה למניעת הזיות ולהבטחת איכות תשובות.
 
-2. **Clean Module Separation** — Each component (bot, admin, rag, database) has clear responsibilities and well-defined interfaces.
+2. **הפרדת מודולים נקייה** — כל רכיב (bot, admin, rag, database) בעל אחריות ברורה וממשקים מוגדרים היטב.
 
-3. **Graceful Fallbacks** — The embedding module's fallback to hash-based local embeddings enables offline development. The LLM module returns a safe fallback response on errors.
+3. **חזרה חיננית (Graceful Fallbacks)** — המעבר של מודול ה-embeddings ל-embeddings מקומיים מבוססי hash מאפשר פיתוח אופליין. מודול ה-LLM מחזיר תשובת ברירת מחדל בטוחה בשגיאות.
 
-4. **Good Database Design** — WAL mode, foreign keys, check constraints, and proper indexing demonstrate solid SQLite usage.
+4. **עיצוב בסיס נתונים טוב** — מצב WAL, מפתחות זרים, CHECK constraints ואינדוקס נכון מדגימים שימוש מוצק ב-SQLite.
 
-5. **Hebrew-First UX** — The system prompt, UI text, and user interactions are all in Hebrew, showing attention to the target audience.
+5. **חוויית משתמש בעברית** — ה-System Prompt, טקסט ה-UI ואינטראקציות המשתמש כולם בעברית, מה שמראה תשומת לב לקהל היעד.
 
-6. **Deployment-Ready** — The `render.yaml` config, Gunicorn support, and environment-based configuration show production readiness.
+6. **מוכן לפריסה** — קונפיגורציית `render.yaml`, תמיכה ב-Gunicorn, וקונפיגורציה מבוססת משתני סביבה מראים מוכנות לייצור.
 
-7. **Conversation Continuity** — Storing and retrieving conversation history for context-aware responses is a good UX practice.
-
----
-
-## Summary Table
-
-| # | Severity | File | Issue |
-|---|----------|------|-------|
-| 1 | Critical | admin/app.py | Plaintext password comparison |
-| 2 | Critical | config.py | Hardcoded default secrets |
-| 3 | Critical | vector_store.py | Unsafe pickle deserialization |
-| 4 | Critical | admin/app.py | No CSRF protection |
-| 5 | Critical | admin/app.py | No input validation on status updates |
-| 6 | High | database.py | No connection pooling / context manager |
-| 7 | High | llm.py, embeddings.py | Global client initialization at import |
-| 8 | High | bot/handlers.py | Sync LLM calls blocking async event loop |
-| 9 | High | admin/app.py | Stale RAG index after KB changes |
-| 10 | High | bot/handlers.py | Booking flow routing edge case |
-| 11 | Medium | admin/app.py | Dashboard fetches all data to count |
-| 12 | Medium | bot/handlers.py | Markdown parse errors not handled |
-| 13 | Medium | rag/chunker.py | Token estimation inaccurate for Hebrew |
-| 14 | Medium | multiple | f-string in logger calls |
-| 15 | Medium | main.py | Thread safety concerns |
-| 16 | Medium | database.py | Conversation ordering by timestamp |
-| 17 | Low | config.py | 0.0.0.0 default host |
-| 18 | Low | bot/handlers.py | Unused imports |
-| 19 | Low | llm.py | Magic numbers |
-| 20 | Low | admin/app.py | Non-existent static folder |
-| 21 | Low | root | Duplicate package structure |
-| 22 | Low | project | No test suite |
-| 23 | Low | bot/handlers.py | Generic error handling |
+7. **רצף שיחה** — שמירה ואחזור של היסטוריית שיחות לתשובות מודעות הקשר היא פרקטיקה טובה לחוויית משתמש.
 
 ---
 
-**Overall Assessment:** The codebase is well-organized and demonstrates solid architectural decisions (RAG pipeline, three-layer LLM, modular design). The main areas for improvement are security hardening (authentication, CSRF, pickle), reliability under concurrency (async/await, DB connections), and adding a test suite. With these improvements addressed, this would be a robust production-ready system.
+## טבלת סיכום
+
+| # | חומרה | קובץ | ממצא |
+|---|--------|------|------|
+| 1 | קריטי | admin/app.py | השוואת סיסמאות בטקסט גלוי |
+| 2 | קריטי | config.py | סודות ברירת מחדל מוטמעים בקוד |
+| 3 | קריטי | vector_store.py | deserialization לא בטוח עם pickle |
+| 4 | קריטי | admin/app.py | אין הגנת CSRF |
+| 5 | קריטי | admin/app.py | אין ולידציה על קלט בעדכוני סטטוס |
+| 6 | גבוה | database.py | אין connection pooling / context manager |
+| 7 | גבוה | llm.py, embeddings.py | אתחול גלובלי של client בזמן import |
+| 8 | גבוה | bot/handlers.py | קריאות LLM סינכרוניות חוסמות event loop אסינכרוני |
+| 9 | גבוה | admin/app.py | אינדקס RAG מיושן אחרי שינויים ב-KB |
+| 10 | גבוה | bot/handlers.py | מקרה קצה בניתוב תהליך הזמנה |
+| 11 | בינוני | admin/app.py | הדשבורד טוען את כל הנתונים רק כדי לספור |
+| 12 | בינוני | bot/handlers.py | שגיאות Markdown לא מטופלות |
+| 13 | בינוני | rag/chunker.py | הערכת טוקנים לא מדויקת לעברית |
+| 14 | בינוני | מרובים | שימוש ב-f-string בקריאות logger |
+| 15 | בינוני | main.py | חששות בטיחות תהליכונים |
+| 16 | בינוני | database.py | מיון היסטוריית שיחות לפי timestamp |
+| 17 | נמוך | config.py | 0.0.0.0 כ-host ברירת מחדל |
+| 18 | נמוך | bot/handlers.py | ייבואים שאינם בשימוש |
+| 19 | נמוך | llm.py | מספרי קסם |
+| 20 | נמוך | admin/app.py | תיקיית static לא קיימת |
+| 21 | נמוך | שורש | מבנה חבילה כפול |
+| 22 | נמוך | פרויקט | אין סט בדיקות |
+| 23 | נמוך | bot/handlers.py | טיפול גנרי בשגיאות |
+
+---
+
+**הערכה כוללת:** הקוד מאורגן היטב ומדגים החלטות ארכיטקטוניות מוצקות (מנוע RAG, LLM תלת-שכבתי, עיצוב מודולרי). תחומי השיפור העיקריים הם חיזוק אבטחה (אימות, CSRF, pickle), אמינות תחת מקביליות (async/await, חיבורי DB), והוספת סט בדיקות. עם טיפול בשיפורים אלו, זו תהיה מערכת ייצור חזקה ואמינה.
