@@ -11,6 +11,7 @@ Features:
 - Conversation history per user
 """
 
+import asyncio
 import logging
 from telegram import (
     Update,
@@ -33,6 +34,10 @@ logger = logging.getLogger(__name__)
 
 # Conversation states for appointment booking
 BOOKING_SERVICE, BOOKING_DATE, BOOKING_TIME, BOOKING_CONFIRM = range(4)
+
+
+async def _generate_answer_async(*args, **kwargs):
+    return await asyncio.to_thread(generate_answer, *args, **kwargs)
 
 
 def _get_main_keyboard() -> ReplyKeyboardMarkup:
@@ -112,7 +117,7 @@ async def price_list_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await update.message.reply_text("📋 תנו לי רגע לחפש את המחירון שלנו...")
     
     # Use the RAG pipeline to find pricing information
-    result = generate_answer("Show me the complete price list with all services and prices")
+    result = await _generate_answer_async("Show me the complete price list with all services and prices")
     
     db.save_message(user_id, username, "user", "📋 Price List")
     db.save_message(user_id, username, "assistant", result["answer"], ", ".join(result["sources"]))
@@ -131,7 +136,7 @@ async def location_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id, username = _get_user_info(update)
     
     # Use RAG to find location/address info
-    result = generate_answer("What is the business address and location? How do I get there?")
+    result = await _generate_answer_async("What is the business address and location? How do I get there?")
     
     db.save_message(user_id, username, "user", "📍 Send Location")
     db.save_message(user_id, username, "assistant", result["answer"], ", ".join(result["sources"]))
@@ -192,7 +197,7 @@ async def booking_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     user_id, username = _get_user_info(update)
     
     # Get available services from KB
-    result = generate_answer("What services do you offer? List them briefly.")
+    result = await _generate_answer_async("What services do you offer? List them briefly.")
     
     text = (
         "📅 *קביעת תור*\n\n"
@@ -336,9 +341,6 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Check for button texts and route accordingly
     if user_message == "📋 מחירון":
         return await price_list_handler(update, context)
-    elif user_message == "📅 קביעת תור":
-        # This should be caught by the ConversationHandler, but just in case
-        return await booking_start(update, context)
     elif user_message == "📍 שליחת מיקום":
         return await location_handler(update, context)
     elif user_message == "👤 דברו עם נציג":
@@ -354,7 +356,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     db.save_message(user_id, username, "user", user_message)
     
     # Generate answer via RAG + LLM
-    result = generate_answer(
+    result = await _generate_answer_async(
         user_query=user_message,
         conversation_history=history,
     )
