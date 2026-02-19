@@ -39,8 +39,13 @@ CHUNK_MAX_TOKENS = int(os.getenv("CHUNK_MAX_TOKENS", "300"))
 
 # ─── Admin Panel ─────────────────────────────────────────────────────────────
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "changeme123")
-ADMIN_SECRET_KEY = os.getenv("ADMIN_SECRET_KEY", "super-secret-key-change-me")
+#
+# Security note:
+# - Do not embed default secrets in code.
+# - These are intentionally empty by default and must be provided via environment.
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
+ADMIN_PASSWORD_HASH = os.getenv("ADMIN_PASSWORD_HASH", "")
+ADMIN_SECRET_KEY = os.getenv("ADMIN_SECRET_KEY", "")
 ADMIN_HOST = os.getenv("ADMIN_HOST", "0.0.0.0")
 ADMIN_PORT = int(os.getenv("ADMIN_PORT") or os.getenv("PORT") or "5000")
 
