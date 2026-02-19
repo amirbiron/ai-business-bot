@@ -3,7 +3,6 @@ Vector Store module — FAISS-based vector index for similarity search.
 """
 
 import json
-import pickle
 import logging
 from pathlib import Path
 from typing import Optional
@@ -117,11 +116,11 @@ class VectorStore:
         
         faiss.write_index(self.index, str(save_path / "index.faiss"))
         
-        with open(save_path / "metadata.pkl", "wb") as f:
-            pickle.dump(self.metadata, f)
+        with open(save_path / "metadata.json", "w", encoding="utf-8") as f:
+            json.dump(self.metadata, f, ensure_ascii=False)
         
-        with open(save_path / "config.json", "w") as f:
-            json.dump({"dimension": self.dimension}, f)
+        with open(save_path / "config.json", "w", encoding="utf-8") as f:
+            json.dump({"dimension": self.dimension}, f, ensure_ascii=False)
         
         logger.info(f"Saved FAISS index to {save_path}")
     
@@ -135,20 +134,30 @@ class VectorStore:
         load_path = Path(path or FAISS_INDEX_PATH)
         
         index_file = load_path / "index.faiss"
-        metadata_file = load_path / "metadata.pkl"
+        metadata_json_file = load_path / "metadata.json"
+        legacy_metadata_file = load_path / "metadata.pkl"
         config_file = load_path / "config.json"
         
-        if not all(f.exists() for f in [index_file, metadata_file, config_file]):
+        if not all(f.exists() for f in [index_file, config_file]):
             logger.info("No saved index found.")
+            return False
+        if not metadata_json_file.exists():
+            if legacy_metadata_file.exists():
+                logger.warning(
+                    "Legacy metadata.pkl found but loading pickle is disabled for security. "
+                    "Please rebuild the RAG index to regenerate metadata.json."
+                )
+            else:
+                logger.info("No saved metadata found.")
             return False
         
         try:
             self.index = faiss.read_index(str(index_file))
             
-            with open(metadata_file, "rb") as f:
-                self.metadata = pickle.load(f)
+            with open(metadata_json_file, "r", encoding="utf-8") as f:
+                self.metadata = json.load(f)
             
-            with open(config_file, "r") as f:
+            with open(config_file, "r", encoding="utf-8") as f:
                 config = json.load(f)
                 self.dimension = config["dimension"]
             
