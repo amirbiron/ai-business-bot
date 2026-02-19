@@ -7,14 +7,36 @@ This module:
 """
 
 import logging
+import threading
+from pathlib import Path
 import numpy as np
 
 from ai_chatbot import database as db
+from ai_chatbot.config import FAISS_INDEX_PATH
 from ai_chatbot.rag.chunker import create_chunks_for_entry
 from ai_chatbot.rag.embeddings import get_embedding, get_embeddings_batch
 from ai_chatbot.rag.vector_store import get_vector_store, reset_vector_store
 
 logger = logging.getLogger(__name__)
+
+_INDEX_STALE_FLAG: Path = FAISS_INDEX_PATH / ".stale"
+_REBUILD_LOCK = threading.Lock()
+
+
+def mark_index_stale() -> None:
+    FAISS_INDEX_PATH.mkdir(parents=True, exist_ok=True)
+    _INDEX_STALE_FLAG.touch(exist_ok=True)
+
+
+def clear_index_stale() -> None:
+    try:
+        _INDEX_STALE_FLAG.unlink()
+    except FileNotFoundError:
+        pass
+
+
+def is_index_stale() -> bool:
+    return _INDEX_STALE_FLAG.exists()
 
 
 def rebuild_index():
@@ -36,6 +58,7 @@ def rebuild_index():
         store = get_vector_store()
         store.build_index(np.array([]), [])
         store.save()
+        clear_index_stale()
         return
     
     # Step 1: Create chunks for all entries
@@ -54,6 +77,7 @@ def rebuild_index():
         store = get_vector_store()
         store.build_index(np.array([]), [])
         store.save()
+        clear_index_stale()
         return
     
     logger.info(f"Created {len(all_chunks)} chunks from {len(entries)} entries")
@@ -96,6 +120,7 @@ def rebuild_index():
     for entry_id, entry_chunks in chunks_by_entry.items():
         db.save_chunks(entry_id, entry_chunks)
     
+    clear_index_stale()
     logger.info("RAG index rebuild complete!")
 
 
@@ -110,6 +135,15 @@ def retrieve(query: str, top_k: int = None) -> list[dict]:
     Returns:
         List of relevant chunk dicts with text, category, title, and score.
     """
+    if is_index_stale():
+        with _REBUILD_LOCK:
+            if is_index_stale():
+                logger.info("RAG index marked stale. Rebuilding before retrieval...")
+                try:
+                    rebuild_index()
+                except Exception:
+                    logger.exception("Failed rebuilding stale RAG index; continuing with existing index.")
+
     store = get_vector_store()
     
     if store.index is None or store.index.ntotal == 0:

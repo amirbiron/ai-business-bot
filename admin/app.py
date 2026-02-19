@@ -37,7 +37,7 @@ from ai_chatbot.config import (
     ADMIN_PORT,
     BUSINESS_NAME,
 )
-from ai_chatbot.rag.engine import rebuild_index
+from ai_chatbot.rag.engine import rebuild_index, mark_index_stale, is_index_stale
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +83,10 @@ def create_admin_app() -> Flask:
 
     csrf = CSRFProtect()
     csrf.init_app(app)
+
+    @app.context_processor
+    def _inject_rag_index_state():
+        return {"rag_index_stale": is_index_stale()}
 
     @app.errorhandler(CSRFError)
     def _handle_csrf_error(e):
@@ -175,6 +179,7 @@ def create_admin_app() -> Flask:
                 flash("כל השדות הם חובה.", "danger")
             else:
                 db.add_kb_entry(category, title, content)
+                mark_index_stale()
                 flash(f"הרשומה '{title}' נוספה בהצלחה!", "success")
                 return redirect(url_for("kb_list"))
         
@@ -204,6 +209,7 @@ def create_admin_app() -> Flask:
                 flash("כל השדות הם חובה.", "danger")
             else:
                 db.update_kb_entry(entry_id, category, title, content)
+                mark_index_stale()
                 flash(f"הרשומה '{title}' עודכנה בהצלחה!", "success")
                 return redirect(url_for("kb_list"))
         
@@ -220,6 +226,7 @@ def create_admin_app() -> Flask:
     @login_required
     def kb_delete(entry_id):
         db.delete_kb_entry(entry_id)
+        mark_index_stale()
         flash("הרשומה נמחקה.", "success")
         return redirect(url_for("kb_list"))
     
