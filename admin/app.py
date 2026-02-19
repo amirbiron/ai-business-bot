@@ -10,6 +10,7 @@ Features:
 - Rebuild RAG index
 """
 
+import hmac
 import logging
 from functools import wraps
 from flask import (
@@ -23,10 +24,14 @@ from flask import (
     session,
 )
 
+from flask_wtf.csrf import CSRFProtect, CSRFError
+from werkzeug.security import check_password_hash
+
 from ai_chatbot import database as db
 from ai_chatbot.config import (
     ADMIN_USERNAME,
     ADMIN_PASSWORD,
+    ADMIN_PASSWORD_HASH,
     ADMIN_SECRET_KEY,
     ADMIN_HOST,
     ADMIN_PORT,
@@ -36,15 +41,54 @@ from ai_chatbot.rag.engine import rebuild_index
 
 logger = logging.getLogger(__name__)
 
+VALID_AGENT_REQUEST_STATUSES = {"pending", "handled", "dismissed"}
+VALID_APPOINTMENT_STATUSES = {"pending", "confirmed", "cancelled"}
+
+
+def _validate_admin_security_config() -> None:
+    if not ADMIN_SECRET_KEY:
+        raise RuntimeError(
+            "ADMIN_SECRET_KEY must be set (required for session + CSRF protection)."
+        )
+    if not ADMIN_USERNAME:
+        raise RuntimeError("ADMIN_USERNAME must be set.")
+    if not (ADMIN_PASSWORD_HASH or ADMIN_PASSWORD):
+        raise RuntimeError(
+            "Either ADMIN_PASSWORD_HASH (recommended) or ADMIN_PASSWORD must be set."
+        )
+
+
+def _verify_admin_credentials(username: str, password: str) -> bool:
+    if not username or not password:
+        return False
+    if not hmac.compare_digest(str(username), str(ADMIN_USERNAME)):
+        return False
+    if ADMIN_PASSWORD_HASH:
+        try:
+            return check_password_hash(ADMIN_PASSWORD_HASH, password)
+        except Exception:
+            return False
+    return hmac.compare_digest(str(password), str(ADMIN_PASSWORD))
+
 
 def create_admin_app() -> Flask:
     """Create and configure the Flask admin application."""
+    _validate_admin_security_config()
     app = Flask(
         __name__,
         template_folder="templates",
         static_folder="static",
     )
     app.secret_key = ADMIN_SECRET_KEY
+
+    csrf = CSRFProtect()
+    csrf.init_app(app)
+
+    @app.errorhandler(CSRFError)
+    def _handle_csrf_error(e):
+        # Avoid leaking CSRF details; just ask the user to retry.
+        flash("פג תוקף הטופס. נסו שוב.", "danger")
+        return redirect(request.referrer or url_for("login"))
     
     # ─── Auth Decorator ───────────────────────────────────────────────────
     
@@ -63,7 +107,7 @@ def create_admin_app() -> Flask:
         if request.method == "POST":
             username = request.form.get("username", "")
             password = request.form.get("password", "")
-            if username == ADMIN_USERNAME and password == ADMIN_PASSWORD:
+            if _verify_admin_credentials(username, password):
                 session["logged_in"] = True
                 flash("ברוכים השבים!", "success")
                 return redirect(url_for("dashboard"))
@@ -227,6 +271,9 @@ def create_admin_app() -> Flask:
     @login_required
     def handle_request(request_id):
         status = request.form.get("status", "handled")
+        if status not in VALID_AGENT_REQUEST_STATUSES:
+            flash("סטטוס לא חוקי.", "danger")
+            return redirect(url_for("agent_requests"))
         db.update_agent_request_status(request_id, status)
         flash(f"בקשה #{request_id} סומנה כ-{status}.", "success")
         return redirect(url_for("agent_requests"))
@@ -247,6 +294,9 @@ def create_admin_app() -> Flask:
     @login_required
     def update_appointment(appt_id):
         status = request.form.get("status", "confirmed")
+        if status not in VALID_APPOINTMENT_STATUSES:
+            flash("סטטוס לא חוקי.", "danger")
+            return redirect(url_for("appointments"))
         db.update_appointment_status(appt_id, status)
         flash(f"תור #{appt_id} סומן כ-{status}.", "success")
         return redirect(url_for("appointments"))

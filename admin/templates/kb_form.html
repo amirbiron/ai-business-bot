@@ -12,6 +12,7 @@
 <div class="card mt-4">
     <div class="card-body">
         <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="mb-3">
                 <label for="category" class="form-label"><strong>קטגוריה</strong></label>
                 <input type="text" class="form-control" id="category" name="category"

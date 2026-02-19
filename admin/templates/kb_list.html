@@ -5,6 +5,7 @@
     <h2><i class="bi bi-book"></i> בסיס ידע</h2>
     <div>
         <form method="POST" action="/kb/rebuild" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn btn-outline-warning me-2"
                     onclick="return confirm('לבנות מחדש את אינדקס ה-RAG? זה עשוי לקחת רגע.')">
                 <i class="bi bi-arrow-clockwise"></i> בנייה מחדש
@@ -68,6 +69,7 @@
                                 <i class="bi bi-pencil"></i>
                             </a>
                             <form method="POST" action="/kb/delete/{{ entry.id }}" class="d-inline">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                 <button type="submit" class="btn btn-sm btn-outline-danger"
                                         onclick="return confirm('למחוק רשומה זו?')">
                                     <i class="bi bi-trash"></i>

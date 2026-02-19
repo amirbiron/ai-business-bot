@@ -12,6 +12,7 @@ numpy
 
 # Web Admin Panel
 flask
+flask-wtf
 gunicorn
 
 # Configuration
