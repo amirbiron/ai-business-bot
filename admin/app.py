@@ -65,15 +65,15 @@ def create_admin_app() -> Flask:
             password = request.form.get("password", "")
             if username == ADMIN_USERNAME and password == ADMIN_PASSWORD:
                 session["logged_in"] = True
-                flash("Welcome back!", "success")
+                flash("ברוכים השבים!", "success")
                 return redirect(url_for("dashboard"))
-            flash("Invalid credentials.", "danger")
+            flash("פרטי התחברות שגויים.", "danger")
         return render_template("login.html", business_name=BUSINESS_NAME)
     
     @app.route("/logout")
     def logout():
         session.clear()
-        flash("Logged out.", "info")
+        flash("התנתקת בהצלחה.", "info")
         return redirect(url_for("login"))
     
     # ─── Dashboard ────────────────────────────────────────────────────────
@@ -128,10 +128,10 @@ def create_admin_app() -> Flask:
             content = request.form.get("content", "").strip()
             
             if not all([category, title, content]):
-                flash("All fields are required.", "danger")
+                flash("כל השדות הם חובה.", "danger")
             else:
                 db.add_kb_entry(category, title, content)
-                flash(f"Entry '{title}' added successfully!", "success")
+                flash(f"הרשומה '{title}' נוספה בהצלחה!", "success")
                 return redirect(url_for("kb_list"))
         
         categories = db.get_kb_categories()
@@ -148,7 +148,7 @@ def create_admin_app() -> Flask:
     def kb_edit(entry_id):
         entry = db.get_kb_entry(entry_id)
         if not entry:
-            flash("Entry not found.", "danger")
+            flash("הרשומה לא נמצאה.", "danger")
             return redirect(url_for("kb_list"))
         
         if request.method == "POST":
@@ -157,10 +157,10 @@ def create_admin_app() -> Flask:
             content = request.form.get("content", "").strip()
             
             if not all([category, title, content]):
-                flash("All fields are required.", "danger")
+                flash("כל השדות הם חובה.", "danger")
             else:
                 db.update_kb_entry(entry_id, category, title, content)
-                flash(f"Entry '{title}' updated successfully!", "success")
+                flash(f"הרשומה '{title}' עודכנה בהצלחה!", "success")
                 return redirect(url_for("kb_list"))
         
         categories = db.get_kb_categories()
@@ -176,7 +176,7 @@ def create_admin_app() -> Flask:
     @login_required
     def kb_delete(entry_id):
         db.delete_kb_entry(entry_id)
-        flash("Entry deleted.", "success")
+        flash("הרשומה נמחקה.", "success")
         return redirect(url_for("kb_list"))
     
     @app.route("/kb/rebuild", methods=["POST"])
@@ -184,10 +184,10 @@ def create_admin_app() -> Flask:
     def kb_rebuild():
         try:
             rebuild_index()
-            flash("RAG index rebuilt successfully!", "success")
+            flash("אינדקס RAG נבנה מחדש בהצלחה!", "success")
         except Exception as e:
             logger.error(f"Index rebuild failed: {e}")
-            flash(f"Index rebuild failed: {str(e)}", "danger")
+            flash(f"בניית האינדקס נכשלה: {str(e)}", "danger")
         return redirect(url_for("kb_list"))
     
     # ─── Conversations ────────────────────────────────────────────────────
@@ -228,7 +228,7 @@ def create_admin_app() -> Flask:
     def handle_request(request_id):
         status = request.form.get("status", "handled")
         db.update_agent_request_status(request_id, status)
-        flash(f"Request #{request_id} marked as {status}.", "success")
+        flash(f"בקשה #{request_id} סומנה כ-{status}.", "success")
         return redirect(url_for("agent_requests"))
     
     # ─── Appointments ─────────────────────────────────────────────────────
@@ -248,7 +248,7 @@ def create_admin_app() -> Flask:
     def update_appointment(appt_id):
         status = request.form.get("status", "confirmed")
         db.update_appointment_status(appt_id, status)
-        flash(f"Appointment #{appt_id} marked as {status}.", "success")
+        flash(f"תור #{appt_id} סומן כ-{status}.", "success")
         return redirect(url_for("appointments"))
     
     # ─── API Endpoints (for AJAX) ─────────────────────────────────────────

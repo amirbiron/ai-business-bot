@@ -1,26 +1,26 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h2 class="mb-4"><i class="bi bi-chat-dots"></i> Conversation Logs</h2>
+<h2 class="mb-4"><i class="bi bi-chat-dots"></i> יומן שיחות</h2>
 
 <div class="row">
     <!-- User List -->
     <div class="col-md-3">
         <div class="card">
-            <div class="card-header"><strong>Users</strong></div>
+            <div class="card-header"><strong>משתמשים</strong></div>
             <div class="list-group list-group-flush" style="max-height: 70vh; overflow-y: auto;">
-                <a href="/conversations" 
+                <a href="/conversations"
                    class="list-group-item list-group-item-action {% if not selected_user %}active{% endif %}">
-                    <i class="bi bi-chat-dots"></i> All Messages
+                    <i class="bi bi-chat-dots"></i> כל ההודעות
                 </a>
                 {% for user in users %}
-                <a href="/conversations?user_id={{ user.user_id }}" 
+                <a href="/conversations?user_id={{ user.user_id }}"
                    class="list-group-item list-group-item-action {% if selected_user == user.user_id %}active{% endif %}">
                     <div class="d-flex justify-content-between">
-                        <strong>{{ user.username or 'Unknown' }}</strong>
+                        <strong>{{ user.username or 'לא ידוע' }}</strong>
                         <span class="badge bg-secondary">{{ user.message_count }}</span>
                     </div>
-                    <small class="text-muted">Last: {{ user.last_active }}</small>
+                    <small class="text-muted">אחרון: {{ user.last_active }}</small>
                 </a>
                 {% endfor %}
             </div>
@@ -33,9 +33,9 @@
             <div class="card-header">
                 <strong>
                     {% if selected_user %}
-                    Messages with User {{ selected_user }}
+                    הודעות עם משתמש {{ selected_user }}
                     {% else %}
-                    All Recent Messages
+                    כל ההודעות האחרונות
                     {% endif %}
                 </strong>
             </div>
@@ -47,21 +47,21 @@
                         <strong>
                             {% if msg.role == 'user' %}
                             <i class="bi bi-person-circle text-primary"></i>
-                            {{ msg.get('username', 'Customer') if msg.get('username') else 'Customer' }}
+                            {{ msg.get('username', 'לקוח/ה') if msg.get('username') else 'לקוח/ה' }}
                             {% else %}
-                            <i class="bi bi-robot text-success"></i> Bot
+                            <i class="bi bi-robot text-success"></i> בוט
                             {% endif %}
                         </strong>
                         <small class="text-muted">{{ msg.created_at }}</small>
                     </div>
                     <p class="mb-1">{{ msg.message }}</p>
                     {% if msg.sources %}
-                    <small class="text-muted"><i class="bi bi-link-45deg"></i> Sources: {{ msg.sources }}</small>
+                    <small class="text-muted"><i class="bi bi-link-45deg"></i> מקורות: {{ msg.sources }}</small>
                     {% endif %}
                 </div>
                 {% endfor %}
                 {% else %}
-                <p class="text-muted text-center py-4">No messages yet.</p>
+                <p class="text-muted text-center py-4">אין הודעות עדיין.</p>
                 {% endif %}
             </div>
         </div>

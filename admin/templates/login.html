@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="he" dir="rtl">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ business_name }} — Login</title>
+    <title>{{ business_name }} — התחברות</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
     <style>
@@ -29,7 +29,7 @@
             <div class="text-center mb-4">
                 <i class="bi bi-robot" style="font-size: 3rem; color: #6c5ce7;"></i>
                 <h3 class="mt-2">{{ business_name }}</h3>
-                <p class="text-muted">Admin Panel</p>
+                <p class="text-muted">פאנל ניהול</p>
             </div>
 
             {% with messages = get_flashed_messages(with_categories=true) %}
@@ -42,15 +42,15 @@
 
             <form method="POST">
                 <div class="mb-3">
-                    <label for="username" class="form-label">Username</label>
+                    <label for="username" class="form-label">שם משתמש</label>
                     <input type="text" class="form-control" id="username" name="username" required autofocus>
                 </div>
                 <div class="mb-3">
-                    <label for="password" class="form-label">Password</label>
+                    <label for="password" class="form-label">סיסמה</label>
                     <input type="password" class="form-control" id="password" name="password" required>
                 </div>
                 <button type="submit" class="btn btn-primary w-100" style="background-color: #6c5ce7; border: none;">
-                    <i class="bi bi-box-arrow-in-right"></i> Log In
+                    <i class="bi bi-box-arrow-in-left"></i> התחברות
                 </button>
             </form>
         </div>
