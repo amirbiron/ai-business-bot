@@ -56,6 +56,7 @@
 
     /* Sidebar */
     --sidebar-width: 260px;
+    --topbar-height: 56px;
 
     /* Transitions */
     --transition: all 0.3s ease;
@@ -293,7 +294,7 @@ a:hover {
     top: 0;
     right: 0;
     left: 0;
-    height: 56px;
+    height: var(--topbar-height);
     background: rgba(15, 23, 42, 0.95);
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
@@ -1056,6 +1057,7 @@ textarea:focus-visible,
 @media (max-width: 768px) {
     html {
         font-size: 14px;
+        overflow-x: hidden;
     }
 
     body {
@@ -1064,12 +1066,15 @@ textarea:focus-visible,
 
     .sidebar {
         transform: translateX(100%);
-        top: 56px;
-        height: calc(100vh - 56px);
+        visibility: hidden;
+        transition: transform 0.3s ease, visibility 0.3s;
+        top: var(--topbar-height);
+        height: calc(100vh - var(--topbar-height));
     }
 
     .sidebar.open {
         transform: translateX(0);
+        visibility: visible;
         box-shadow: var(--shadow-lg);
     }
 
@@ -1084,7 +1089,9 @@ textarea:focus-visible,
     .main-content {
         margin-right: 0;
         padding: 1rem;
-        padding-top: calc(56px + 1rem);
+        padding-top: calc(var(--topbar-height) + 1rem);
+        max-width: 100vw;
+        overflow-x: hidden;
     }
 
     .page-header h1 {
