@@ -26,7 +26,7 @@
                         <span class="fw-semibold">{{ user.username or 'לא ידוע' }}</span>
                         <span class="badge badge-info">{{ user.message_count }}</span>
                     </div>
-                    <span class="text-small text-muted">אחרון: {{ user.last_active }}</span>
+                    <span class="text-small text-muted">אחרון: {{ user.last_active|il_datetime }}</span>
                 </a>
                 {% endfor %}
             </div>
@@ -57,7 +57,7 @@
                         <i class="bi bi-robot" style="color: var(--success);"></i> בוט
                         {% endif %}
                     </span>
-                    <span class="time">{{ msg.created_at }}</span>
+                    <span class="time">{{ msg.created_at|il_datetime }}</span>
                 </div>
                 <div class="message-content">{{ msg.message }}</div>
                 {% if msg.sources %}

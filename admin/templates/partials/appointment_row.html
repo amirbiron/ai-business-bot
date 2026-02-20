@@ -24,7 +24,7 @@
         <span class="badge badge-danger">בוטל</span>
         {% endif %}
     </td>
-    <td class="text-small text-muted">{{ appt.created_at }}</td>
+    <td class="text-small text-muted">{{ appt.created_at|il_datetime }}</td>
     <td>
         {% if appt.status == 'pending' %}
         <div class="actions-cell">

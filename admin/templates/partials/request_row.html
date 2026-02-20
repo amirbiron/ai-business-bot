@@ -23,7 +23,7 @@
         <span class="badge badge-muted">{{ req.status }}</span>
         {% endif %}
     </td>
-    <td class="text-small text-muted">{{ req.created_at }}</td>
+    <td class="text-small text-muted">{{ req.created_at|il_datetime }}</td>
     <td>
         {% if req.status == 'pending' %}
         <div class="actions-cell">
@@ -43,7 +43,7 @@
             </button>
         </div>
         {% elif req.handled_at %}
-        <span class="text-small text-muted">{{ req.handled_at }}</span>
+        <span class="text-small text-muted">{{ req.handled_at|il_datetime }}</span>
         {% endif %}
     </td>
 </tr>

@@ -21,7 +21,7 @@
 <div class="filter-pills animate-fade-in">
     <a href="/kb" class="filter-pill {% if not current_category %}active{% endif %}">הכל</a>
     {% for cat in categories %}
-    <a href="/kb?category={{ cat }}" class="filter-pill {% if current_category == cat %}active{% endif %}">{{ cat }}</a>
+    <a href="/kb?category={{ cat }}" class="filter-pill {% if current_category == cat %}active{% endif %}">{{ cat|translate_category }}</a>
     {% endfor %}
 </div>
 
@@ -46,7 +46,7 @@
                     {% for entry in entries %}
                     <tr id="kb-row-{{ entry.id }}">
                         <td>{{ entry.id }}</td>
-                        <td><span class="badge badge-category">{{ entry.category }}</span></td>
+                        <td><span class="badge badge-category">{{ entry.category|translate_category }}</span></td>
                         <td class="fw-semibold" style="color: var(--text-primary);">{{ entry.title }}</td>
                         <td>{{ entry.content[:100] }}{% if entry.content|length > 100 %}...{% endif %}</td>
                         <td>
@@ -56,7 +56,7 @@
                             <span class="badge badge-danger">לא פעיל</span>
                             {% endif %}
                         </td>
-                        <td class="text-small text-muted">{{ entry.updated_at }}</td>
+                        <td class="text-small text-muted">{{ entry.updated_at|il_datetime }}</td>
                         <td>
                             <div class="actions-cell">
                                 <a href="/kb/edit/{{ entry.id }}" class="btn btn-secondary btn-icon btn-sm" title="ערוך">
