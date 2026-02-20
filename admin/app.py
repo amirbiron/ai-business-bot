@@ -13,6 +13,7 @@ Features:
 import hmac
 import logging
 from functools import wraps
+from urllib.parse import urlparse
 from flask import (
     Flask,
     render_template,
@@ -61,14 +62,40 @@ def _validate_admin_security_config() -> None:
 def _verify_admin_credentials(username: str, password: str) -> bool:
     if not username or not password:
         return False
-    if not hmac.compare_digest(str(username), str(ADMIN_USERNAME)):
-        return False
+
+    username_ok = hmac.compare_digest(str(username), str(ADMIN_USERNAME))
+
+    # Always perform the password check to avoid a timing oracle that can
+    # distinguish "wrong username" from "right username, wrong password".
     if ADMIN_PASSWORD_HASH:
         try:
-            return check_password_hash(ADMIN_PASSWORD_HASH, password)
+            password_ok = check_password_hash(ADMIN_PASSWORD_HASH, str(password))
         except Exception:
-            return False
-    return hmac.compare_digest(str(password), str(ADMIN_PASSWORD))
+            password_ok = False
+    else:
+        password_ok = hmac.compare_digest(str(password), str(ADMIN_PASSWORD))
+
+    return username_ok and password_ok
+
+
+def _safe_redirect_back(default_url: str) -> str:
+    """
+    Return a safe same-origin redirect target derived from Referer, or a default.
+    """
+    ref = request.referrer
+    if not ref:
+        return default_url
+    try:
+        ref_url = urlparse(ref)
+        host_url = urlparse(request.host_url)
+        if ref_url.scheme in ("http", "https") and ref_url.netloc == host_url.netloc:
+            path = ref_url.path or "/"
+            if not path.startswith("/"):
+                return default_url
+            return f"{path}?{ref_url.query}" if ref_url.query else path
+    except Exception:
+        return default_url
+    return default_url
 
 
 def create_admin_app() -> Flask:
@@ -88,7 +115,8 @@ def create_admin_app() -> Flask:
     def _handle_csrf_error(e):
         # Avoid leaking CSRF details; just ask the user to retry.
         flash("פג תוקף הטופס. נסו שוב.", "danger")
-        return redirect(request.referrer or url_for("login"))
+        default = url_for("dashboard") if session.get("logged_in") else url_for("login")
+        return redirect(_safe_redirect_back(default))
     
     # ─── Auth Decorator ───────────────────────────────────────────────────
     
