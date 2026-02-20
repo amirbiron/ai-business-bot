@@ -67,6 +67,12 @@
                     <div class="list-group-item d-flex justify-content-between align-items-center">
                         <div>
                             <strong>{{ req.username }}</strong>
+                            {% if req.telegram_username %}
+                            <br>
+                            <a class="small text-decoration-none" href="https://t.me/{{ req.telegram_username }}" target="_blank" rel="noopener">
+                                @{{ req.telegram_username }}
+                            </a>
+                            {% endif %}
                             <br><small class="text-muted">{{ req.created_at }}</small>
                         </div>
                         <span class="badge badge-pending">ממתין</span>
@@ -96,6 +102,12 @@
                             <strong>{{ appt.username }}</strong>
                             <span class="badge badge-pending">{{ appt.status }}</span>
                         </div>
+                        {% if appt.telegram_username %}
+                        <a class="small text-decoration-none" href="https://t.me/{{ appt.telegram_username }}" target="_blank" rel="noopener">
+                            @{{ appt.telegram_username }}
+                        </a>
+                        <br>
+                        {% endif %}
                         <small>{{ appt.service }} — {{ appt.preferred_date }} בשעה {{ appt.preferred_time }}</small>
                     </div>
                     {% endfor %}

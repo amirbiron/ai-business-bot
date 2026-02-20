@@ -24,7 +24,14 @@
                         <td>{{ req.id }}</td>
                         <td>
                             <strong>{{ req.username }}</strong>
-                            <br><small class="text-muted">מזהה: {{ req.user_id }}</small>
+                            {% if req.telegram_username %}
+                            <br>
+                            <a class="small text-decoration-none" href="https://t.me/{{ req.telegram_username }}" target="_blank" rel="noopener">
+                                @{{ req.telegram_username }}
+                            </a>
+                            {% else %}
+                            <br><small class="text-muted">ללא שם משתמש בטלגרם</small>
+                            {% endif %}
                         </td>
                         <td>{{ req.message }}</td>
                         <td>
