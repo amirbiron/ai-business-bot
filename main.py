@@ -65,15 +65,25 @@ def main():
     # Always initialize the database
     logger.info("Initializing database...")
     db.init_db()
-    
+
     if args.seed:
         run_seed()
         return
-    
+
+    # Auto-seed on first run: if the knowledge base is empty, populate it with
+    # demo data and build the FAISS index so the bot can answer questions
+    # immediately without requiring a manual --seed step.
+    if db.count_kb_entries(active_only=False) == 0:
+        logger.info("Knowledge base is empty — auto-seeding with demo data...")
+        try:
+            run_seed()
+        except Exception:
+            logger.exception("Auto-seed failed. Continuing without demo data.")
+
     if args.bot:
         run_telegram_bot()
         return
-    
+
     if args.admin:
         run_admin_panel()
         return
