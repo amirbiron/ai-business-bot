@@ -102,7 +102,7 @@ def _strip_source_citation(response_text: str) -> str:
     The source citation (e.g. "מקור: מחירון קיץ 2025") is required internally
     for quality validation but should not be visible to end users.
     """
-    cleaned = re.sub(r"\n*([Ss]ource|מקור):\s*.+", "", response_text)
+    cleaned = re.sub(r"\n*" + SOURCE_CITATION_PATTERN, "", response_text)
     return cleaned.strip()
 
 
