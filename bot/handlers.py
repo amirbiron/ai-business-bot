@@ -97,8 +97,6 @@ def _should_handoff_to_human(text: str) -> bool:
     # Common phrasing from SYSTEM_PROMPT rule #2
     if "תנו לי להעביר" in t and "נציג אנושי" in t:
         return True
-    if t.startswith("אין לי את המידע הזה כרגע"):
-        return True
     return False
 
 
@@ -154,10 +152,7 @@ async def _handoff_to_human(
         message=reason,
     )
 
-    response_text = (
-        "אין לי את המידע הזה כרגע. תנו לי להעביר אתכם לנציג אנושי שיוכל לעזור. "
-        "נציג אנושי יחזור אליכם בקרוב!"
-    )
+    response_text = FALLBACK_RESPONSE
     db.save_message(user_id, display_name, "assistant", response_text)
     await update.message.reply_text(
         response_text,
@@ -317,6 +312,9 @@ async def talk_to_agent_handler(update: Update, context: ContextTypes.DEFAULT_TY
 async def booking_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Start the appointment booking conversation."""
     user_id, display_name, telegram_username = _get_user_info(update)
+
+    # Log the user's booking attempt even if we handoff to human.
+    db.save_message(user_id, display_name, "user", "📅 Book Appointment")
     
     # Get available services from KB
     result = await _generate_answer_async("What services do you offer? List them briefly.")
@@ -339,8 +337,6 @@ async def booking_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         "אנא כתבו את *השירות* שתרצו להזמין "
         "(או הקלידו /cancel כדי לחזור):"
     )
-    
-    db.save_message(user_id, display_name, "user", "📅 Book Appointment")
     
     await _reply_markdown_safe(update.message, text)
     return BOOKING_SERVICE
