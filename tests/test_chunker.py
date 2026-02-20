@@ -1,4 +1,4 @@
-from rag.chunker import chunk_text, create_chunks_for_entry, estimate_tokens
+from ai_chatbot.rag.chunker import chunk_text, create_chunks_for_entry, estimate_tokens
 
 
 def test_chunk_text_returns_single_chunk_when_under_limit():

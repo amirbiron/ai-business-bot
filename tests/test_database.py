@@ -1,6 +1,6 @@
 from pathlib import Path
 
-import database as db
+from ai_chatbot import database as db
 
 
 def _use_temp_db(tmp_path: Path) -> None:
