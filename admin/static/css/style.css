@@ -1055,9 +1055,13 @@ textarea:focus-visible,
 }
 
 @media (max-width: 768px) {
+    html,
+    body {
+        overflow-x: hidden;
+    }
+
     html {
         font-size: 14px;
-        overflow-x: hidden;
     }
 
     .sidebar {
