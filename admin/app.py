@@ -13,8 +13,11 @@ Features:
 import hmac
 import json
 import logging
+from datetime import datetime, timezone
 from functools import wraps
 from urllib.parse import urlparse
+from zoneinfo import ZoneInfo
+
 from flask import (
     Flask,
     render_template,
@@ -45,6 +48,49 @@ logger = logging.getLogger(__name__)
 
 VALID_AGENT_REQUEST_STATUSES = {"pending", "handled", "dismissed"}
 VALID_APPOINTMENT_STATUSES = {"pending", "confirmed", "cancelled"}
+
+ISRAEL_TZ = ZoneInfo("Asia/Jerusalem")
+
+CATEGORY_TRANSLATION = {
+    "Staff": "הצוות",
+    "Services": "שירותים",
+    "Promotions": "הטבות",
+    "Pricing": "מחירון",
+    "Policies": "מדיניות",
+    "Location": "מיקום",
+    "Hours": "שעות",
+    "FAQ": "שאלות נפוצות",
+}
+
+STATUS_TRANSLATION = {
+    "pending": "ממתין",
+    "handled": "טופל",
+    "dismissed": "נדחה",
+    "confirmed": "מאושר",
+    "cancelled": "בוטל",
+}
+
+
+def _format_il_datetime(value: str) -> str:
+    """Format a UTC datetime string to Israel time as DD-MM-YYYY HH:MM."""
+    if not value:
+        return ""
+    try:
+        dt = datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
+        dt = dt.replace(tzinfo=timezone.utc).astimezone(ISRAEL_TZ)
+        return dt.strftime("%d-%m-%Y %H:%M")
+    except (ValueError, TypeError):
+        return value
+
+
+def _translate_category(value: str) -> str:
+    """Translate an English KB category name to Hebrew."""
+    return CATEGORY_TRANSLATION.get(value, value)
+
+
+def _translate_status(value: str) -> str:
+    """Translate an English status to Hebrew."""
+    return STATUS_TRANSLATION.get(value, value)
 
 
 def _validate_admin_security_config() -> None:
@@ -112,6 +158,10 @@ def create_admin_app() -> Flask:
 
     csrf = CSRFProtect()
     csrf.init_app(app)
+
+    app.jinja_env.filters["il_datetime"] = _format_il_datetime
+    app.jinja_env.filters["translate_category"] = _translate_category
+    app.jinja_env.filters["translate_status"] = _translate_status
 
     @app.context_processor
     def _inject_rag_index_state():

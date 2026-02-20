@@ -56,7 +56,7 @@
                                 @{{ req.telegram_username }}
                             </a>
                             {% endif %}
-                            <br><span class="text-small text-muted">{{ req.created_at }}</span>
+                            <br><span class="text-small text-muted">{{ req.created_at|il_datetime }}</span>
                         </div>
                         <span class="badge badge-warning">ממתין</span>
                     </div>
@@ -85,7 +85,7 @@
                 <div class="list-group-item">
                     <div class="d-flex justify-between align-center" style="margin-bottom: 0.25rem;">
                         <span class="fw-semibold">{{ appt.username }}</span>
-                        <span class="badge badge-warning">{{ appt.status }}</span>
+                        <span class="badge badge-warning">{{ appt.status|translate_status }}</span>
                     </div>
                     {% if appt.telegram_username %}
                     <a class="text-small" href="https://t.me/{{ appt.telegram_username }}" target="_blank" rel="noopener">
