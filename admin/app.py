@@ -263,7 +263,7 @@ def create_admin_app() -> Flask:
             rebuild_index()
             flash("אינדקס RAG נבנה מחדש בהצלחה!", "success")
         except Exception as e:
-            logger.error(f"Index rebuild failed: {e}")
+            logger.error("Index rebuild failed: %s", e)
             flash(f"בניית האינדקס נכשלה: {str(e)}", "danger")
         return redirect(url_for("kb_list"))
     
@@ -339,11 +339,9 @@ def create_admin_app() -> Flask:
     @app.route("/api/stats")
     @login_required
     def api_stats():
-        pending_requests = db.get_agent_requests(status="pending")
-        pending_appointments = db.get_appointments(status="pending")
         return jsonify({
-            "pending_requests": len(pending_requests),
-            "pending_appointments": len(pending_appointments),
+            "pending_requests": db.count_agent_requests(status="pending"),
+            "pending_appointments": db.count_appointments(status="pending"),
         })
     
     return app
@@ -351,6 +349,6 @@ def create_admin_app() -> Flask:
 
 def run_admin():
     """Start the Flask admin panel (blocking call)."""
-    logger.info(f"Starting admin panel on {ADMIN_HOST}:{ADMIN_PORT}")
+    logger.info("Starting admin panel on %s:%s", ADMIN_HOST, ADMIN_PORT)
     app = create_admin_app()
     app.run(host=ADMIN_HOST, port=ADMIN_PORT, debug=False)

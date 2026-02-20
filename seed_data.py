@@ -398,11 +398,11 @@ def seed_database():
     # Check if data already exists
     existing = db.get_all_kb_entries()
     if existing:
-        logger.info(f"Database already has {len(existing)} entries. Skipping seed.")
+        logger.info("Database already has %s entries. Skipping seed.", len(existing))
         logger.info("To re-seed, delete the database file first: ai_chatbot/data/chatbot.db")
         return False
     
-    logger.info(f"Seeding {len(DEMO_ENTRIES)} knowledge base entries...")
+    logger.info("Seeding %s knowledge base entries...", len(DEMO_ENTRIES))
     
     for entry in DEMO_ENTRIES:
         entry_id = db.add_kb_entry(
@@ -410,7 +410,12 @@ def seed_database():
             title=entry["title"],
             content=entry["content"],
         )
-        logger.info(f"  Added: [{entry['category']}] {entry['title']} (ID: {entry_id})")
+        logger.info(
+            "  Added: [%s] %s (ID: %s)",
+            entry["category"],
+            entry["title"],
+            entry_id,
+        )
     
     logger.info("Seed data inserted successfully!")
     return True

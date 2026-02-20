@@ -187,7 +187,7 @@ async def talk_to_agent_handler(update: Update, context: ContextTypes.DEFAULT_TY
                 parse_mode="Markdown"
             )
         except Exception as e:
-            logger.error(f"Failed to send owner notification: {e}")
+            logger.error("Failed to send owner notification: %s", e)
     
     response_text = (
         "👤 הודעתי לצוות שלנו שאתם מעוניינים לדבר עם מישהו.\n\n"
@@ -307,7 +307,7 @@ async def booking_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     parse_mode="Markdown"
                 )
             except Exception as e:
-                logger.error(f"Failed to send appointment notification: {e}")
+                logger.error("Failed to send appointment notification: %s", e)
         
         db.save_message(user_id, username, "assistant",
                         f"תור נקבע: {service} בתאריך {date} בשעה {time}")
@@ -390,7 +390,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle errors gracefully."""
-    logger.error(f"Update {update} caused error: {context.error}")
+    logger.error("Update %s caused error: %s", update, context.error)
     
     if update and update.effective_message:
         await update.effective_message.reply_text(

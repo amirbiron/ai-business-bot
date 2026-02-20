@@ -35,7 +35,7 @@ def run_seed():
 def run_admin_panel():
     """Start the Flask admin panel in a thread."""
     from ai_chatbot.admin.app import run_admin
-    logger.info(f"Starting Admin Panel at http://{ADMIN_HOST}:{ADMIN_PORT}")
+    logger.info("Starting Admin Panel at http://%s:%s", ADMIN_HOST, ADMIN_PORT)
     run_admin()
 
 
@@ -84,7 +84,7 @@ def main():
     # Start admin panel in a background thread
     admin_thread = threading.Thread(target=run_admin_panel, daemon=True)
     admin_thread.start()
-    logger.info(f"Admin panel started at http://{ADMIN_HOST}:{ADMIN_PORT}")
+    logger.info("Admin panel started at http://%s:%s", ADMIN_HOST, ADMIN_PORT)
     
     # Start the Telegram bot in the main thread (it uses asyncio)
     if TELEGRAM_BOT_TOKEN:

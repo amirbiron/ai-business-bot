@@ -88,8 +88,8 @@ def _quality_check(response_text: str) -> str:
         return response_text
     
     logger.warning(
-        f"Quality check failed — no source citation found. "
-        f"Response preview: '{response_text[:100]}...'"
+        "Quality check failed — no source citation found. Response preview: '%s...'",
+        response_text[:100],
     )
     return FALLBACK_RESPONSE
 
@@ -139,7 +139,7 @@ def generate_answer(
         )
         raw_answer = response.choices[0].message.content.strip()
     except Exception as e:
-        logger.error(f"LLM API error: {e}")
+        logger.error("LLM API error: %s", e)
         return {
             "answer": FALLBACK_RESPONSE,
             "sources": [],
