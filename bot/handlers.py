@@ -24,11 +24,12 @@ from telegram.error import BadRequest
 from telegram.ext import ContextTypes, ConversationHandler
 
 from ai_chatbot import database as db
-from ai_chatbot.llm import generate_answer, strip_source_citation
+from ai_chatbot.llm import generate_answer, strip_source_citation, maybe_summarize
 from ai_chatbot.config import (
     BUSINESS_NAME,
     TELEGRAM_OWNER_CHAT_ID,
     FALLBACK_RESPONSE,
+    CONTEXT_WINDOW_SIZE,
 )
 
 logger = logging.getLogger(__name__)
@@ -362,21 +363,25 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Show typing indicator
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
-    
+
     # Get conversation history for context continuity
-    history = db.get_conversation_history(user_id, limit=10)
-    
+    history = db.get_conversation_history(user_id, limit=CONTEXT_WINDOW_SIZE)
+
     # Save user message
     db.save_message(user_id, username, "user", user_message)
-    
-    # Generate answer via RAG + LLM
+
+    # Generate answer via RAG + LLM (with user_id for summary loading)
     result = await _generate_answer_async(
         user_query=user_message,
         conversation_history=history,
+        user_id=user_id,
     )
-    
+
     # Save assistant response (raw, with citation) for history consistency
     db.save_message(user_id, username, "assistant", result["answer"], ", ".join(result["sources"]))
+
+    # Trigger summarization if threshold reached (runs in background)
+    await asyncio.to_thread(maybe_summarize, user_id)
 
     # Send citation-stripped response to customer
     await _reply_markdown_safe(

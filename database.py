@@ -97,11 +97,21 @@ def init_db():
                 created_at  TEXT DEFAULT (datetime('now'))
             );
 
+            -- Conversation summaries for long-term memory
+            CREATE TABLE IF NOT EXISTS conversation_summaries (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id         TEXT NOT NULL,
+                summary_text    TEXT NOT NULL,
+                message_count   INTEGER NOT NULL DEFAULT 0,
+                created_at      TEXT DEFAULT (datetime('now'))
+            );
+
             -- Create indexes
             CREATE INDEX IF NOT EXISTS idx_kb_entries_category ON kb_entries(category);
             CREATE INDEX IF NOT EXISTS idx_kb_chunks_entry ON kb_chunks(entry_id);
             CREATE INDEX IF NOT EXISTS idx_conversations_user ON conversations(user_id);
             CREATE INDEX IF NOT EXISTS idx_agent_requests_status ON agent_requests(status);
+            CREATE INDEX IF NOT EXISTS idx_conversation_summaries_user ON conversation_summaries(user_id);
         """)
 
 
@@ -266,6 +276,65 @@ def get_unique_users() -> list[dict]:
             GROUP BY user_id 
             ORDER BY last_active DESC
         """).fetchall()
+        return [dict(r) for r in rows]
+
+
+def get_unsummarized_message_count(user_id: str) -> int:
+    """Count messages for a user that haven't been included in any summary yet."""
+    with get_connection() as conn:
+        # Get the total messages covered by summaries
+        summary_row = conn.execute(
+            "SELECT COALESCE(SUM(message_count), 0) AS total FROM conversation_summaries WHERE user_id=?",
+            (user_id,)
+        ).fetchone()
+        summarized_count = int(summary_row["total"])
+
+        total_row = conn.execute(
+            "SELECT COUNT(*) AS count FROM conversations WHERE user_id=?",
+            (user_id,)
+        ).fetchone()
+        total_count = int(total_row["count"])
+
+        return max(0, total_count - summarized_count)
+
+
+def get_messages_for_summarization(user_id: str, limit: int) -> list[dict]:
+    """Get the oldest unsummarized messages for a user (to create a summary from)."""
+    with get_connection() as conn:
+        # Get total summarized count to know the offset
+        summary_row = conn.execute(
+            "SELECT COALESCE(SUM(message_count), 0) AS total FROM conversation_summaries WHERE user_id=?",
+            (user_id,)
+        ).fetchone()
+        offset = int(summary_row["total"])
+
+        rows = conn.execute(
+            """SELECT role, message, created_at
+               FROM conversations WHERE user_id=?
+               ORDER BY id ASC LIMIT ? OFFSET ?""",
+            (user_id, limit, offset)
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def save_conversation_summary(user_id: str, summary_text: str, message_count: int):
+    """Save a conversation summary for a user."""
+    with get_connection() as conn:
+        conn.execute(
+            "INSERT INTO conversation_summaries (user_id, summary_text, message_count) VALUES (?, ?, ?)",
+            (user_id, summary_text, message_count)
+        )
+
+
+def get_conversation_summaries(user_id: str) -> list[dict]:
+    """Get all conversation summaries for a user, ordered chronologically."""
+    with get_connection() as conn:
+        rows = conn.execute(
+            """SELECT summary_text, message_count, created_at
+               FROM conversation_summaries WHERE user_id=?
+               ORDER BY id ASC""",
+            (user_id,)
+        ).fetchall()
         return [dict(r) for r in rows]
 
 
