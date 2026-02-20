@@ -16,7 +16,6 @@ from functools import wraps
 from urllib.parse import urlparse
 from flask import (
     Flask,
-    make_response,
     render_template,
     request,
     redirect,
@@ -119,7 +118,15 @@ def create_admin_app() -> Flask:
 
     @app.errorhandler(CSRFError)
     def _handle_csrf_error(e):
-        # Avoid leaking CSRF details; just ask the user to retry.
+        if request.headers.get("HX-Request"):
+            # Return a lightweight 403 so HTMX doesn't replace content with
+            # a full redirect page.  The csrfExpired trigger tells client JS
+            # to show a reload prompt.
+            resp = app.make_response(("", 403))
+            resp.headers["HX-Retarget"] = "none"
+            resp.headers["HX-Trigger"] = "csrfExpired"
+            return resp
+        # Regular form submission — flash and redirect.
         flash("פג תוקף הטופס. נסו שוב.", "danger")
         default = url_for("dashboard") if session.get("logged_in") else url_for("login")
         return redirect(_safe_redirect_back(default))
@@ -255,7 +262,9 @@ def create_admin_app() -> Flask:
         db.delete_kb_entry(entry_id)
         mark_index_stale()
         if request.headers.get("HX-Request"):
-            return ""
+            resp = app.make_response("")
+            resp.headers["HX-Trigger"] = "showStaleWarning"
+            return resp
         flash("הרשומה נמחקה.", "success")
         return redirect(url_for("kb_list"))
     

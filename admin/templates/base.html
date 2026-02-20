@@ -10,11 +10,11 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <!-- Bootstrap Icons -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet" crossorigin="anonymous">
     <!-- Design System CSS -->
     <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
     <!-- HTMX -->
-    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+    <script src="https://unpkg.com/htmx.org@2.0.4" crossorigin="anonymous"></script>
 </head>
 <body hx-headers='{"X-CSRFToken": "{{ csrf_token() }}"}'>
     <!-- Mobile Top Bar -->
@@ -89,8 +89,7 @@
             {% endwith %}
             </div>
 
-            {% if rag_index_stale %}
-            <div class="rag-stale-warning">
+            <div id="rag-stale-banner" class="rag-stale-warning" {% if not rag_index_stale %}style="display:none;"{% endif %}>
                 <div>
                     <strong>האינדקס לא מעודכן.</strong>
                     שינוי בבסיס הידע עדיין לא משוקף בבוט — מומלץ לבנות מחדש את אינדקס ה‑RAG.
@@ -103,7 +102,6 @@
                     </button>
                 </form>
             </div>
-            {% endif %}
 
             {% block content %}{% endblock %}
         </main>
@@ -150,6 +148,17 @@
                 setTimeout(function() { el.remove(); }, 300);
             });
         }, 5000);
+
+        // HTMX: show RAG stale warning after KB delete
+        document.body.addEventListener('showStaleWarning', function() {
+            var banner = document.getElementById('rag-stale-banner');
+            if (banner) banner.style.display = '';
+        });
+
+        // HTMX: handle expired CSRF token
+        document.body.addEventListener('csrfExpired', function() {
+            alert('פג תוקף הטופס. יש לרענן את הדף ולנסות שוב.');
+        });
     </script>
 
     {% block scripts %}{% endblock %}
