@@ -13,6 +13,8 @@ from ai_chatbot.openai_client import get_openai_client
 from ai_chatbot.config import (
     OPENAI_MODEL,
     LLM_MAX_TOKENS,
+    LLM_TEMPERATURE,
+    CONVERSATION_HISTORY_LIMIT,
     SYSTEM_PROMPT,
     SOURCE_CITATION_PATTERN,
     FALLBACK_RESPONSE,
@@ -57,7 +59,7 @@ def _build_messages(
     
     # Conversation history (last N messages for continuity)
     if conversation_history:
-        for msg in conversation_history[-10:]:  # Keep last 10 messages
+        for msg in conversation_history[-CONVERSATION_HISTORY_LIMIT:]:
             messages.append({
                 "role": msg["role"],
                 "content": msg["message"]
@@ -146,7 +148,7 @@ def generate_answer(
         response = client.chat.completions.create(
             model=OPENAI_MODEL,
             messages=messages,
-            temperature=0.3,
+            temperature=LLM_TEMPERATURE,
             max_tokens=LLM_MAX_TOKENS,
         )
         raw_answer = response.choices[0].message.content.strip()

@@ -37,6 +37,8 @@ RAG_TOP_K = int(os.getenv("RAG_TOP_K", "10"))
 RAG_MIN_RELEVANCE = float(os.getenv("RAG_MIN_RELEVANCE", "0.3"))
 CHUNK_MAX_TOKENS = int(os.getenv("CHUNK_MAX_TOKENS", "300"))
 LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "1024"))
+LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.3"))
+CONVERSATION_HISTORY_LIMIT = int(os.getenv("CONVERSATION_HISTORY_LIMIT", "10"))
 
 # ─── Admin Panel ─────────────────────────────────────────────────────────────
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
@@ -47,7 +49,7 @@ ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
 ADMIN_PASSWORD_HASH = os.getenv("ADMIN_PASSWORD_HASH", "")
 ADMIN_SECRET_KEY = os.getenv("ADMIN_SECRET_KEY", "")
-ADMIN_HOST = os.getenv("ADMIN_HOST", "0.0.0.0")
+ADMIN_HOST = os.getenv("ADMIN_HOST", "127.0.0.1")
 ADMIN_PORT = int(os.getenv("ADMIN_PORT") or os.getenv("PORT") or "5000")
 
 # ─── Business Info (defaults for demo) ───────────────────────────────────────
