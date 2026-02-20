@@ -24,7 +24,7 @@ from telegram.error import BadRequest
 from telegram.ext import ContextTypes, ConversationHandler
 
 from ai_chatbot import database as db
-from ai_chatbot.llm import generate_answer
+from ai_chatbot.llm import generate_answer, strip_source_citation
 from ai_chatbot.config import (
     BUSINESS_NAME,
     TELEGRAM_OWNER_CHAT_ID,
@@ -79,11 +79,11 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     welcome_text = (
         f"👋 ברוכים הבאים ל-*{BUSINESS_NAME}*!\n\n"
-        f"אני העוזר/ת הווירטואלי/ת שלכם. אני יכול/ה לעזור לכם עם:\n"
+        f"אני העוזר הווירטואלי שלכם. אני יכול לעזור לכם עם:\n"
         f"• מידע על השירותים והמחירים שלנו\n"
         f"• קביעת תורים\n"
         f"• מענה על שאלות\n"
-        f"• חיבור לנציג/ת אנושי/ת\n\n"
+        f"• חיבור לנציג אנושי\n\n"
         f"פשוט כתבו את השאלה שלכם או השתמשו בכפתורים למטה! 👇"
     )
     
@@ -108,7 +108,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• לחצו על *📋 מחירון* כדי לראות את השירותים והמחירים\n"
         "• לחצו על *📅 קביעת תור* כדי לקבוע ביקור\n"
         "• לחצו על *📍 שליחת מיקום* כדי לקבל את הכתובת והמפה שלנו\n"
-        "• לחצו על *👤 דברו עם נציג* כדי לדבר עם נציג/ה אמיתי/ת\n\n"
+        "• לחצו על *👤 דברו עם נציג* כדי לדבר עם נציג אמיתי\n\n"
         "אפשר גם לשאול שאלות כמו:\n"
         '  _"מה שעות הפתיחה שלכם?"_\n'
         '  _"האם אתם מציעים צביעת שיער?"_\n'
@@ -135,10 +135,10 @@ async def price_list_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     
     db.save_message(user_id, username, "user", "📋 Price List")
     db.save_message(user_id, username, "assistant", result["answer"], ", ".join(result["sources"]))
-    
+
     await _reply_markdown_safe(
         update.message,
-        result["answer"],
+        strip_source_citation(result["answer"]),
         reply_markup=_get_main_keyboard(),
     )
 
@@ -154,10 +154,10 @@ async def location_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     db.save_message(user_id, username, "user", "📍 Send Location")
     db.save_message(user_id, username, "assistant", result["answer"], ", ".join(result["sources"]))
-    
+
     await _reply_markdown_safe(
         update.message,
-        result["answer"],
+        strip_source_citation(result["answer"]),
         reply_markup=_get_main_keyboard(),
     )
 
@@ -169,17 +169,17 @@ async def talk_to_agent_handler(update: Update, context: ContextTypes.DEFAULT_TY
     user_id, username = _get_user_info(update)
     
     # Create agent request in database
-    request_id = db.create_agent_request(user_id, username, "לקוח/ה ביקש/ה לדבר עם נציג/ה")
+    request_id = db.create_agent_request(user_id, username, "לקוח ביקש לדבר עם נציג")
     
     # Notify the business owner via Telegram
     if TELEGRAM_OWNER_CHAT_ID:
         try:
             notification = (
                 f"🔔 *בקשת נציג #{request_id}*\n\n"
-                f"לקוח/ה: {username}\n"
+                f"לקוח: {username}\n"
                 f"מזהה משתמש: {user_id}\n"
                 f"זמן: עכשיו\n\n"
-                f"הלקוח/ה מבקש/ת לדבר עם נציג/ה אנושי/ת."
+                f"הלקוח מבקש לדבר עם נציג אנושי."
             )
             await context.bot.send_message(
                 chat_id=TELEGRAM_OWNER_CHAT_ID,
@@ -191,7 +191,7 @@ async def talk_to_agent_handler(update: Update, context: ContextTypes.DEFAULT_TY
     
     response_text = (
         "👤 הודעתי לצוות שלנו שאתם מעוניינים לדבר עם מישהו.\n\n"
-        "נציג/ה אנושי/ת יחזור/תחזור אליכם בקרוב. "
+        "נציג אנושי יחזור אליכם בקרוב. "
         "בינתיים, אתם מוזמנים לשאול אותי כל שאלה נוספת!"
     )
     
@@ -215,7 +215,7 @@ async def booking_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     
     text = (
         "📅 *קביעת תור*\n\n"
-        f"{result['answer']}\n\n"
+        f"{strip_source_citation(result['answer'])}\n\n"
         "אנא כתבו את *השירות* שתרצו להזמין "
         "(או הקלידו /cancel כדי לחזור):"
     )
@@ -296,7 +296,7 @@ async def booking_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             try:
                 notification = (
                     f"📅 *בקשת תור חדשה #{appt_id}*\n\n"
-                    f"לקוח/ה: {username}\n"
+                    f"לקוח: {username}\n"
                     f"שירות: {service}\n"
                     f"תאריך: {date}\n"
                     f"שעה: {time}\n"
@@ -375,13 +375,13 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         conversation_history=history,
     )
     
-    # Save assistant response
+    # Save assistant response (raw, with citation) for history consistency
     db.save_message(user_id, username, "assistant", result["answer"], ", ".join(result["sources"]))
-    
-    # Send response
+
+    # Send citation-stripped response to customer
     await _reply_markdown_safe(
         update.message,
-        result["answer"],
+        strip_source_citation(result["answer"]),
         reply_markup=_get_main_keyboard(),
     )
 
@@ -395,6 +395,6 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update and update.effective_message:
         await update.effective_message.reply_text(
             "מצטערים, משהו השתבש. אנא נסו שוב או לחצו על "
-            "'👤 דברו עם נציג' כדי לדבר עם נציג/ה אנושי/ת.",
+            "'👤 דברו עם נציג' כדי לדבר עם נציג אנושי.",
             reply_markup=_get_main_keyboard()
         )

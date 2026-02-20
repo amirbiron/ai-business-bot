@@ -47,7 +47,7 @@
                         <strong>
                             {% if msg.role == 'user' %}
                             <i class="bi bi-person-circle text-primary"></i>
-                            {{ msg.get('username', 'לקוח/ה') if msg.get('username') else 'לקוח/ה' }}
+                            {{ msg.get('username', 'לקוח') if msg.get('username') else 'לקוח' }}
                             {% else %}
                             <i class="bi bi-robot text-success"></i> בוט
                             {% endif %}

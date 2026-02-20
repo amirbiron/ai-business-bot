@@ -45,10 +45,10 @@ def _build_messages(
     
     # Layer B — RAG context
     context_message = (
-        "מידע הקשר (השתמש/י רק במידע זה כדי לענות על שאלת הלקוח/ה):\n\n"
+        "מידע הקשר (השתמש רק במידע זה כדי לענות על שאלת הלקוח):\n\n"
         f"{context}\n\n"
-        "חשוב: בסס/י את תשובתך רק על המידע למעלה. "
-        "תמיד סיים/י את התשובה עם 'מקור: [שם המקור]' בציון ההקשר שבו השתמשת."
+        "חשוב: בסס את תשובתך רק על המידע למעלה. "
+        "תמיד סיים את התשובה עם 'מקור: [שם המקור]' בציון ההקשר שבו השתמשת."
     )
     messages.append({
         "role": "system",
@@ -87,12 +87,23 @@ def _quality_check(response_text: str) -> str:
     """
     if re.search(SOURCE_CITATION_PATTERN, response_text):
         return response_text
-    
+
     logger.warning(
         "Quality check failed — no source citation found. Response preview: '%s...'",
         response_text[:100],
     )
     return FALLBACK_RESPONSE
+
+
+def strip_source_citation(response_text: str) -> str:
+    """
+    Remove source citation lines from the response before sending to the customer.
+
+    The source citation (e.g. "מקור: מחירון קיץ 2025") is required internally
+    for quality validation but should not be visible to end users.
+    """
+    cleaned = re.sub(r"\n*" + SOURCE_CITATION_PATTERN, "", response_text)
+    return cleaned.strip()
 
 
 def generate_answer(
@@ -149,7 +160,7 @@ def generate_answer(
     
     # Step 4: Quality check (Layer C)
     final_answer = _quality_check(raw_answer)
-    
+
     return {
         "answer": final_answer,
         "sources": sources,
