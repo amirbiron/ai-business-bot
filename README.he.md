@@ -70,26 +70,20 @@
 
 ```
 ./
-├── admin/                # פאנל ניהול Flask
-│   ├── templates/        # תבניות HTML
-│   ├── static/           # קבצי CSS, JS
-│   └── app.py            # אפליקציית Flask
-├── bot/                  # בוט טלגרם
-│   ├── handlers.py       # טיפול בפקודות והודעות
-│   └── telegram_bot.py   # התקנה והפעלת הבוט
+├── ai_chatbot/           # חבילת האפליקציה (קנונית)
+│   ├── admin/            # פאנל ניהול Flask (templates/static נמצאים כאן)
+│   ├── bot/              # בוט טלגרם
+│   ├── rag/              # מנוע RAG (chunking/embeddings/vector store)
+│   ├── config.py         # תצורה
+│   ├── database.py       # גישה ל-SQLite
+│   ├── llm.py            # אינטגרציית LLM (שכבות A, B, C)
+│   └── main.py           # ראנר ראשי
 ├── data/                 # קבצי נתונים (מאגר נתונים, אינדקס FAISS)
-├── rag/                  # מנוע RAG
-│   ├── chunker.py        # לוגיקת חלוקה לקטעים
-│   ├── embeddings.py     # יצירת הטמעות OpenAI
-│   ├── engine.py         # תזמור צינור RAG
-│   └── vector_store.py   # ניהול אינדקס FAISS
-├── utils/                # פונקציות שירות (TBD)
-├── __init__.py
-├── __main__.py           # נקודת כניסה ראשית להפעלת האפליקציה
-├── config.py             # כל הגדרות התצורה
-├── database.py           # ניהול מאגר נתונים SQLite
-├── llm.py                # אינטגרציית LLM (שכבות A, B, C)
-├── main.py               # סקריפט ראשי להרצת בוט/ניהול
+├── main.py               # wrapper תואם-לאחור (מריץ ai_chatbot.main)
+├── config.py             # wrapper תואם-לאחור
+├── database.py           # wrapper תואם-לאחור
+├── llm.py                # wrapper תואם-לאחור
+├── openai_client.py      # wrapper תואם-לאחור
 ├── seed_data.py          # סקריפט לזריעת נתוני דמו
 ├── requirements.txt      # תלויות Python
 └── .env.example          # קובץ דוגמה למשתני סביבה
@@ -177,7 +171,7 @@ python -m main
 ```
 
 -   **בוט טלגרם**: יתחיל לבדוק הודעות.
--   **פאנל ניהול**: יהיה זמין ב-`http://0.0.0.0:5000`.
+-   **פאנל ניהול**: יהיה זמין ב-`http://127.0.0.1:5000` (ברירת מחדל מקומית).
 
 ### הפעלת בוט הטלגרם בלבד
 
