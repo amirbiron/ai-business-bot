@@ -11,6 +11,7 @@ Features:
 """
 
 import hmac
+import json
 import logging
 from functools import wraps
 from urllib.parse import urlparse
@@ -330,7 +331,11 @@ def create_admin_app() -> Flask:
         status = request.form.get("status", "handled")
         if status not in VALID_AGENT_REQUEST_STATUSES:
             if request.headers.get("HX-Request"):
-                return app.make_response(("סטטוס לא חוקי.", 422))
+                resp = app.make_response(("", 422))
+                resp.headers["HX-Trigger"] = json.dumps(
+                    {"showToast": {"message": "סטטוס לא חוקי.", "type": "danger"}}
+                )
+                return resp
             flash("סטטוס לא חוקי.", "danger")
             return redirect(url_for("agent_requests"))
         db.update_agent_request_status(request_id, status)
@@ -360,7 +365,11 @@ def create_admin_app() -> Flask:
         status = request.form.get("status", "confirmed")
         if status not in VALID_APPOINTMENT_STATUSES:
             if request.headers.get("HX-Request"):
-                return app.make_response(("סטטוס לא חוקי.", 422))
+                resp = app.make_response(("", 422))
+                resp.headers["HX-Trigger"] = json.dumps(
+                    {"showToast": {"message": "סטטוס לא חוקי.", "type": "danger"}}
+                )
+                return resp
             flash("סטטוס לא חוקי.", "danger")
             return redirect(url_for("appointments"))
         db.update_appointment_status(appt_id, status)

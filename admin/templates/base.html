@@ -159,6 +159,12 @@
         document.body.addEventListener('csrfExpired', function() {
             alert('פג תוקף הטופס. יש לרענן את הדף ולנסות שוב.');
         });
+
+        // HTMX: show toast notification from server-triggered events
+        document.body.addEventListener('showToast', function(e) {
+            var detail = e.detail || {};
+            alert(detail.message || 'שגיאה לא צפויה.');
+        });
     </script>
 
     {% block scripts %}{% endblock %}
