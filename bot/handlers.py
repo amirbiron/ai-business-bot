@@ -20,6 +20,7 @@ from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
 )
+from telegram.error import BadRequest
 from telegram.ext import ContextTypes, ConversationHandler
 
 from ai_chatbot import database as db
@@ -38,6 +39,19 @@ BOOKING_SERVICE, BOOKING_DATE, BOOKING_TIME, BOOKING_CONFIRM = range(4)
 
 async def _generate_answer_async(*args, **kwargs):
     return await asyncio.to_thread(generate_answer, *args, **kwargs)
+
+
+async def _reply_markdown_safe(message, text: str, **kwargs):
+    """
+    Send a Markdown-formatted message, with a fallback to plain text if Telegram
+    rejects invalid Markdown from model/user-provided content.
+    """
+    if message is None:
+        return None
+    try:
+        return await message.reply_text(text, parse_mode="Markdown", **kwargs)
+    except BadRequest:
+        return await message.reply_text(text, **kwargs)
 
 
 def _get_main_keyboard() -> ReplyKeyboardMarkup:
@@ -122,10 +136,10 @@ async def price_list_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     db.save_message(user_id, username, "user", "📋 Price List")
     db.save_message(user_id, username, "assistant", result["answer"], ", ".join(result["sources"]))
     
-    await update.message.reply_text(
+    await _reply_markdown_safe(
+        update.message,
         result["answer"],
-        parse_mode="Markdown",
-        reply_markup=_get_main_keyboard()
+        reply_markup=_get_main_keyboard(),
     )
 
 
@@ -141,10 +155,10 @@ async def location_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     db.save_message(user_id, username, "user", "📍 Send Location")
     db.save_message(user_id, username, "assistant", result["answer"], ", ".join(result["sources"]))
     
-    await update.message.reply_text(
+    await _reply_markdown_safe(
+        update.message,
         result["answer"],
-        parse_mode="Markdown",
-        reply_markup=_get_main_keyboard()
+        reply_markup=_get_main_keyboard(),
     )
 
 
@@ -208,7 +222,7 @@ async def booking_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     
     db.save_message(user_id, username, "user", "📅 Book Appointment")
     
-    await update.message.reply_text(text, parse_mode="Markdown")
+    await _reply_markdown_safe(update.message, text)
     return BOOKING_SERVICE
 
 
@@ -365,10 +379,10 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     db.save_message(user_id, username, "assistant", result["answer"], ", ".join(result["sources"]))
     
     # Send response
-    await update.message.reply_text(
+    await _reply_markdown_safe(
+        update.message,
         result["answer"],
-        parse_mode="Markdown",
-        reply_markup=_get_main_keyboard()
+        reply_markup=_get_main_keyboard(),
     )
 
 
