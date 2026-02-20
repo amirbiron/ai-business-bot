@@ -17,10 +17,8 @@ from telegram import (
     Update,
     ReplyKeyboardMarkup,
     KeyboardButton,
-    InlineKeyboardButton,
-    InlineKeyboardMarkup,
 )
-from telegram.error import BadRequest
+from telegram.error import BadRequest, NetworkError, TimedOut
 from telegram.ext import ContextTypes, ConversationHandler
 
 from ai_chatbot import database as db
@@ -29,6 +27,7 @@ from ai_chatbot.config import (
     BUSINESS_NAME,
     TELEGRAM_OWNER_CHAT_ID,
     FALLBACK_RESPONSE,
+    CONVERSATION_HISTORY_LIMIT,
 )
 
 logger = logging.getLogger(__name__)
@@ -364,7 +363,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
     
     # Get conversation history for context continuity
-    history = db.get_conversation_history(user_id, limit=10)
+    history = db.get_conversation_history(user_id, limit=CONVERSATION_HISTORY_LIMIT)
     
     # Save user message
     db.save_message(user_id, username, "user", user_message)
@@ -390,7 +389,15 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle errors gracefully."""
-    logger.error("Update %s caused error: %s", update, context.error)
+    err = context.error
+    if isinstance(err, (NetworkError, TimedOut)):
+        logger.warning("Telegram transient error: %s", err)
+    else:
+        logger.error(
+            "Unexpected error while handling update: %s",
+            err,
+            exc_info=(type(err), err, getattr(err, "__traceback__", None)),
+        )
     
     if update and update.effective_message:
         await update.effective_message.reply_text(
