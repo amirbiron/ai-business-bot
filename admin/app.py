@@ -90,7 +90,8 @@ def _safe_redirect_back(default_url: str) -> str:
         host_url = urlparse(request.host_url)
         if ref_url.scheme in ("http", "https") and ref_url.netloc == host_url.netloc:
             path = ref_url.path or "/"
-            if not path.startswith("/"):
+            # Prevent protocol-relative redirects (e.g. "//evil.com") and require an absolute path.
+            if not path.startswith("/") or path.startswith("//"):
                 return default_url
             return f"{path}?{ref_url.query}" if ref_url.query else path
     except Exception:
