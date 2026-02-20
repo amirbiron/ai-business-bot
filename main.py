@@ -73,7 +73,7 @@ def main():
     # Auto-seed on first run: if the knowledge base is empty, populate it with
     # demo data and build the FAISS index so the bot can answer questions
     # immediately without requiring a manual --seed step.
-    if db.count_kb_entries() == 0:
+    if db.count_kb_entries(active_only=False) == 0:
         logger.info("Knowledge base is empty — auto-seeding with demo data...")
         try:
             run_seed()
