@@ -123,7 +123,8 @@ def create_admin_app() -> Flask:
             # a full redirect page.  The csrfExpired trigger tells client JS
             # to show a reload prompt.
             resp = app.make_response(("", 403))
-            resp.headers["HX-Retarget"] = "none"
+            # Prevent any DOM swap on HTMX requests.
+            resp.headers["HX-Reswap"] = "none"
             resp.headers["HX-Trigger"] = "csrfExpired"
             return resp
         # Regular form submission — flash and redirect.
