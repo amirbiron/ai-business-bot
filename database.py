@@ -233,7 +233,7 @@ def get_conversation_history(user_id: str, limit: int = 20) -> list[dict]:
         rows = conn.execute(
             """SELECT role, message, sources, created_at 
                FROM conversations WHERE user_id=? 
-               ORDER BY created_at DESC LIMIT ?""",
+               ORDER BY id DESC LIMIT ?""",
             (user_id, limit)
         ).fetchall()
         return [dict(r) for r in reversed(rows)]
@@ -244,7 +244,7 @@ def get_all_conversations(limit: int = 100) -> list[dict]:
     with get_connection() as conn:
         rows = conn.execute(
             """SELECT user_id, username, role, message, sources, created_at 
-               FROM conversations ORDER BY created_at DESC LIMIT ?""",
+               FROM conversations ORDER BY id DESC LIMIT ?""",
             (limit,)
         ).fetchall()
         return [dict(r) for r in rows]
