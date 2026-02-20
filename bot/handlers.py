@@ -395,8 +395,10 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=_get_main_keyboard(),
     )
 
-    # Trigger summarization in background (fire-and-forget, after response is sent)
-    asyncio.create_task(_summarize_safe(user_id))
+    # Trigger summarization in background (fire-and-forget, after response is sent).
+    # context.application.create_task keeps a strong reference so the task
+    # is not garbage-collected mid-execution.
+    context.application.create_task(_summarize_safe(user_id))
 
 
 # ─── Error Handler ───────────────────────────────────────────────────────────

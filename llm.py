@@ -25,7 +25,9 @@ from ai_chatbot import database as db
 
 logger = logging.getLogger(__name__)
 
-# Per-user locks to prevent concurrent summarizations for the same user
+# Per-user locks to prevent concurrent summarizations for the same user.
+# Bounded to _MAX_LOCKS entries; oldest unlocked entries are evicted when full.
+_MAX_LOCKS = 1000
 _summarize_locks: dict[str, threading.Lock] = {}
 _summarize_locks_guard = threading.Lock()
 
@@ -180,9 +182,20 @@ def _generate_summary(messages: list[dict], existing_summary: str = None) -> str
 
 
 def _get_user_lock(user_id: str) -> threading.Lock:
-    """Get or create a per-user lock for summarization."""
+    """Get or create a per-user lock for summarization.
+
+    Evicts the oldest unlocked entries when the dict exceeds _MAX_LOCKS.
+    """
     with _summarize_locks_guard:
         if user_id not in _summarize_locks:
+            # Evict stale unlocked entries if we've hit the cap
+            if len(_summarize_locks) >= _MAX_LOCKS:
+                to_remove = [
+                    uid for uid, lock in _summarize_locks.items()
+                    if not lock.locked()
+                ]
+                for uid in to_remove[:len(_summarize_locks) - _MAX_LOCKS + 1]:
+                    del _summarize_locks[uid]
             _summarize_locks[user_id] = threading.Lock()
         return _summarize_locks[user_id]
 
