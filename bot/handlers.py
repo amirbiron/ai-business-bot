@@ -101,7 +101,6 @@ def _should_handoff_to_human(text: str) -> bool:
 
 
 async def _create_request_and_notify_owner(
-    update: Update,
     context: ContextTypes.DEFAULT_TYPE,
     user_id: str,
     display_name: str,
@@ -144,7 +143,6 @@ async def _handoff_to_human(
     reason: str,
 ) -> None:
     await _create_request_and_notify_owner(
-        update,
         context,
         user_id=user_id,
         display_name=display_name,
@@ -284,7 +282,6 @@ async def talk_to_agent_handler(update: Update, context: ContextTypes.DEFAULT_TY
     
     # Create agent request in database
     await _create_request_and_notify_owner(
-        update,
         context,
         user_id=user_id,
         display_name=display_name,
