@@ -37,6 +37,13 @@ logger = logging.getLogger(__name__)
 # Conversation states for appointment booking
 BOOKING_SERVICE, BOOKING_DATE, BOOKING_TIME, BOOKING_CONFIRM = range(4)
 
+# Button label constants — used for routing and filtering
+BUTTON_PRICE_LIST = "📋 מחירון"
+BUTTON_BOOKING = "📅 קביעת תור"
+BUTTON_LOCATION = "📍 שליחת מיקום"
+BUTTON_AGENT = "👤 דברו עם נציג"
+ALL_BUTTON_TEXTS = [BUTTON_PRICE_LIST, BUTTON_BOOKING, BUTTON_LOCATION, BUTTON_AGENT]
+
 
 async def _generate_answer_async(*args, **kwargs):
     return await asyncio.to_thread(generate_answer, *args, **kwargs)
@@ -457,6 +464,26 @@ async def booking_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     return ConversationHandler.END
 
 
+async def booking_button_interrupt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Handle button clicks during an active booking — cancel booking and route to the clicked button."""
+    context.user_data.clear()
+    user_message = update.message.text
+
+    if user_message == BUTTON_BOOKING:
+        # Restart the booking flow from scratch
+        return await booking_start(update, context)
+
+    # For other buttons, end the conversation and delegate to the right handler
+    if user_message == BUTTON_PRICE_LIST:
+        await price_list_handler(update, context)
+    elif user_message == BUTTON_LOCATION:
+        await location_handler(update, context)
+    elif user_message == BUTTON_AGENT:
+        await talk_to_agent_handler(update, context)
+
+    return ConversationHandler.END
+
+
 # ─── Free-Text Message Handler ───────────────────────────────────────────────
 
 async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -468,11 +495,11 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_message = update.message.text
     
     # Check for button texts and route accordingly
-    if user_message == "📋 מחירון":
+    if user_message == BUTTON_PRICE_LIST:
         return await price_list_handler(update, context)
-    elif user_message == "📍 שליחת מיקום":
+    elif user_message == BUTTON_LOCATION:
         return await location_handler(update, context)
-    elif user_message == "👤 דברו עם נציג":
+    elif user_message == BUTTON_AGENT:
         return await talk_to_agent_handler(update, context)
     
     # Show typing indicator
