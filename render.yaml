@@ -45,8 +45,6 @@ services:
         sync: false
       - key: ADMIN_SECRET_KEY
         sync: false
-      - key: ADMIN_HOST
-        value: 0.0.0.0
 
       # Optional branding
       - key: BUSINESS_NAME

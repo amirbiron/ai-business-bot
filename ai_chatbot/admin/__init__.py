@@ -1,2 +1,2 @@
-"""Admin panel package."""
+"""Wrappers for the root-level `admin/` package."""
 

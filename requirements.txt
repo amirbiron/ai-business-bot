@@ -18,6 +18,3 @@ gunicorn
 
 # Configuration
 python-dotenv
-
-# Testing
-pytest
