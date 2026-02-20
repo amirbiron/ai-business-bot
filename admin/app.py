@@ -17,6 +17,7 @@ from urllib.parse import urlparse
 from flask import (
     Flask,
     render_template,
+    render_template_string,
     request,
     redirect,
     url_for,
@@ -267,7 +268,20 @@ def create_admin_app() -> Flask:
         db.delete_kb_entry(entry_id)
         mark_index_stale()
         if request.headers.get("HX-Request"):
-            resp = app.make_response("")
+            if db.count_kb_entries(active_only=False) == 0:
+                resp = app.make_response(render_template_string(
+                    '<div class="empty-state">'
+                    '<i class="bi bi-journal-plus"></i>'
+                    '<p>אין עדיין רשומות בבסיס הידע.</p>'
+                    '<a href="/kb/add" class="btn btn-primary btn-sm"'
+                    ' style="margin-top: 0.5rem; width: auto;">'
+                    '<i class="bi bi-plus-lg"></i> הוסיפו את הרשומה הראשונה'
+                    "</a></div>"
+                ))
+                resp.headers["HX-Retarget"] = "#kb-table-wrapper"
+                resp.headers["HX-Reswap"] = "outerHTML"
+            else:
+                resp = app.make_response("")
             resp.headers["HX-Trigger"] = "showStaleWarning"
             return resp
         flash("הרשומה נמחקה.", "success")
