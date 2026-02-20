@@ -9,6 +9,7 @@ This module:
 import logging
 import threading
 from pathlib import Path
+from contextlib import contextmanager
 import numpy as np
 
 from ai_chatbot import database as db
@@ -20,7 +21,32 @@ from ai_chatbot.rag.vector_store import get_vector_store, reset_vector_store
 logger = logging.getLogger(__name__)
 
 _INDEX_STALE_FLAG: Path = FAISS_INDEX_PATH / ".stale"
+_INDEX_STATE_LOCK_FILE: Path = FAISS_INDEX_PATH / ".index_state.lock"
 _REBUILD_LOCK = threading.RLock()
+
+
+@contextmanager
+def _index_state_lock():
+    """
+    Cross-process lock for reading/writing the index state files.
+    """
+    FAISS_INDEX_PATH.mkdir(parents=True, exist_ok=True)
+    f = _INDEX_STATE_LOCK_FILE.open("a+", encoding="utf-8")
+    try:
+        try:
+            import fcntl  # Linux/Unix only
+            fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+        except Exception:
+            # Best-effort: if flock isn't available, keep going with in-process lock only.
+            pass
+        yield
+    finally:
+        try:
+            import fcntl  # Linux/Unix only
+            fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+        except Exception:
+            pass
+        f.close()
 
 
 def _stale_token() -> int | None:
@@ -40,25 +66,32 @@ def _maybe_clear_stale(start_token: int | None) -> None:
         # Either there was no stale flag at rebuild start, or we couldn't read it.
         # If it exists now, assume new KB changes happened during rebuild.
         return
-    end_token = _stale_token()
-    if end_token == start_token:
-        clear_index_stale()
+    with _index_state_lock():
+        end_token = _stale_token()
+        if end_token == start_token:
+            try:
+                _INDEX_STALE_FLAG.unlink()
+            except FileNotFoundError:
+                pass
 
 
 def mark_index_stale() -> None:
-    FAISS_INDEX_PATH.mkdir(parents=True, exist_ok=True)
-    _INDEX_STALE_FLAG.touch(exist_ok=True)
+    with _index_state_lock():
+        FAISS_INDEX_PATH.mkdir(parents=True, exist_ok=True)
+        _INDEX_STALE_FLAG.touch(exist_ok=True)
 
 
 def clear_index_stale() -> None:
-    try:
-        _INDEX_STALE_FLAG.unlink()
-    except FileNotFoundError:
-        pass
+    with _index_state_lock():
+        try:
+            _INDEX_STALE_FLAG.unlink()
+        except FileNotFoundError:
+            pass
 
 
 def is_index_stale() -> bool:
-    return _INDEX_STALE_FLAG.exists()
+    with _index_state_lock():
+        return _INDEX_STALE_FLAG.exists()
 
 
 def rebuild_index():
@@ -74,7 +107,8 @@ def rebuild_index():
     """
     with _REBUILD_LOCK:
         logger.info("Rebuilding RAG index...")
-        start_stale_token = _stale_token()
+        with _index_state_lock():
+            start_stale_token = _stale_token()
 
         entries = db.get_all_kb_entries(active_only=True)
         if not entries:
