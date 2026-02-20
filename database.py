@@ -78,6 +78,7 @@ def init_db():
                 id          INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id     TEXT NOT NULL,
                 username    TEXT DEFAULT '',
+                telegram_username TEXT DEFAULT '',
                 message     TEXT DEFAULT '',
                 status      TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'handled', 'dismissed')),
                 created_at  TEXT DEFAULT (datetime('now')),
@@ -89,6 +90,7 @@ def init_db():
                 id          INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id     TEXT NOT NULL,
                 username    TEXT DEFAULT '',
+                telegram_username TEXT DEFAULT '',
                 service     TEXT DEFAULT '',
                 preferred_date TEXT DEFAULT '',
                 preferred_time TEXT DEFAULT '',
@@ -113,6 +115,16 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_agent_requests_status ON agent_requests(status);
             CREATE INDEX IF NOT EXISTS idx_conversation_summaries_user ON conversation_summaries(user_id);
         """)
+
+        # Lightweight migrations for existing databases (SQLite can only ADD COLUMN).
+        def _ensure_column(table: str, column: str, ddl_suffix: str) -> None:
+            cols = conn.execute(f"PRAGMA table_info({table})").fetchall()
+            if any(r["name"] == column for r in cols):
+                return
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ddl_suffix}")
+
+        _ensure_column("agent_requests", "telegram_username", "TEXT DEFAULT ''")
+        _ensure_column("appointments", "telegram_username", "TEXT DEFAULT ''")
 
 
 # ─── Knowledge Base CRUD ─────────────────────────────────────────────────────
@@ -364,13 +376,18 @@ def count_unique_users() -> int:
 
 # ─── Agent Requests ──────────────────────────────────────────────────────────
 
-def create_agent_request(user_id: str, username: str, message: str = "") -> int:
+def create_agent_request(
+    user_id: str,
+    username: str,
+    message: str = "",
+    telegram_username: str = "",
+) -> int:
     """Create a new agent transfer request."""
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(
-            "INSERT INTO agent_requests (user_id, username, message) VALUES (?, ?, ?)",
-            (user_id, username, message)
+            "INSERT INTO agent_requests (user_id, username, telegram_username, message) VALUES (?, ?, ?, ?)",
+            (user_id, username, telegram_username or "", message)
         )
         return cursor.lastrowid
 
@@ -417,16 +434,22 @@ def update_agent_request_status(request_id: int, status: str):
 
 # ─── Appointments ────────────────────────────────────────────────────────────
 
-def create_appointment(user_id: str, username: str, service: str = "",
-                       preferred_date: str = "", preferred_time: str = "",
-                       notes: str = "") -> int:
+def create_appointment(
+    user_id: str,
+    username: str,
+    service: str = "",
+    preferred_date: str = "",
+    preferred_time: str = "",
+    notes: str = "",
+    telegram_username: str = "",
+) -> int:
     """Create a new appointment booking."""
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(
-            """INSERT INTO appointments (user_id, username, service, preferred_date, preferred_time, notes)
-               VALUES (?, ?, ?, ?, ?, ?)""",
-            (user_id, username, service, preferred_date, preferred_time, notes)
+            """INSERT INTO appointments (user_id, username, telegram_username, service, preferred_date, preferred_time, notes)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (user_id, username, telegram_username or "", service, preferred_date, preferred_time, notes)
         )
         return cursor.lastrowid
 
