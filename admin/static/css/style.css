@@ -1122,7 +1122,8 @@ textarea:focus-visible,
         justify-content: center;
     }
 
-    .btn-sm {
+    .btn-sm,
+    .d-flex > .btn {
         width: auto;
     }
 

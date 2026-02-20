@@ -138,6 +138,10 @@ def create_admin_app() -> Flask:
         @wraps(f)
         def decorated(*args, **kwargs):
             if not session.get("logged_in"):
+                if request.headers.get("HX-Request"):
+                    resp = app.make_response(("", 401))
+                    resp.headers["HX-Redirect"] = url_for("login")
+                    return resp
                 return redirect(url_for("login"))
             return f(*args, **kwargs)
         return decorated
