@@ -8,12 +8,7 @@ LLM Module — Integrates the three-layer architecture:
 
 import re
 import logging
-from typing import Optional
-
-try:
-    from openai import OpenAI  # type: ignore
-except Exception:  # pragma: no cover
-    OpenAI = None  # type: ignore
+from ai_chatbot.openai_client import get_openai_client
 
 from ai_chatbot.config import (
     OPENAI_MODEL,
@@ -24,17 +19,6 @@ from ai_chatbot.config import (
 from ai_chatbot.rag.engine import retrieve, format_context
 
 logger = logging.getLogger(__name__)
-
-_client: Optional[object] = None
-
-
-def _get_client():
-    global _client
-    if _client is None:
-        if OpenAI is None:
-            raise RuntimeError("OpenAI client is unavailable (openai package not installed).")
-        _client = OpenAI()
-    return _client
 
 
 def _build_messages(
@@ -146,7 +130,7 @@ def generate_answer(
     
     # Step 3: Call the LLM
     try:
-        client = _get_client()
+        client = get_openai_client()
         response = client.chat.completions.create(
             model=OPENAI_MODEL,
             messages=messages,
