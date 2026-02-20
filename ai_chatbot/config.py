@@ -51,7 +51,7 @@ ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
 ADMIN_PASSWORD_HASH = os.getenv("ADMIN_PASSWORD_HASH", "")
 ADMIN_SECRET_KEY = os.getenv("ADMIN_SECRET_KEY", "")
-ADMIN_HOST = os.getenv("ADMIN_HOST", "127.0.0.1")
+ADMIN_HOST = os.getenv("ADMIN_HOST") or ("0.0.0.0" if os.getenv("PORT") else "127.0.0.1")
 ADMIN_PORT = int(os.getenv("ADMIN_PORT") or os.getenv("PORT") or "5000")
 
 # ─── Business Info (defaults for demo) ───────────────────────────────────────
