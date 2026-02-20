@@ -12,6 +12,7 @@ from ai_chatbot.openai_client import get_openai_client
 
 from ai_chatbot.config import (
     OPENAI_MODEL,
+    LLM_MAX_TOKENS,
     SYSTEM_PROMPT,
     SOURCE_CITATION_PATTERN,
     FALLBACK_RESPONSE,
@@ -44,10 +45,10 @@ def _build_messages(
     
     # Layer B — RAG context
     context_message = (
-        "CONTEXT INFORMATION (use ONLY this to answer the customer's question):\n\n"
+        "מידע הקשר (השתמש/י רק במידע זה כדי לענות על שאלת הלקוח/ה):\n\n"
         f"{context}\n\n"
-        "IMPORTANT: Base your answer ONLY on the context above. "
-        "Always end your response with 'Source: [name of the source]' citing which context you used."
+        "חשוב: בסס/י את תשובתך רק על המידע למעלה. "
+        "תמיד סיים/י את התשובה עם 'מקור: [שם המקור]' בציון ההקשר שבו השתמשת."
     )
     messages.append({
         "role": "system",
@@ -135,7 +136,7 @@ def generate_answer(
             model=OPENAI_MODEL,
             messages=messages,
             temperature=0.3,
-            max_tokens=500,
+            max_tokens=LLM_MAX_TOKENS,
         )
         raw_answer = response.choices[0].message.content.strip()
     except Exception as e:
