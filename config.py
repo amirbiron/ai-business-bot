@@ -38,6 +38,10 @@ RAG_MIN_RELEVANCE = float(os.getenv("RAG_MIN_RELEVANCE", "0.3"))
 CHUNK_MAX_TOKENS = int(os.getenv("CHUNK_MAX_TOKENS", "300"))
 LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "1024"))
 
+# ─── Conversation Memory Settings ─────────────────────────────────────────
+CONTEXT_WINDOW_SIZE = int(os.getenv("CONTEXT_WINDOW_SIZE", "10"))
+SUMMARY_THRESHOLD = int(os.getenv("SUMMARY_THRESHOLD", "10"))
+
 # ─── Admin Panel ─────────────────────────────────────────────────────────────
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
 #

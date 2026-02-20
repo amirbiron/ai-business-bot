@@ -97,11 +97,21 @@ def init_db():
                 created_at  TEXT DEFAULT (datetime('now'))
             );
 
+            -- Conversation summaries for long-term memory
+            CREATE TABLE IF NOT EXISTS conversation_summaries (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id         TEXT NOT NULL,
+                summary_text    TEXT NOT NULL,
+                message_count   INTEGER NOT NULL DEFAULT 0,
+                created_at      TEXT DEFAULT (datetime('now'))
+            );
+
             -- Create indexes
             CREATE INDEX IF NOT EXISTS idx_kb_entries_category ON kb_entries(category);
             CREATE INDEX IF NOT EXISTS idx_kb_chunks_entry ON kb_chunks(entry_id);
             CREATE INDEX IF NOT EXISTS idx_conversations_user ON conversations(user_id);
             CREATE INDEX IF NOT EXISTS idx_agent_requests_status ON agent_requests(status);
+            CREATE INDEX IF NOT EXISTS idx_conversation_summaries_user ON conversation_summaries(user_id);
         """)
 
 
@@ -267,6 +277,80 @@ def get_unique_users() -> list[dict]:
             ORDER BY last_active DESC
         """).fetchall()
         return [dict(r) for r in rows]
+
+
+def get_unsummarized_message_count(user_id: str) -> int:
+    """Count messages for a user that haven't been included in any summary yet."""
+    with get_connection() as conn:
+        # Get the total messages covered by summaries
+        summary_row = conn.execute(
+            "SELECT COALESCE(SUM(message_count), 0) AS total FROM conversation_summaries WHERE user_id=?",
+            (user_id,)
+        ).fetchone()
+        summarized_count = int(summary_row["total"])
+
+        total_row = conn.execute(
+            "SELECT COUNT(*) AS count FROM conversations WHERE user_id=?",
+            (user_id,)
+        ).fetchone()
+        total_count = int(total_row["count"])
+
+        return max(0, total_count - summarized_count)
+
+
+def get_messages_for_summarization(user_id: str, limit: int) -> list[dict]:
+    """Get the oldest unsummarized messages for a user (to create a summary from)."""
+    with get_connection() as conn:
+        # Get total summarized count to know the offset
+        summary_row = conn.execute(
+            "SELECT COALESCE(SUM(message_count), 0) AS total FROM conversation_summaries WHERE user_id=?",
+            (user_id,)
+        ).fetchone()
+        offset = int(summary_row["total"])
+
+        rows = conn.execute(
+            """SELECT role, message, created_at
+               FROM conversations WHERE user_id=?
+               ORDER BY id ASC LIMIT ? OFFSET ?""",
+            (user_id, limit, offset)
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def save_conversation_summary(user_id: str, summary_text: str, message_count: int):
+    """
+    Save a conversation summary for a user.
+
+    Replaces all previous summaries with a single merged summary.
+    The message_count is accumulated from prior summaries so that
+    offset tracking remains correct.
+    """
+    with get_connection() as conn:
+        # Accumulate total message count from existing summaries
+        row = conn.execute(
+            "SELECT COALESCE(SUM(message_count), 0) AS total FROM conversation_summaries WHERE user_id=?",
+            (user_id,)
+        ).fetchone()
+        total_message_count = int(row["total"]) + message_count
+
+        # Replace all previous summaries with the new merged one
+        conn.execute("DELETE FROM conversation_summaries WHERE user_id=?", (user_id,))
+        conn.execute(
+            "INSERT INTO conversation_summaries (user_id, summary_text, message_count) VALUES (?, ?, ?)",
+            (user_id, summary_text, total_message_count)
+        )
+
+
+def get_latest_summary(user_id: str) -> dict | None:
+    """Get the latest (single) conversation summary for a user."""
+    with get_connection() as conn:
+        row = conn.execute(
+            """SELECT summary_text, message_count, created_at
+               FROM conversation_summaries WHERE user_id=?
+               ORDER BY id DESC LIMIT 1""",
+            (user_id,)
+        ).fetchone()
+        return dict(row) if row else None
 
 
 def count_unique_users() -> int:
