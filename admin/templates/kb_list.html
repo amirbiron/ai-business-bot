@@ -78,13 +78,7 @@
             </table>
         </div>
         {% else %}
-        <div class="empty-state">
-            <i class="bi bi-journal-plus"></i>
-            <p>אין עדיין רשומות בבסיס הידע.</p>
-            <a href="/kb/add" class="btn btn-primary btn-sm" style="margin-top: 0.5rem; width: auto;">
-                <i class="bi bi-plus-lg"></i> הוסיפו את הרשומה הראשונה
-            </a>
-        </div>
+        {% include "partials/kb_empty.html" %}
         {% endif %}
     </div>
 </div>
