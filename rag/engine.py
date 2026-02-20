@@ -112,18 +112,7 @@ def rebuild_index():
 
         entries = db.get_all_kb_entries(active_only=True)
         if not entries:
-            # Auto-seed: if the database is completely empty, populate it with
-            # demo data so the bot can answer questions out of the box.
-            logger.warning("No KB entries found. Attempting to seed demo data...")
-            try:
-                from ai_chatbot.seed_data import seed_database
-                seed_database()
-                entries = db.get_all_kb_entries(active_only=True)
-            except Exception:
-                logger.exception("Failed to auto-seed demo data.")
-
-        if not entries:
-            logger.warning("No KB entries found after seed attempt. Creating empty index.")
+            logger.warning("No KB entries found. Creating empty index.")
             store = get_vector_store()
             store.build_index(np.array([]), [])
             store.save()

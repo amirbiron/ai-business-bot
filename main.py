@@ -75,7 +75,10 @@ def main():
     # immediately without requiring a manual --seed step.
     if db.count_kb_entries() == 0:
         logger.info("Knowledge base is empty — auto-seeding with demo data...")
-        run_seed()
+        try:
+            run_seed()
+        except Exception:
+            logger.exception("Auto-seed failed. Continuing without demo data.")
 
     if args.bot:
         run_telegram_bot()
