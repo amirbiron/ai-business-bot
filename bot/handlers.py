@@ -24,7 +24,7 @@ from telegram.error import BadRequest
 from telegram.ext import ContextTypes, ConversationHandler
 
 from ai_chatbot import database as db
-from ai_chatbot.llm import generate_answer
+from ai_chatbot.llm import generate_answer, strip_source_citation
 from ai_chatbot.config import (
     BUSINESS_NAME,
     TELEGRAM_OWNER_CHAT_ID,
@@ -135,10 +135,10 @@ async def price_list_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     
     db.save_message(user_id, username, "user", "📋 Price List")
     db.save_message(user_id, username, "assistant", result["answer"], ", ".join(result["sources"]))
-    
+
     await _reply_markdown_safe(
         update.message,
-        result["answer"],
+        strip_source_citation(result["answer"]),
         reply_markup=_get_main_keyboard(),
     )
 
@@ -154,10 +154,10 @@ async def location_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     db.save_message(user_id, username, "user", "📍 Send Location")
     db.save_message(user_id, username, "assistant", result["answer"], ", ".join(result["sources"]))
-    
+
     await _reply_markdown_safe(
         update.message,
-        result["answer"],
+        strip_source_citation(result["answer"]),
         reply_markup=_get_main_keyboard(),
     )
 
@@ -215,7 +215,7 @@ async def booking_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     
     text = (
         "📅 *קביעת תור*\n\n"
-        f"{result['answer']}\n\n"
+        f"{strip_source_citation(result['answer'])}\n\n"
         "אנא כתבו את *השירות* שתרצו להזמין "
         "(או הקלידו /cancel כדי לחזור):"
     )
@@ -375,13 +375,13 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         conversation_history=history,
     )
     
-    # Save assistant response
+    # Save assistant response (raw, with citation) for history consistency
     db.save_message(user_id, username, "assistant", result["answer"], ", ".join(result["sources"]))
-    
-    # Send response
+
+    # Send citation-stripped response to customer
     await _reply_markdown_safe(
         update.message,
-        result["answer"],
+        strip_source_citation(result["answer"]),
         reply_markup=_get_main_keyboard(),
     )
 

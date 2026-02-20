@@ -95,7 +95,7 @@ def _quality_check(response_text: str) -> str:
     return FALLBACK_RESPONSE
 
 
-def _strip_source_citation(response_text: str) -> str:
+def strip_source_citation(response_text: str) -> str:
     """
     Remove source citation lines from the response before sending to the customer.
 
@@ -160,9 +160,6 @@ def generate_answer(
     
     # Step 4: Quality check (Layer C)
     final_answer = _quality_check(raw_answer)
-
-    # Step 5: Strip source citation from customer-facing response
-    final_answer = _strip_source_citation(final_answer)
 
     return {
         "answer": final_answer,
