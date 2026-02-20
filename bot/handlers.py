@@ -73,8 +73,8 @@ async def _reply_markdown_safe(message, text: str, **kwargs):
 def _get_main_keyboard() -> ReplyKeyboardMarkup:
     """Create the main menu keyboard with action buttons."""
     keyboard = [
-        [KeyboardButton("📋 מחירון"), KeyboardButton("📅 קביעת תור")],
-        [KeyboardButton("📍 שליחת מיקום"), KeyboardButton("👤 דברו עם נציג")],
+        [KeyboardButton(BUTTON_PRICE_LIST), KeyboardButton(BUTTON_BOOKING)],
+        [KeyboardButton(BUTTON_LOCATION), KeyboardButton(BUTTON_AGENT)],
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
@@ -473,13 +473,19 @@ async def booking_button_interrupt(update: Update, context: ContextTypes.DEFAULT
         # Restart the booking flow from scratch
         return await booking_start(update, context)
 
-    # For other buttons, end the conversation and delegate to the right handler
     if user_message == BUTTON_PRICE_LIST:
         await price_list_handler(update, context)
     elif user_message == BUTTON_LOCATION:
         await location_handler(update, context)
     elif user_message == BUTTON_AGENT:
         await talk_to_agent_handler(update, context)
+    else:
+        # Safety fallback — should not happen, but avoid a silent dead-end
+        logger.warning("booking_button_interrupt: unexpected text %r", user_message)
+        await update.message.reply_text(
+            "ההזמנה בוטלה. איך עוד אפשר לעזור לכם?",
+            reply_markup=_get_main_keyboard(),
+        )
 
     return ConversationHandler.END
 

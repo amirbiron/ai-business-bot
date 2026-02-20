@@ -30,6 +30,7 @@ from ai_chatbot.bot.handlers import (
     BOOKING_TIME,
     BOOKING_CONFIRM,
     ALL_BUTTON_TEXTS,
+    BUTTON_BOOKING,
 )
 
 logger = logging.getLogger(__name__)
@@ -60,7 +61,7 @@ def create_bot_application():
 
     booking_handler = ConversationHandler(
         entry_points=[
-            MessageHandler(filters.Regex(r"^📅 קביעת תור$"), booking_start),
+            MessageHandler(filters.Regex(r"^" + re.escape(BUTTON_BOOKING) + r"$"), booking_start),
             CommandHandler("book", booking_start),
         ],
         states={
