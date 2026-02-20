@@ -158,26 +158,23 @@ def create_admin_app() -> Flask:
     @app.route("/")
     @login_required
     def dashboard():
-        kb_entries = db.get_all_kb_entries()
-        categories = db.get_kb_categories()
-        users = db.get_unique_users()
-        pending_requests = db.get_agent_requests(status="pending")
-        pending_appointments = db.get_appointments(status="pending")
-        
         stats = {
-            "kb_entries": len(kb_entries),
-            "categories": len(categories),
-            "users": len(users),
-            "pending_requests": len(pending_requests),
-            "pending_appointments": len(pending_appointments),
+            "kb_entries": db.count_kb_entries(active_only=True),
+            "categories": db.count_kb_categories(active_only=True),
+            "users": db.count_unique_users(),
+            "pending_requests": db.count_agent_requests(status="pending"),
+            "pending_appointments": db.count_appointments(status="pending"),
         }
+
+        pending_requests = db.get_agent_requests(status="pending", limit=5)
+        pending_appointments = db.get_appointments(status="pending", limit=5)
         
         return render_template(
             "dashboard.html",
             business_name=BUSINESS_NAME,
             stats=stats,
-            recent_requests=pending_requests[:5],
-            recent_appointments=pending_appointments[:5],
+            recent_requests=pending_requests,
+            recent_appointments=pending_appointments,
         )
     
     # ─── Knowledge Base Management ────────────────────────────────────────
