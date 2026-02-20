@@ -12,14 +12,11 @@ to local embeddings and logs a warning.
 import hashlib
 import logging
 import numpy as np
-from openai import OpenAI
+from ai_chatbot.openai_client import get_openai_client
 
 from ai_chatbot.config import EMBEDDING_MODEL
 
 logger = logging.getLogger(__name__)
-
-# Initialize the OpenAI client (API key and base URL pre-configured in env)
-client = OpenAI()
 
 # Dimension for local fallback embeddings (matches text-embedding-3-small)
 LOCAL_EMBEDDING_DIM = 1536
@@ -76,6 +73,7 @@ def get_embedding(text: str) -> np.ndarray:
         text = "empty"
     
     try:
+        client = get_openai_client()
         response = client.embeddings.create(
             input=[text],
             model=EMBEDDING_MODEL
@@ -107,6 +105,7 @@ def get_embeddings_batch(texts: list[str]) -> np.ndarray:
         
         for i in range(0, len(cleaned), batch_size):
             batch = cleaned[i:i + batch_size]
+            client = get_openai_client()
             response = client.embeddings.create(
                 input=batch,
                 model=EMBEDDING_MODEL

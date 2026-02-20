@@ -116,6 +116,22 @@
                 {% endif %}
                 {% endwith %}
 
+                {% if rag_index_stale %}
+                <div class="alert alert-warning d-flex justify-content-between align-items-center" role="alert">
+                    <div>
+                        <strong>האינדקס לא מעודכן.</strong>
+                        שינוי בבסיס הידע עדיין לא משוקף בבוט — מומלץ לבנות מחדש את אינדקס ה‑RAG.
+                    </div>
+                    <form method="POST" action="/kb/rebuild" class="m-0">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-sm btn-outline-dark"
+                                onclick="return confirm('לבנות מחדש את אינדקס ה-RAG? זה עשוי לקחת רגע.')">
+                            <i class="bi bi-arrow-clockwise"></i> בנייה מחדש
+                        </button>
+                    </form>
+                </div>
+                {% endif %}
+
                 {% block content %}{% endblock %}
             </main>
         </div>

@@ -8,7 +8,7 @@ LLM Module — Integrates the three-layer architecture:
 
 import re
 import logging
-from openai import OpenAI
+from ai_chatbot.openai_client import get_openai_client
 
 from ai_chatbot.config import (
     OPENAI_MODEL,
@@ -19,9 +19,6 @@ from ai_chatbot.config import (
 from ai_chatbot.rag.engine import retrieve, format_context
 
 logger = logging.getLogger(__name__)
-
-# Initialize OpenAI client (API key and base URL pre-configured in env)
-client = OpenAI()
 
 
 def _build_messages(
@@ -133,6 +130,7 @@ def generate_answer(
     
     # Step 3: Call the LLM
     try:
+        client = get_openai_client()
         response = client.chat.completions.create(
             model=OPENAI_MODEL,
             messages=messages,
