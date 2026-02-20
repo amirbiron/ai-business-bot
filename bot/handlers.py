@@ -218,9 +218,9 @@ async def price_list_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await update.message.reply_text("📋 תנו לי רגע לחפש את המחירון שלנו...")
     
     # Use the RAG pipeline to find pricing information
-    result = await _generate_answer_async("Show me the complete price list with all services and prices")
+    result = await _generate_answer_async("הצג לי את המחירון המלא עם כל השירותים והמחירים")
     
-    db.save_message(user_id, display_name, "user", "📋 Price List")
+    db.save_message(user_id, display_name, "user", "📋 מחירון")
     stripped = strip_source_citation(result["answer"])
     if _should_handoff_to_human(stripped):
         await _handoff_to_human(
@@ -249,9 +249,9 @@ async def location_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id, display_name, telegram_username = _get_user_info(update)
     
     # Use RAG to find location/address info
-    result = await _generate_answer_async("What is the business address and location? How do I get there?")
+    result = await _generate_answer_async("מה הכתובת והמיקום של העסק? איך מגיעים?")
     
-    db.save_message(user_id, display_name, "user", "📍 Send Location")
+    db.save_message(user_id, display_name, "user", "📍 מיקום")
 
     stripped = strip_source_citation(result["answer"])
     if _should_handoff_to_human(stripped):
@@ -295,7 +295,7 @@ async def talk_to_agent_handler(update: Update, context: ContextTypes.DEFAULT_TY
         "בינתיים, אתם מוזמנים לשאול אותי כל שאלה נוספת!"
     )
     
-    db.save_message(user_id, display_name, "user", "👤 Talk to Agent")
+    db.save_message(user_id, display_name, "user", "👤 שיחה עם נציג")
     db.save_message(user_id, display_name, "assistant", response_text)
     
     await update.message.reply_text(
@@ -311,10 +311,10 @@ async def booking_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     user_id, display_name, telegram_username = _get_user_info(update)
 
     # Log the user's booking attempt even if we handoff to human.
-    db.save_message(user_id, display_name, "user", "📅 Book Appointment")
+    db.save_message(user_id, display_name, "user", "📅 קביעת תור")
     
     # Get available services from KB
-    result = await _generate_answer_async("What services do you offer? List them briefly.")
+    result = await _generate_answer_async("אילו שירותים אתם מציעים? פרטו בקצרה.")
 
     stripped = strip_source_citation(result["answer"])
     if _should_handoff_to_human(stripped):
