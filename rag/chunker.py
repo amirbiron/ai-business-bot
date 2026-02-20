@@ -11,21 +11,29 @@ try:
 except Exception:  # pragma: no cover
     tiktoken = None
 
-_ENCODING = None
+_ENCODING = None  # None=unknown, False=unavailable, else=tiktoken.Encoding
 
 
 def _get_encoding():
     global _ENCODING
+    if _ENCODING is False:
+        return None
     if _ENCODING is not None:
         return _ENCODING
     if tiktoken is None:
+        _ENCODING = False
         return None
     try:
         from ai_chatbot.config import OPENAI_MODEL
         _ENCODING = tiktoken.encoding_for_model(OPENAI_MODEL)
+        return _ENCODING
     except Exception:
-        _ENCODING = tiktoken.get_encoding("cl100k_base")
-    return _ENCODING
+        try:
+            _ENCODING = tiktoken.get_encoding("cl100k_base")
+            return _ENCODING
+        except Exception:
+            _ENCODING = False
+            return None
 
 
 def estimate_tokens(text: str) -> int:
@@ -37,7 +45,10 @@ def estimate_tokens(text: str) -> int:
     """
     if not text:
         return 0
-    enc = _get_encoding()
+    try:
+        enc = _get_encoding()
+    except Exception:
+        enc = None
     if enc is not None:
         try:
             return len(enc.encode(text))
