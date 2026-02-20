@@ -1,10 +1,8 @@
 """
-ai_chatbot package
-------------------
-This repository's source code currently lives at the repo root (e.g. `config.py`,
-`database.py`, `admin/`, `bot/`, `rag/`). The application code imports modules
-via the `ai_chatbot.*` namespace, so for deployments (including Render) we ship
-this lightweight package wrapper that forwards imports to the existing modules.
+AI Business Chatbot package.
+
+This is the canonical import namespace for the application code (bot, admin,
+RAG engine, config, and database).
 """
 
 __version__ = "1.0.0"

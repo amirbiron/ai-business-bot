@@ -1,2 +1,2 @@
-"""Wrappers for the root-level `rag/` package."""
+"""RAG (retrieval-augmented generation) package."""
 
