@@ -1,11 +1,13 @@
 """
-Seed Data — Populates the knowledge base with demo data for "Dana's Beauty Salon".
+Seed Data — מאכלס את מאגר הידע (Knowledge Base) בנתוני הדגמה עבור "מכון היופי של דנה".
 
-Run this script to initialize the database with example business information.
-Usage: python -m ai_chatbot.seed_data
+הרץ סקריפט זה כדי לאתחל את מסד הנתונים עם מידע עסקי לדוגמה.
+
+שימוש: python -m ai_chatbot.seed_data
 """
 
 import logging
+
 from ai_chatbot import database as db
 from ai_chatbot.rag.engine import rebuild_index
 
@@ -18,374 +20,313 @@ DEMO_ENTRIES = [
     # ── Services ──────────────────────────────────────────────────────────
     {
         "category": "Services",
-        "title": "Hair Services",
-        "content": """Dana's Beauty Salon offers a full range of professional hair services:
-
-HAIRCUTS:
-- Women's Haircut & Style: Includes consultation, wash, cut, and blow-dry
-- Men's Haircut: Classic or modern styles with precision cutting
-- Children's Haircut (under 12): Gentle and fun experience for kids
-- Bang Trim: Quick trim for bangs/fringe between appointments
-
-HAIR COLORING:
-- Full Color: Complete single-process color application
-- Highlights / Lowlights: Foil or balayage technique
-- Balayage: Hand-painted highlights for a natural, sun-kissed look
-- Root Touch-Up: Color refresh for roots only
-- Color Correction: Fix previous color treatments (consultation required)
-
-HAIR TREATMENTS:
-- Deep Conditioning Treatment: Intensive moisture and repair
-- Keratin Smoothing Treatment: Reduces frizz for 3-4 months
-- Scalp Treatment: Targeted treatment for scalp health
-- Olaplex Treatment: Bond-building treatment for damaged hair
-
-STYLING:
-- Blow-Dry & Style: Professional blow-out styling
-- Special Occasion Updo: For weddings, proms, and events
-- Bridal Hair: Wedding day hair styling (trial included)"""
+        "title": "שירותי שיער",
+        "content": """מכון היופי של דנה מציע מגוון מלא של שירותי שיער מקצועיים:
+תספורות:
+- תספורת נשים ועיצוב: כולל ייעוץ, חפיפה, תספורת ופן
+- תספורת גברים: עיצובים קלאסיים או מודרניים בדיוק מירבי
+- תספורת ילדים (עד גיל 12): חוויה עדינה וכיפית לילדים
+- גזירת פוני: סידור מהיר של הפוני בין תורים
+צבע לשיער:
+- צבע מלא: תהליך צביעה מלא מהשורש ועד הקצוות
+- גוונים: בטכניקת נייר כסף או בליאז'
+- בליאז': צביעה חופשית למראה טבעי ושטוף שמש
+- צביעת שורשים: חידוש צבע לשורשים בלבד
+- תיקון צבע: תיקון טיפולי צבע קודמים (נדרש ייעוץ מראש)
+טיפולי שיער:
+- טיפול הזנה עמוק: לחות ושיקום אינטנסיבי
+- החלקת קרטין: מפחיתה פריזיות וקיימת 3-4 חודשים
+- טיפול קרקפת: טיפול ממוקד לבריאות הקרקפת
+- טיפול אולפלקס (Olaplex): טיפול בונה-קשרים לשיער פגום
+עיצוב:
+- פן ועיצוב: עיצוב שיער מקצועי (Blow-out)
+- תסרוקות ערב: לחתונות, נשפים ואירועים מיוחדים
+- תסרוקת כלה: עיצוב שיער ליום החתונה (כולל תור ניסיון)"""
     },
     {
         "category": "Services",
-        "title": "Nail Services",
-        "content": """Our nail services include:
-
-MANICURE:
-- Classic Manicure: Nail shaping, cuticle care, hand massage, and polish
-- Gel Manicure: Long-lasting gel polish (2-3 weeks wear)
-- Luxury Spa Manicure: Extended treatment with exfoliation, mask, and hot towel
-
-PEDICURE:
-- Classic Pedicure: Foot soak, nail care, callus removal, and polish
-- Gel Pedicure: Long-lasting gel polish for toes
-- Luxury Spa Pedicure: Full treatment with sugar scrub, mask, and extended massage
-
-NAIL ART:
-- Simple Nail Art: Accent nails with basic designs
-- Full Nail Art: Custom designs on all nails
-- French Tips: Classic or colored French manicure
-
-NAIL EXTENSIONS:
-- Acrylic Full Set: Full set of acrylic nail extensions
-- Acrylic Fill: Maintenance fill for existing acrylics
-- Gel Extensions: Soft gel nail extensions"""
+        "title": "שירותי ציפורניים",
+        "content": """שירותי הציפורניים שלנו כוללים:
+מניקור:
+- מניקור קלאסי: עיצוב ציפורניים, טיפול בעור שמסביב, עיסוי ידיים ולק
+- מניקור ג'ל: לק ג'ל עמיד לאורך זמן (2-3 שבועות)
+- מניקור ספא יוקרתי: טיפול מורחב הכולל פילינג, מסכה ומגבת חמה
+פדיקור:
+- פדיקור קלאסי: השריית רגליים, טיפול בציפורניים, הסרת עור יבש ולק
+- פדיקור ג'ל: לק ג'ל עמיד לציפורני הרגליים
+- פדיקור ספא יוקרתי: טיפול מלא עם פילינג סוכר, מסכה ועיסוי מורחב
+קישוטי ציפורניים (Nail Art):
+- עיצוב פשוט: עיצובים בסיסיים על ציפורניים נבחרות
+- עיצוב מלא: עיצובים מותאמים אישית על כל הציפורניים
+- פרנץ': מניקור פרנץ' קלאסי או צבעוני
+בניית ציפורניים:
+- סט אקריל מלא: בניית ציפורניים באקריל
+- מילוי אקריל: טיפול תחזוקה לבנייה קיימת באקריל
+- בנייה בג'ל: הארכת ציפורניים בשיטת ג'ל רך"""
     },
     {
         "category": "Services",
-        "title": "Facial & Skin Services",
-        "content": """Facial and skin care services at Dana's Beauty Salon:
-
-FACIALS:
-- Classic Facial: Deep cleansing, exfoliation, extraction, mask, and moisturizer (60 min)
-- Anti-Aging Facial: Targeted treatment with collagen and peptides (75 min)
-- Hydrating Facial: Intense moisture boost for dry skin (60 min)
-- Acne Treatment Facial: Deep cleansing with salicylic acid and blue light (60 min)
-- Express Facial: Quick refresh facial for busy schedules (30 min)
-
-SKIN TREATMENTS:
-- Microdermabrasion: Crystal-free exfoliation for smoother skin
-- Chemical Peel (Light): Gentle peel for brightening and texture
-- LED Light Therapy: Red or blue light for anti-aging or acne
-- Dermaplaning: Gentle exfoliation removing peach fuzz"""
+        "title": "טיפולי פנים ועור",
+        "content": """טיפולי פנים ועור במכון היופי של דנה:
+טיפולי פנים:
+- טיפול פנים קלאסי: ניקוי עמוק, פילינג, הוצאת שחורים, מסכה וקרם לחות (60 דק')
+- טיפול אנטי-אייג'ינג: טיפול ממוקד עם קולגן ופפטידים (75 דק')
+- טיפול לחות: בוסט של לחות אינטנסיבית לעור יבש (60 דק')
+- טיפול פנים לאקנה: ניקוי עמוק עם חומצה סליצילית ואור כחול (60 דק')
+- טיפול פנים אקספרס: רענון מהיר ללו"ז צפוף (30 דק')
+טיפולי עור:
+- מיקרודרמבריישן (Microdermabrasion): קילוף עדין ללא גבישים לעור חלק יותר
+- פילינג כימי (קל): קילוף עדין להבהרה ושיפור מרקם העור
+- טיפול באור (LED Light Therapy): אור אדום או כחול לאנטי-אייג'ינג או אקנה
+- דרמפלנינג (Dermaplaning): קילוף עדין המסיר פלומת שיער ותאים מתים"""
     },
     {
         "category": "Services",
-        "title": "Waxing & Hair Removal",
-        "content": """Waxing and hair removal services:
-
-FACE:
-- Eyebrow Wax: Shaping and clean-up
-- Upper Lip Wax
-- Full Face Wax: Eyebrows, upper lip, chin, and sides
-
-BODY:
-- Underarm Wax
-- Half Arm Wax
-- Full Arm Wax
-- Half Leg Wax
-- Full Leg Wax
-- Brazilian Wax
-- Bikini Line Wax
-- Back Wax
-- Chest Wax
-
-We use premium hard wax and soft wax depending on the area for maximum comfort and effectiveness. All waxing services include pre-wax cleansing and post-wax soothing lotion."""
+        "title": "שעווה והסרת שיער",
+        "content": """שירותי שעווה והסרת שיער:
+פנים:
+- עיצוב גבות: סידור וניקוי
+- שפם: הסרת שיער מעל השפה העליונה
+- שעווה בפנים (מלא): גבות, שפם, סנטר ופאות
+גוף:
+- שעווה בבית שחי
+- חצי יד / יד מלאה
+- חצי רגל / רגל מלאה
+- שעווה ברזילאית
+- קו ביקיני
+- גב / חזה
+אנו משתמשים בשעווה קשה ורכה באיכות פרימיום, בהתאם לאזור המטופל, לנוחות ויעילות מקסימלית. כל שירותי השעווה כוללים ניקוי לפני הטיפול וקרם הרגעה לאחריו."""
     },
 
     # ── Pricing ───────────────────────────────────────────────────────────
     {
         "category": "Pricing",
-        "title": "Summer 2025 Price List",
-        "content": """DANA'S BEAUTY SALON — PRICE LIST (Valid from June 2025)
-
-HAIR SERVICES:
-- Women's Haircut & Style: $65
-- Men's Haircut: $35
-- Children's Haircut (under 12): $25
-- Bang Trim: $15
-- Full Color: $95-$130 (depending on length)
-- Highlights / Lowlights: $120-$180
-- Balayage: $150-$220
-- Root Touch-Up: $75
-- Color Correction: Starting at $200 (consultation required)
-- Deep Conditioning Treatment: $40
-- Keratin Smoothing Treatment: $250-$350
-- Olaplex Treatment: $50 (add-on: $30)
-- Blow-Dry & Style: $45
-- Special Occasion Updo: $85
-- Bridal Hair (with trial): $200
-
-NAIL SERVICES:
-- Classic Manicure: $30
-- Gel Manicure: $45
-- Luxury Spa Manicure: $55
-- Classic Pedicure: $40
-- Gel Pedicure: $55
-- Luxury Spa Pedicure: $70
-- Simple Nail Art: +$10
-- Full Nail Art: +$25-$40
-- French Tips: +$10
-- Acrylic Full Set: $65
-- Acrylic Fill: $40
-- Gel Extensions: $75
-
-FACIAL & SKIN:
-- Classic Facial (60 min): $85
-- Anti-Aging Facial (75 min): $120
-- Hydrating Facial (60 min): $90
-- Acne Treatment Facial (60 min): $95
-- Express Facial (30 min): $50
-- Microdermabrasion: $110
-- Chemical Peel (Light): $95
-- LED Light Therapy: $60
-- Dermaplaning: $75
-
-WAXING:
-- Eyebrow Wax: $18
-- Upper Lip Wax: $12
-- Full Face Wax: $45
-- Underarm Wax: $25
-- Half Leg Wax: $40
-- Full Leg Wax: $65
-- Brazilian Wax: $55
-- Bikini Line Wax: $35
-
-All prices include applicable taxes. Prices may vary based on hair length and thickness.
-We accept cash, credit cards, and Apple Pay."""
+        "title": "מחירון קיץ 2025",
+        "content": """מכון היופי של דנה — מחירון (בתוקף מיוני 2025)
+שירותי שיער:
+- תספורת נשים ועיצוב: 250₪
+- תספורת גברים: 100₪
+- תספורת ילדים (עד גיל 12): 80₪
+- גזירת פוני: 50₪
+- צבע מלא: 250₪-350₪ (תלוי באורך)
+- גוונים: 350₪-550₪
+- בליאז': 450₪-700₪
+- צביעת שורשים: 200₪
+- תיקון צבע: החל מ-600₪ (נדרש ייעוץ)
+- טיפול הזנה עמוק: 120₪
+- החלקת קרטין: 800₪-1200₪
+- טיפול אולפלקס: 150₪ (בתוספת לטיפול אחר: 90₪)
+- פן ועיצוב: 120₪
+- תסרוקת ערב: 350₪
+- תסרוקת כלה (כולל ניסיון): 1200₪
+שירותי ציפורניים:
+- מניקור קלאסי: 80₪
+- מניקור ג'ל: 140₪
+- מניקור ספא יוקרתי: 180₪
+- פדיקור קלאסי: 130₪
+- פדיקור ג'ל: 180₪
+- פדיקור ספא יוקרתי: 220₪
+- קישוטים (עיצוב פשוט): +30₪
+- קישוטים (עיצוב מלא): +80₪-120₪
+- פרנץ': +30₪
+- סט בנייה באקריל: 250₪
+- מילוי באקריל: 150₪
+- בנייה בג'ל: 280₪
+טיפולי פנים ועור:
+- טיפול פנים קלאסי (60 דק'): 350₪
+- טיפול אנטי-אייג'ינג (75 דק'): 450₪
+- טיפול לחות (60 דק'): 380₪
+- טיפול לאקנה (60 דק'): 400₪
+- טיפול פנים אקספרס (30 דק'): 200₪
+- מיקרודרמבריישן: 400₪
+- פילינג כימי (קל): 350₪
+- טיפול באור (LED): 250₪
+- דרמפלנינג: 300₪
+שעווה:
+- עיצוב גבות: 60₪
+- שפם: 40₪
+- שעווה בפנים (מלא): 150₪
+- בית שחי: 80₪
+- חצי רגל: 120₪
+- רגל מלאה: 180₪
+- שעווה ברזילאית: 200₪
+- קו ביקיני: 100₪
+כל המחירים כוללים מע"מ. המחירים עשויים להשתנות בהתאם לאורך ועובי השיער.
+אנו מקבלים מזומן, כרטיסי אשראי, ביט ו-Apple Pay."""
     },
 
     # ── Hours ─────────────────────────────────────────────────────────────
     {
         "category": "Hours",
-        "title": "Opening Hours",
-        "content": """DANA'S BEAUTY SALON — OPENING HOURS
-
-Regular Hours:
-- Monday: 9:00 AM - 7:00 PM
-- Tuesday: 9:00 AM - 7:00 PM
-- Wednesday: 9:00 AM - 8:00 PM (Late night!)
-- Thursday: 9:00 AM - 7:00 PM
-- Friday: 9:00 AM - 5:00 PM
-- Saturday: 9:00 AM - 4:00 PM
-- Sunday: CLOSED
-
-Holiday Hours:
-- We are closed on all major national holidays
-- Special holiday hours will be announced on our social media
-- During holiday seasons, we recommend booking at least 2 weeks in advance
-
-Last appointment is accepted 1 hour before closing time.
-Walk-ins are welcome but appointments are recommended to avoid waiting."""
+        "title": "שעות פתיחה",
+        "content": """מכון היופי של דנה — שעות פתיחה
+שעות פעילות רגילות:
+- ראשון: 9:00 - 19:00
+- שני: 9:00 - 19:00
+- שלישי: 9:00 - 20:00 (פתוח עד מאוחר!)
+- רביעי: 9:00 - 19:00
+- חמישי: 9:00 - 19:00
+- שישי: 9:00 - 14:00
+- שבת: סגור
+שעות בחגים:
+- המכון סגור בערבי חג וחגים (אלא אם צוין אחרת)
+- שעות פעילות מיוחדות לחגים יפורסמו ברשתות החברתיות שלנו
+- לקראת החגים, אנו ממליצים לקבוע תור לפחות שבועיים מראש
+תור אחרון יתקבל עד שעה לפני שעת הסגירה.
+לקוחות מזדמנים (Walk-ins) יתקבלו בברכה על בסיס מקום פנוי, אך מומלץ לקבוע תור מראש."""
     },
 
     # ── Location ──────────────────────────────────────────────────────────
     {
         "category": "Location",
-        "title": "Address & Directions",
-        "content": """DANA'S BEAUTY SALON — LOCATION
-
-Address: 123 Rothschild Boulevard, Tel Aviv, Israel 6688101
-
-Landmarks: Located between Allenby Street and Herzl Street, next to Café Noir.
-
-Getting Here:
-- By Car: Street parking available on Rothschild Blvd. Paid parking garage at 110 Rothschild (2 min walk).
-- By Bus: Lines 5, 18, 61 stop at Rothschild/Allenby junction (1 min walk)
-- By Train: Tel Aviv HaShalom station (15 min walk or short bus ride)
-- By Bike: Tel-O-Fun bike station right outside the salon
-
-The salon is on the ground floor with wheelchair accessibility.
-Look for the pink and white awning with our logo!
-
-Contact:
-- Phone: +972-3-555-0123
-- WhatsApp: +972-50-555-0123
-- Email: hello@danasbeauty.com
-- Instagram: @danasbeautysalon
-- Website: www.danasbeauty.com"""
+        "title": "כתובת ודרכי הגעה",
+        "content": """מכון היופי של דנה — מיקום
+כתובת: שדרות רוטשילד 123, תל אביב-יפו 6688101
+נקודות ציון: ממוקם בין רחוב אלנבי לרחוב הרצל, סמוך לקפה נואר.
+דרכי הגעה:
+- ברכב: חניה בכחול-לבן זמינה בשדרה. חניון בתשלום ממוקם ברוטשילד 110 (2 דקות הליכה).
+- באוטובוס: קווים 5, 18, 61 עוצרים בצומת רוטשילד/אלנבי (דקה הליכה).
+- ברכבת הקלה/רכבת: תחנת אלנבי של הרכבת הקלה נמצאת במרחק הליכה קצר.
+- באופניים: תחנת תל-אופן ממש מחוץ למכון.
+המכון ממוקם בקומת הקרקע ונגיש לכיסאות גלגלים.
+חפשו את הסוכך הוורוד-לבן עם הלוגו שלנו!
+יצירת קשר:
+- טלפון: 03-555-0123
+- וואטסאפ: 050-555-0123
+- אימייל: hello@danasbeauty.co.il
+- אינסטגרם: @danasbeautysalon
+- אתר אינטרנט: www.danasbeauty.co.il"""
     },
 
     # ── Staff ─────────────────────────────────────────────────────────────
     {
         "category": "Staff",
-        "title": "Our Team",
-        "content": """MEET OUR TEAM AT DANA'S BEAUTY SALON
-
-DANA COHEN — Owner & Senior Stylist
-- 15+ years of experience in hair styling and coloring
-- Specializes in balayage, color correction, and bridal hair
-- Certified by L'Oréal Professionnel and Wella
-- Available: Monday-Friday
-
-MAYA LEVI — Hair Stylist
-- 8 years of experience
-- Specializes in precision cuts and keratin treatments
-- Expert in curly hair techniques (DevaCurl certified)
-- Available: Monday-Saturday
-
-NOOR HASSAN — Nail Technician
-- 6 years of experience in nail art and extensions
-- Certified in gel and acrylic techniques
-- Known for creative nail art designs
-- Available: Tuesday-Saturday
-
-YAEL MIZRAHI — Esthetician
-- Licensed esthetician with 10 years of experience
-- Specializes in anti-aging facials and skin treatments
-- Certified in microdermabrasion and chemical peels
-- Available: Monday, Wednesday, Thursday, Saturday
-
-LIOR SHAPIRA — Waxing Specialist & Junior Stylist
-- 4 years of experience
-- Specializes in Brazilian waxing and full-body waxing
-- Also trained in blow-dry styling
-- Available: Monday-Friday"""
+        "title": "הצוות שלנו",
+        "content": """הכירו את הצוות במכון היופי של דנה
+דנה כהן — בעלים ומעצבת שיער בכירה
+- מעל 15 שנות ניסיון בעיצוב וצביעת שיער
+- מתמחה בבליאז', תיקוני צבע ותסרוקות כלה
+- מוסמכת מטעם L'Oréal Professionnel ו-Wella
+- ימי עבודה: ראשון-חמישי
+מאיה לוי — מעצבת שיער
+- 8 שנות ניסיון
+- מתמחה בתספורות מדויקות והחלקות קרטין
+- מומחית לשיער מתולתל (מוסמכת DevaCurl)
+- ימי עבודה: ראשון-שישי
+נור חסן — טכנאית ציפורניים
+- 6 שנות ניסיון בבנייה וקישוטי ציפורניים
+- מוסמכת בטכניקות ג'ל ואקריל
+- ידועה בעיצובים היצירתיים שלה
+- ימי עבודה: שני-שישי
+יעל מזרחי — קוסמטיקאית פרא-רפואית
+- קוסמטיקאית מורשית עם 10 שנות ניסיון
+- מתמחה בטיפולי אנטי-אייג'ינג ושיקום העור
+- מוסמכת לטיפולי מיקרודרמבריישן ופילינג כימי
+- ימי עבודה: ראשון, שלישי, רביעי, שישי
+ליאור שפירא — מומחית שעווה ומעצבת שיער צעירה
+- 4 שנות ניסיון
+- מתמחה בשעווה ברזילאית ושעוות גוף מלאה
+- עברה הכשרות גם בעיצוב פן (Blow-dry)
+- ימי עבודה: ראשון-חמישי"""
     },
 
     # ── Policies ──────────────────────────────────────────────────────────
     {
         "category": "Policies",
-        "title": "Cancellation & Booking Policy",
-        "content": """DANA'S BEAUTY SALON — CANCELLATION & BOOKING POLICY
-
-BOOKING:
-- Appointments can be booked via phone, WhatsApp, or through our Telegram bot
-- A valid phone number is required for booking confirmation
-- We recommend booking at least 3-5 days in advance, especially for weekends
-- Bridal and special event appointments should be booked at least 2 weeks ahead
-
-CANCELLATION POLICY:
-- Free cancellation up to 24 hours before your appointment
-- Cancellations within 24 hours will be charged a 50% cancellation fee
-- No-shows will be charged the full service price
-- First-time no-shows receive a warning; repeated no-shows may result in requiring a deposit for future bookings
-
-LATE ARRIVALS:
-- If you arrive more than 15 minutes late, we may need to reschedule or modify your service
-- Please call us if you're running late so we can accommodate you
-
-DEPOSITS:
-- Bridal packages require a 30% non-refundable deposit at booking
-- Color correction services require a $50 consultation deposit (applied to service)
-- Group bookings (3+ people) require a 25% deposit"""
+        "title": "מדיניות ביטולים והזמנות",
+        "content": """מכון היופי של דנה — מדיניות ביטולים והזמנות
+הזמנת תורים:
+- ניתן לקבוע תורים דרך הטלפון, וואטסאפ או דרך בוט הטלגרם שלנו.
+- נדרש מספר טלפון תקין לאישור התור.
+- אנו ממליצים לקבוע תור 3-5 ימים מראש, במיוחד לסופי שבוע.
+- תורים לכלות ואירועים מיוחדים יש לקבוע לפחות שבועיים מראש.
+מדיניות ביטולים:
+- ביטול חינם אפשרי עד 24 שעות לפני מועד התור.
+- ביטולים בהתראה של פחות מ-24 שעות יחויבו ב-50% מעלות הטיפול.
+- אי-הגעה (No-show) ללא הודעה תחויב במחיר הטיפול המלא.
+- לקוחות שלא הגיעו לתור ללא הודעה יותר מפעם אחת, יידרשו לשלם מקדמה.
+איחורים:
+- במידה ותאחרו ביותר מ-15 דקות, ייתכן שניאלץ לקבוע מועד חדש או לקצר הטיפול.
+- אנא התקשרו לעדכן אם אתם מתעכבים.
+מקדמות:
+- חבילות כלה דורשות תשלום מקדמה של 30% (ללא החזר כספי במקרה של ביטול).
+- שירותי תיקון צבע דורשים פיקדון ייעוץ של 100₪.
+- הזמנות קבוצתיות (3 אנשים ומעלה) דורשות מקדמה של 25%."""
     },
     {
         "category": "Policies",
-        "title": "Safety & Hygiene Policy",
-        "content": """DANA'S BEAUTY SALON — SAFETY & HYGIENE
-
-We take your health and safety seriously:
-
-SANITATION:
-- All tools are sterilized between clients using hospital-grade disinfectant
-- Single-use items (files, buffers, wax strips) are disposed of after each client
-- Stations are sanitized between appointments
-- We use fresh towels and capes for every client
-
-PRODUCTS:
-- We use only professional-grade, salon-quality products
-- All products are cruelty-free
-- We carry hypoallergenic options for sensitive skin
-- Product brands: L'Oréal Professionnel, Olaplex, OPI, CND, Dermalogica
-
-ALLERGIES:
-- Please inform us of any allergies before your appointment
-- Patch tests are available 48 hours before color services
-- We maintain a record of client allergies in our system
-
-COVID-19 PROTOCOLS:
-- Enhanced cleaning and ventilation
-- Hand sanitizer available at entrance
-- Staff health monitoring"""
+        "title": "מדיניות בטיחות והיגיינה",
+        "content": """מכון היופי של דנה — בטיחות והיגיינה
+הבריאות והבטיחות שלכם הם בראש סדר העדיפויות שלנו:
+היגיינה וחיטוי:
+- כל הכלים עוברים חיטוי בדרגה רפואית (אוטוקלאב) בין לקוח ללקוח.
+- פריטים חד-פעמיים נזרקים מיד לאחר השימוש.
+- עמדות הטיפול עוברות חיטוי יסודי בין תורים.
+- אנו משתמשים במגבות וחלוקים נקיים לכל לקוח.
+מוצרים:
+- משתמשים במוצרים מקצועיים באיכות סלון בלבד.
+- כל המוצרים אינם מנוסים על בעלי חיים (Cruelty-free).
+- קיימות אפשרויות היפואלרגניות לבעלי עור רגיש.
+- מותגים: L'Oréal Professionnel, Olaplex, OPI, CND, Dermalogica.
+אלרגיות ורגישויות:
+- אנא יידעו אותנו על כל אלרגיה או רגישות לפני תחילת הטיפול.
+- טסט רגישות (Patch test) זמין ומומלץ 48 שעות לפני צביעת שיער ראשונה.
+- אנו מנהלים רישום אלרגיות במערכת הלקוחות שלנו.
+פרוטוקולי אוורור וניקיון:
+- מערכת אוורור מתקדמת.
+- עמדות אלכוג'ל בכניסה ובכל עמדת טיפול."""
     },
 
     # ── FAQ ───────────────────────────────────────────────────────────────
     {
         "category": "FAQ",
-        "title": "Frequently Asked Questions",
-        "content": """FREQUENTLY ASKED QUESTIONS — DANA'S BEAUTY SALON
-
-Q: Do I need an appointment or do you accept walk-ins?
-A: We accept walk-ins, but appointments are strongly recommended to guarantee availability. You can book via phone, WhatsApp, or our Telegram bot.
-
-Q: How long does a typical hair coloring appointment take?
-A: Single-process color takes about 1.5-2 hours. Highlights and balayage take 2-3 hours. Color correction may take 3-5 hours depending on the situation.
-
-Q: Do you offer gift cards?
-A: Yes! Gift cards are available in any amount starting from $25. They can be purchased in-salon or ordered by phone for delivery.
-
-Q: Is there parking available?
-A: Street parking is available on Rothschild Boulevard (metered). There's also a paid parking garage at 110 Rothschild, a 2-minute walk away.
-
-Q: Do you offer bridal packages?
-A: Yes! Our bridal package includes a trial session and day-of styling. We also offer packages for the bridal party. Book at least 2 weeks in advance.
-
-Q: What products do you use?
-A: We use professional brands including L'Oréal Professionnel, Olaplex, OPI, CND, and Dermalogica. All our products are cruelty-free.
-
-Q: Can I bring my child to the salon?
-A: Children are welcome! We offer children's haircuts for kids under 12. For safety, children must be supervised at all times.
-
-Q: Do you offer student discounts?
-A: Yes! Students get 10% off all services with a valid student ID. This cannot be combined with other promotions.
-
-Q: What payment methods do you accept?
-A: We accept cash, all major credit cards, and Apple Pay. We do not accept personal checks.
-
-Q: How often should I get a haircut?
-A: We recommend every 6-8 weeks for most styles. If you're growing your hair out, every 8-12 weeks for a trim to keep it healthy."""
+        "title": "שאלות נפוצות (FAQ)",
+        "content": """שאלות נפוצות — מכון היופי של דנה
+ש: האם חובה לקבוע תור מראש או שאפשר פשוט להגיע?
+ת: אפשר להגיע ללא תור, אבל ממליצים לקבוע מראש. ניתן דרך הטלפון, הוואטסאפ או בוט הטלגרם.
+ש: כמה זמן לוקח טיפול צבע לשיער?
+ת: צבע אחיד לוקח בין שעה וחצי לשעתיים. גוונים ובליאז' 2-3 שעות. תיקון צבע 3-5 שעות.
+ש: האם אתם מוכרים שוברי מתנה (Gift Cards)?
+ת: כן! זמינים בכל סכום החל מ-100₪. ניתן לרכוש במכון או להזמין בטלפון.
+ש: האם יש חניה באזור?
+ת: יש חניה בכחול-לבן לאורך שדרות רוטשילד. חניון בתשלום ברחוב רוטשילד 110.
+ש: האם אתם מציעים חבילות כלה?
+ת: כן! כולל תור ניסיון ועיצוב ביום האירוע. חבילות למלוות הכלה גם זמינות. קביעת 2 שבועות מראש.
+ש: באיזה מוצרים אתם משתמשים?
+ת: מותגים מקצועיים כמו L'Oréal Professionnel, Olaplex, OPI, CND ו-Dermalogica. כל המוצרים cruelty-free.
+ש: אפשר להביא ילדים למספרה?
+ת: ילדים מוזמנים! מציעים תספורות לילדים (עד גיל 12). השגיחו עליהם בכל עת.
+ש: האם יש הנחות לחיילים/סטודנטים?
+ת: כן! 10% הנחה בהצגת חוגר/תעודת סטודנט בתוקף (לא כולל כפל מבצעים).
+ש: אילו אמצעי תשלום אתם מכבדים?
+ת: מזומן, כרטיסי אשראי, ביט (Bit) ו-Apple Pay. לא מקבלים צ'קים.
+ש: כל כמה זמן מומלץ להסתפר?
+ת: לרוב התסרוקות ממליצים על תספורת כל 6-8 שבועות. לגדילת שיער כל 8-12 שבועות."""
     },
 
     # ── Promotions ────────────────────────────────────────────────────────
     {
         "category": "Promotions",
-        "title": "Current Promotions & Offers",
-        "content": """CURRENT PROMOTIONS AT DANA'S BEAUTY SALON (Summer 2025)
-
-SUMMER SPECIAL:
-- 15% off all hair coloring services (June-August 2025)
-- Book any color service and get a free Olaplex treatment (worth $50)
-
-NEW CLIENT OFFER:
-- First-time clients receive 20% off their first service
-- Refer a friend and both get $15 off your next visit
-
-LOYALTY PROGRAM:
-- Earn 1 point per $1 spent
-- 100 points = $10 off your next service
-- Birthday month: Double points on all services!
-
-PACKAGE DEALS:
-- "Pamper Package": Haircut + Facial + Manicure for $150 (save $30)
-- "Bridal Glow Package": Facial + Manicure + Pedicure for $170 (save $25)
-- "Monthly Maintenance": Gel Manicure + Eyebrow Wax for $55 (save $8)
-
-STUDENT DISCOUNT:
-- 10% off all services with valid student ID
-- Cannot be combined with other promotions
-
-WEDNESDAY LATE NIGHT SPECIAL:
-- 10% off all services booked after 6:00 PM on Wednesdays"""
+        "title": "מבצעים והטבות",
+        "content": """מבצעים פעילים במכון היופי של דנה (קיץ 2025)
+ספיישל קיץ:
+- 15% הנחה על כל שירותי צביעת השיער (יוני-אוגוסט 2025).
+- בקביעת תור לכל טיפול צבע — טיפול אולפלקס (Olaplex) במתנה (בשווי 150₪).
+הטבת לקוח/ה חדש/ה:
+- לקוחות חדשים: 20% הנחה על הטיפול הראשון!
+- חבר מביא חבר: שניכם תקבלו 50₪ הנחה לטיפול הבא.
+מועדון לקוחות:
+- על כל 10 שקלים מקבלים נקודה.
+- 100 נקודות = 50₪ הנחה לטיפול הבא.
+- חודש יום ההולדת: כפל נקודות על כל השירותים!
+חבילות משתלמות (Package Deals):
+- "חבילת פינוק": תספורת + טיפול פנים + מניקור ב-550₪ (במקום 680₪).
+- "חבילת זוהר": טיפול פנים + מניקור + פדיקור ב-500₪ (במקום 560₪).
+- "תחזוקה חודשית": מניקור ג'ל + סידור גבות ב-170₪ (במקום 200₪).
+הנחת סטודנטים/חיילים:
+- 10% הנחה על כל השירותים בהצגת תעודה בתוקף (אין כפל מבצעים).
+ספיישל שלישי בערב:
+- 10% הנחה על כל השירותים שנקבעים לשעה 18:00 ומעלה בימי שלישי."""
     },
 ]
 
@@ -394,16 +335,16 @@ def seed_database():
     """Populate the database with demo data."""
     logger.info("Initializing database...")
     db.init_db()
-    
-    # Check if data already exists
-    existing = db.get_all_kb_entries()
+
+    # Check if data already exists (include inactive entries to avoid duplicates)
+    existing = db.get_all_kb_entries(active_only=False)
     if existing:
         logger.info("Database already has %s entries. Skipping seed.", len(existing))
         logger.info("To re-seed, delete the database file first: ai_chatbot/data/chatbot.db")
         return False
-    
+
     logger.info("Seeding %s knowledge base entries...", len(DEMO_ENTRIES))
-    
+
     for entry in DEMO_ENTRIES:
         entry_id = db.add_kb_entry(
             category=entry["category"],
@@ -416,7 +357,7 @@ def seed_database():
             entry["title"],
             entry_id,
         )
-    
+
     logger.info("Seed data inserted successfully!")
     return True
 
@@ -424,7 +365,7 @@ def seed_database():
 def seed_and_index():
     """Seed the database and build the RAG index."""
     was_seeded = seed_database()
-    
+
     if was_seeded:
         logger.info("Building RAG index...")
         rebuild_index()
@@ -432,6 +373,7 @@ def seed_and_index():
     else:
         logger.info("Checking if RAG index needs rebuilding...")
         from ai_chatbot.rag.vector_store import get_vector_store
+
         store = get_vector_store()
         if store.index is None or store.index.ntotal == 0:
             logger.info("Index is empty. Rebuilding...")
