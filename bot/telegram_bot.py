@@ -55,7 +55,7 @@ def create_bot_application():
     # ─── Conversation handler for appointment booking ─────────────────────
     # Filter that matches any main-menu button text — used to let button
     # clicks break out of an active booking conversation.
-    button_filter = filters.Regex(
+    button_filter = filters.TEXT & filters.Regex(
         r"^(" + "|".join(re.escape(t) for t in ALL_BUTTON_TEXTS) + r")$"
     )
 
