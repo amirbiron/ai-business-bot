@@ -6,10 +6,56 @@ suitable for embedding and retrieval.
 import re
 from ai_chatbot.config import CHUNK_MAX_TOKENS
 
+try:
+    import tiktoken  # type: ignore
+except Exception:  # pragma: no cover
+    tiktoken = None
+
+_ENCODING = None  # None=unknown, False=unavailable, else=tiktoken.Encoding
+
+
+def _get_encoding():
+    global _ENCODING
+    if _ENCODING is False:
+        return None
+    if _ENCODING is not None:
+        return _ENCODING
+    if tiktoken is None:
+        _ENCODING = False
+        return None
+    try:
+        from ai_chatbot.config import OPENAI_MODEL
+        _ENCODING = tiktoken.encoding_for_model(OPENAI_MODEL)
+        return _ENCODING
+    except Exception:
+        try:
+            _ENCODING = tiktoken.get_encoding("cl100k_base")
+            return _ENCODING
+        except Exception:
+            _ENCODING = False
+            return None
+
 
 def estimate_tokens(text: str) -> int:
-    """Rough token estimation: ~4 characters per token for English."""
-    return len(text) // 4
+    """
+    Estimate tokens for chunking.
+
+    Uses `tiktoken` when available for accurate counting (important for Hebrew).
+    Falls back to a conservative heuristic otherwise.
+    """
+    if not text:
+        return 0
+    try:
+        enc = _get_encoding()
+    except Exception:
+        enc = None
+    if enc is not None:
+        try:
+            return len(enc.encode(text))
+        except Exception:
+            pass
+    # Fallback heuristic: Hebrew often yields fewer chars per token than English.
+    return max(1, len(text) // 3)
 
 
 def chunk_text(text: str, max_tokens: int = None) -> list[str]:
@@ -30,9 +76,7 @@ def chunk_text(text: str, max_tokens: int = None) -> list[str]:
     """
     if max_tokens is None:
         max_tokens = CHUNK_MAX_TOKENS
-    
-    max_chars = max_tokens * 4  # rough conversion
-    
+
     if estimate_tokens(text) <= max_tokens:
         return [text.strip()] if text.strip() else []
     
@@ -47,39 +91,62 @@ def chunk_text(text: str, max_tokens: int = None) -> list[str]:
         if not para:
             continue
         
-        # If adding this paragraph keeps us under limit, add it
-        if len(current_chunk) + len(para) + 2 <= max_chars:
-            current_chunk = (current_chunk + "\n\n" + para).strip()
-        else:
-            # Save current chunk if non-empty
+        candidate = para if not current_chunk else f"{current_chunk}\n\n{para}"
+        if estimate_tokens(candidate) <= max_tokens:
+            current_chunk = candidate
+            continue
+
+        # Save current chunk if non-empty
+        if current_chunk:
+            chunks.append(current_chunk)
+            current_chunk = ""
+
+        # If paragraph itself fits, start a new chunk with it
+        if estimate_tokens(para) <= max_tokens:
+            current_chunk = para
+            continue
+
+        # Paragraph too long: split by sentences, then words
+        sentences = re.split(r"(?<=[.!?])\s+", para)
+        for sentence in sentences:
+            sentence = sentence.strip()
+            if not sentence:
+                continue
+
+            candidate = sentence if not current_chunk else f"{current_chunk} {sentence}"
+            if estimate_tokens(candidate) <= max_tokens:
+                current_chunk = candidate
+                continue
+
             if current_chunk:
                 chunks.append(current_chunk)
                 current_chunk = ""
-            
-            # If paragraph itself is too long, split by sentences
-            if len(para) > max_chars:
-                sentences = re.split(r'(?<=[.!?])\s+', para)
-                for sentence in sentences:
-                    if len(current_chunk) + len(sentence) + 1 <= max_chars:
-                        current_chunk = (current_chunk + " " + sentence).strip()
-                    else:
-                        if current_chunk:
-                            chunks.append(current_chunk)
-                        # If single sentence is too long, split by words
-                        if len(sentence) > max_chars:
-                            words = sentence.split()
-                            current_chunk = ""
-                            for word in words:
-                                if len(current_chunk) + len(word) + 1 <= max_chars:
-                                    current_chunk = (current_chunk + " " + word).strip()
-                                else:
-                                    if current_chunk:
-                                        chunks.append(current_chunk)
-                                    current_chunk = word
-                        else:
-                            current_chunk = sentence
-            else:
-                current_chunk = para
+
+            if estimate_tokens(sentence) <= max_tokens:
+                current_chunk = sentence
+                continue
+
+            # Sentence still too long: split by words
+            words = sentence.split()
+            for word in words:
+                word = word.strip()
+                if not word:
+                    continue
+
+                if estimate_tokens(word) > max_tokens:
+                    if current_chunk:
+                        chunks.append(current_chunk)
+                        current_chunk = ""
+                    chunks.append(word)
+                    continue
+
+                candidate = word if not current_chunk else f"{current_chunk} {word}"
+                if estimate_tokens(candidate) <= max_tokens:
+                    current_chunk = candidate
+                else:
+                    if current_chunk:
+                        chunks.append(current_chunk)
+                    current_chunk = word
     
     if current_chunk:
         chunks.append(current_chunk)

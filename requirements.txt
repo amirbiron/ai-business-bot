@@ -5,6 +5,7 @@ python-telegram-bot[ext]
 
 # LLM & Embeddings
 openai
+tiktoken
 
 # Vector Store
 faiss-cpu

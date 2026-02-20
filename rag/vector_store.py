@@ -62,7 +62,11 @@ class VectorStore:
         self.index = faiss.IndexFlatIP(self.dimension)
         self.index.add(embeddings)
         
-        logger.info(f"Built FAISS index with {self.index.ntotal} vectors of dimension {self.dimension}")
+        logger.info(
+            "Built FAISS index with %s vectors of dimension %s",
+            self.index.ntotal,
+            self.dimension,
+        )
     
     def search(self, query_embedding: np.ndarray, top_k: int = None) -> list[dict]:
         """
@@ -122,7 +126,7 @@ class VectorStore:
         with open(save_path / "config.json", "w", encoding="utf-8") as f:
             json.dump({"dimension": self.dimension}, f, ensure_ascii=False)
         
-        logger.info(f"Saved FAISS index to {save_path}")
+        logger.info("Saved FAISS index to %s", save_path)
     
     def load(self, path: str = None) -> bool:
         """
@@ -161,10 +165,10 @@ class VectorStore:
                 config = json.load(f)
                 self.dimension = config["dimension"]
             
-            logger.info(f"Loaded FAISS index with {self.index.ntotal} vectors")
+            logger.info("Loaded FAISS index with %s vectors", self.index.ntotal)
             return True
         except Exception as e:
-            logger.error(f"Failed to load index: {e}")
+            logger.error("Failed to load index: %s", e)
             return False
 
 

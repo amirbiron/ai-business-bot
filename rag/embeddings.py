@@ -80,7 +80,7 @@ def get_embedding(text: str) -> np.ndarray:
         )
         return np.array(response.data[0].embedding, dtype=np.float32)
     except Exception as e:
-        logger.debug(f"OpenAI embedding API failed: {e}. Using local fallback.")
+        logger.debug("OpenAI embedding API failed: %s. Using local fallback.", e)
         return _local_embedding(text)
 
 
@@ -116,6 +116,6 @@ def get_embeddings_batch(texts: list[str]) -> np.ndarray:
         return np.array(all_embeddings, dtype=np.float32)
     
     except Exception as e:
-        logger.debug(f"OpenAI batch embedding API failed: {e}. Using local fallback.")
+        logger.debug("OpenAI batch embedding API failed: %s. Using local fallback.", e)
         embeddings = [_local_embedding(t) for t in cleaned]
         return np.array(embeddings, dtype=np.float32)

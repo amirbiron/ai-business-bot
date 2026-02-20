@@ -138,13 +138,17 @@ def rebuild_index():
             _maybe_clear_stale(start_stale_token)
             return
 
-        logger.info(f"Created {len(all_chunks)} chunks from {len(entries)} entries")
+        logger.info(
+            "Created %s chunks from %s entries",
+            len(all_chunks),
+            len(entries),
+        )
 
         # Step 2: Generate embeddings
         chunk_texts = [c["text"] for c in all_chunks]
         embeddings = get_embeddings_batch(chunk_texts)
 
-        logger.info(f"Generated {len(embeddings)} embeddings")
+        logger.info("Generated %s embeddings", len(embeddings))
 
         # Step 3: Prepare metadata
         metadata = []
@@ -217,7 +221,7 @@ def retrieve(query: str, top_k: int = None) -> list[dict]:
     # Search
     results = store.search(query_embedding, top_k=top_k)
     
-    logger.info(f"Retrieved {len(results)} chunks for query: '{query[:50]}...'")
+    logger.info("Retrieved %s chunks for query: '%s...'", len(results), query[:50])
     return results
 
 

@@ -15,9 +15,14 @@ from ai_chatbot.config import DB_PATH
 @contextmanager
 def get_connection():
     """Yield a SQLite connection and always close it safely."""
-    conn = sqlite3.connect(str(DB_PATH))
+    # The app can run the Telegram bot (asyncio) and the Flask admin panel in the
+    # same process. We create a fresh connection per operation, but still set a
+    # generous timeout and busy_timeout to reduce "database is locked" errors
+    # under concurrent writes, and allow cross-thread usage if needed.
+    conn = sqlite3.connect(str(DB_PATH), timeout=30, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=30000")
     conn.execute("PRAGMA foreign_keys=ON")
     try:
         yield conn
@@ -161,6 +166,34 @@ def get_kb_categories() -> list[str]:
         return [r["category"] for r in rows]
 
 
+def count_kb_entries(category: str | None = None, active_only: bool = True) -> int:
+    """Count KB entries, optionally filtered by category."""
+    with get_connection() as conn:
+        query = "SELECT COUNT(*) AS count FROM kb_entries WHERE 1=1"
+        params: list[object] = []
+        if active_only:
+            query += " AND is_active=1"
+        if category:
+            query += " AND category=?"
+            params.append(category)
+        row = conn.execute(query, params).fetchone()
+        return int(row["count"]) if row else 0
+
+
+def count_kb_categories(active_only: bool = True) -> int:
+    """Count distinct KB categories."""
+    with get_connection() as conn:
+        if active_only:
+            row = conn.execute(
+                "SELECT COUNT(DISTINCT category) AS count FROM kb_entries WHERE is_active=1"
+            ).fetchone()
+        else:
+            row = conn.execute(
+                "SELECT COUNT(DISTINCT category) AS count FROM kb_entries"
+            ).fetchone()
+        return int(row["count"]) if row else 0
+
+
 # ─── Chunks ──────────────────────────────────────────────────────────────────
 
 def save_chunks(entry_id: int, chunks: list[dict]):
@@ -205,7 +238,7 @@ def get_conversation_history(user_id: str, limit: int = 20) -> list[dict]:
         rows = conn.execute(
             """SELECT role, message, sources, created_at 
                FROM conversations WHERE user_id=? 
-               ORDER BY created_at DESC LIMIT ?""",
+               ORDER BY id DESC LIMIT ?""",
             (user_id, limit)
         ).fetchall()
         return [dict(r) for r in reversed(rows)]
@@ -216,7 +249,7 @@ def get_all_conversations(limit: int = 100) -> list[dict]:
     with get_connection() as conn:
         rows = conn.execute(
             """SELECT user_id, username, role, message, sources, created_at 
-               FROM conversations ORDER BY created_at DESC LIMIT ?""",
+               FROM conversations ORDER BY id DESC LIMIT ?""",
             (limit,)
         ).fetchall()
         return [dict(r) for r in rows]
@@ -236,6 +269,15 @@ def get_unique_users() -> list[dict]:
         return [dict(r) for r in rows]
 
 
+def count_unique_users() -> int:
+    """Count distinct users in conversation history."""
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT COUNT(DISTINCT user_id) AS count FROM conversations"
+        ).fetchone()
+        return int(row["count"]) if row else 0
+
+
 # ─── Agent Requests ──────────────────────────────────────────────────────────
 
 def create_agent_request(user_id: str, username: str, message: str = "") -> int:
@@ -249,19 +291,35 @@ def create_agent_request(user_id: str, username: str, message: str = "") -> int:
         return cursor.lastrowid
 
 
-def get_agent_requests(status: str = None) -> list[dict]:
+def get_agent_requests(status: str | None = None, limit: int | None = None) -> list[dict]:
     """Get agent requests, optionally filtered by status."""
     with get_connection() as conn:
+        params: list[object] = []
         if status:
-            rows = conn.execute(
-                "SELECT * FROM agent_requests WHERE status=? ORDER BY created_at DESC",
-                (status,)
-            ).fetchall()
+            query = "SELECT * FROM agent_requests WHERE status=? ORDER BY created_at DESC"
+            params.append(status)
         else:
-            rows = conn.execute(
-                "SELECT * FROM agent_requests ORDER BY created_at DESC"
-            ).fetchall()
+            query = "SELECT * FROM agent_requests ORDER BY created_at DESC"
+        if limit is not None:
+            query += " LIMIT ?"
+            params.append(limit)
+        rows = conn.execute(query, params).fetchall()
         return [dict(r) for r in rows]
+
+
+def count_agent_requests(status: str | None = None) -> int:
+    """Count agent requests, optionally filtered by status."""
+    with get_connection() as conn:
+        if status:
+            row = conn.execute(
+                "SELECT COUNT(*) AS count FROM agent_requests WHERE status=?",
+                (status,),
+            ).fetchone()
+        else:
+            row = conn.execute(
+                "SELECT COUNT(*) AS count FROM agent_requests"
+            ).fetchone()
+        return int(row["count"]) if row else 0
 
 
 def update_agent_request_status(request_id: int, status: str):
@@ -289,19 +347,35 @@ def create_appointment(user_id: str, username: str, service: str = "",
         return cursor.lastrowid
 
 
-def get_appointments(status: str = None) -> list[dict]:
+def get_appointments(status: str | None = None, limit: int | None = None) -> list[dict]:
     """Get appointments, optionally filtered by status."""
     with get_connection() as conn:
+        params: list[object] = []
         if status:
-            rows = conn.execute(
-                "SELECT * FROM appointments WHERE status=? ORDER BY created_at DESC",
-                (status,)
-            ).fetchall()
+            query = "SELECT * FROM appointments WHERE status=? ORDER BY created_at DESC"
+            params.append(status)
         else:
-            rows = conn.execute(
-                "SELECT * FROM appointments ORDER BY created_at DESC"
-            ).fetchall()
+            query = "SELECT * FROM appointments ORDER BY created_at DESC"
+        if limit is not None:
+            query += " LIMIT ?"
+            params.append(limit)
+        rows = conn.execute(query, params).fetchall()
         return [dict(r) for r in rows]
+
+
+def count_appointments(status: str | None = None) -> int:
+    """Count appointments, optionally filtered by status."""
+    with get_connection() as conn:
+        if status:
+            row = conn.execute(
+                "SELECT COUNT(*) AS count FROM appointments WHERE status=?",
+                (status,),
+            ).fetchone()
+        else:
+            row = conn.execute(
+                "SELECT COUNT(*) AS count FROM appointments"
+            ).fetchone()
+        return int(row["count"]) if row else 0
 
 
 def update_appointment_status(appt_id: int, status: str):
