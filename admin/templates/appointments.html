@@ -1,13 +1,15 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h2 class="mb-4"><i class="bi bi-calendar-check"></i> תורים</h2>
+<div class="page-header animate-fade-in">
+    <h1><i class="bi bi-calendar-check"></i> תורים</h1>
+</div>
 
-<div class="card">
-    <div class="card-body">
+<div class="card animate-slide-up">
+    <div class="card-body" style="padding: 0;">
         {% if appointments %}
-        <div class="table-responsive">
-            <table class="table table-hover">
+        <div class="table-wrapper">
+            <table>
                 <thead>
                     <tr>
                         <th>מזהה</th>
@@ -21,60 +23,18 @@
                         <th>פעולות</th>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody id="appointments-table-body">
                     {% for appt in appointments %}
-                    <tr>
-                        <td>{{ appt.id }}</td>
-                        <td>
-                            <strong>{{ appt.username }}</strong>
-                            {% if appt.telegram_username %}
-                            <br>
-                            <a class="small text-decoration-none" href="https://t.me/{{ appt.telegram_username }}" target="_blank" rel="noopener">
-                                @{{ appt.telegram_username }}
-                            </a>
-                            {% else %}
-                            <br><small class="text-muted">ללא שם משתמש בטלגרם</small>
-                            {% endif %}
-                        </td>
-                        <td>{{ appt.service }}</td>
-                        <td>{{ appt.preferred_date }}</td>
-                        <td>{{ appt.preferred_time }}</td>
-                        <td>{{ appt.notes }}</td>
-                        <td>
-                            {% if appt.status == 'pending' %}
-                            <span class="badge bg-warning text-dark">ממתין</span>
-                            {% elif appt.status == 'confirmed' %}
-                            <span class="badge bg-success">מאושר</span>
-                            {% elif appt.status == 'cancelled' %}
-                            <span class="badge bg-danger">בוטל</span>
-                            {% endif %}
-                        </td>
-                        <td><small>{{ appt.created_at }}</small></td>
-                        <td>
-                            {% if appt.status == 'pending' %}
-                            <form method="POST" action="/appointments/{{ appt.id }}/update" class="d-inline">
-                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                <input type="hidden" name="status" value="confirmed">
-                                <button type="submit" class="btn btn-sm btn-success">
-                                    <i class="bi bi-check-lg"></i> אשר
-                                </button>
-                            </form>
-                            <form method="POST" action="/appointments/{{ appt.id }}/update" class="d-inline">
-                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                <input type="hidden" name="status" value="cancelled">
-                                <button type="submit" class="btn btn-sm btn-outline-danger">
-                                    <i class="bi bi-x-lg"></i> בטל
-                                </button>
-                            </form>
-                            {% endif %}
-                        </td>
-                    </tr>
+                    {% include "partials/appointment_row.html" %}
                     {% endfor %}
                 </tbody>
             </table>
         </div>
         {% else %}
-        <p class="text-muted text-center py-4">אין עדיין תורים.</p>
+        <div class="empty-state">
+            <i class="bi bi-calendar-plus"></i>
+            <p>אין עדיין תורים.</p>
+        </div>
         {% endif %}
     </div>
 </div>

@@ -1,21 +1,24 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="mb-4">
-    <a href="/kb" class="btn btn-outline-secondary btn-sm">
+<div style="margin-bottom: 1rem;">
+    <a href="/kb" class="btn btn-secondary btn-sm">
         <i class="bi bi-arrow-right"></i> חזרה לבסיס הידע
     </a>
 </div>
 
-<h2><i class="bi bi-pencil-square"></i> {% if entry %}עריכת{% else %}הוספת{% endif %} רשומת בסיס ידע</h2>
+<div class="page-header animate-fade-in">
+    <h1><i class="bi bi-pencil-square"></i> {% if entry %}עריכת{% else %}הוספת{% endif %} רשומת בסיס ידע</h1>
+</div>
 
-<div class="card mt-4">
+<div class="card animate-slide-up" style="max-width: 800px;">
     <div class="card-body">
         <form method="POST">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <div class="mb-3">
-                <label for="category" class="form-label"><strong>קטגוריה</strong></label>
-                <input type="text" class="form-control" id="category" name="category"
+
+            <div class="form-group">
+                <label for="category" class="form-label">קטגוריה</label>
+                <input type="text" class="form-input" id="category" name="category"
                        value="{{ entry.category if entry else '' }}"
                        list="category-list" required
                        placeholder="לדוגמה: שירותים, מחירון, שאלות נפוצות, מדיניות, שעות, צוות, מיקום">
@@ -32,29 +35,29 @@
                     <option value="מיקום">
                     <option value="כללי">
                 </datalist>
-                <div class="form-text">הקלידו קטגוריה חדשה או בחרו קיימת.</div>
+                <div class="form-hint">הקלידו קטגוריה חדשה או בחרו קיימת.</div>
             </div>
 
-            <div class="mb-3">
-                <label for="title" class="form-label"><strong>כותרת</strong></label>
-                <input type="text" class="form-control" id="title" name="title"
+            <div class="form-group">
+                <label for="title" class="form-label">כותרת</label>
+                <input type="text" class="form-input" id="title" name="title"
                        value="{{ entry.title if entry else '' }}" required
                        placeholder="לדוגמה: מחירון קיץ 2025">
             </div>
 
-            <div class="mb-3">
-                <label for="content" class="form-label"><strong>תוכן</strong></label>
-                <textarea class="form-control" id="content" name="content" rows="12" required
+            <div class="form-group">
+                <label for="content" class="form-label">תוכן</label>
+                <textarea class="form-textarea" id="content" name="content" rows="12" required
                           placeholder="הכניסו את התוכן המלא כאן. כללו את כל הפרטים — המערכת תפרק אותו אוטומטית עבור הבינה המלאכותית.">{{ entry.content if entry else '' }}</textarea>
-                <div class="form-text">
+                <div class="form-hint">
                     כתבו בצורה טבעית. המערכת תפרק תוכן ארוך לחלקים קטנים לאחזור AI טוב יותר.
                 </div>
             </div>
 
-            <div class="d-flex justify-content-between">
-                <a href="/kb" class="btn btn-outline-secondary">ביטול</a>
-                <button type="submit" class="btn btn-primary" style="background-color: #6c5ce7; border: none;">
-                    <i class="bi bi-check-lg"></i> {% if entry %}עריכת{% else %}הוספת{% endif %} רשומה
+            <div class="d-flex justify-between" style="margin-top: 1.5rem;">
+                <a href="/kb" class="btn btn-secondary">ביטול</a>
+                <button type="submit" class="btn btn-primary" style="width: auto;">
+                    <i class="bi bi-check-lg"></i> {% if entry %}עדכון{% else %}הוספת{% endif %} רשומה
                 </button>
             </div>
         </form>

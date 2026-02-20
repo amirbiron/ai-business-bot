@@ -432,6 +432,13 @@ def update_agent_request_status(request_id: int, status: str):
         )
 
 
+def get_agent_request(request_id: int) -> Optional[dict]:
+    """Get a single agent request by ID."""
+    with get_connection() as conn:
+        row = conn.execute("SELECT * FROM agent_requests WHERE id=?", (request_id,)).fetchone()
+        return dict(row) if row else None
+
+
 # ─── Appointments ────────────────────────────────────────────────────────────
 
 def create_appointment(
@@ -492,3 +499,10 @@ def update_appointment_status(appt_id: int, status: str):
             "UPDATE appointments SET status=? WHERE id=?",
             (status, appt_id)
         )
+
+
+def get_appointment(appt_id: int) -> Optional[dict]:
+    """Get a single appointment by ID."""
+    with get_connection() as conn:
+        row = conn.execute("SELECT * FROM appointments WHERE id=?", (appt_id,)).fetchone()
+        return dict(row) if row else None

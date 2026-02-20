@@ -11,6 +11,7 @@ Features:
 """
 
 import hmac
+import json
 import logging
 from functools import wraps
 from urllib.parse import urlparse
@@ -118,7 +119,16 @@ def create_admin_app() -> Flask:
 
     @app.errorhandler(CSRFError)
     def _handle_csrf_error(e):
-        # Avoid leaking CSRF details; just ask the user to retry.
+        if request.headers.get("HX-Request"):
+            # Return a lightweight 403 so HTMX doesn't replace content with
+            # a full redirect page.  The csrfExpired trigger tells client JS
+            # to show a reload prompt.
+            resp = app.make_response(("", 403))
+            # Prevent any DOM swap on HTMX requests.
+            resp.headers["HX-Reswap"] = "none"
+            resp.headers["HX-Trigger"] = "csrfExpired"
+            return resp
+        # Regular form submission — flash and redirect.
         flash("פג תוקף הטופס. נסו שוב.", "danger")
         default = url_for("dashboard") if session.get("logged_in") else url_for("login")
         return redirect(_safe_redirect_back(default))
@@ -129,6 +139,10 @@ def create_admin_app() -> Flask:
         @wraps(f)
         def decorated(*args, **kwargs):
             if not session.get("logged_in"):
+                if request.headers.get("HX-Request"):
+                    resp = app.make_response(("", 401))
+                    resp.headers["HX-Redirect"] = url_for("login")
+                    return resp
                 return redirect(url_for("login"))
             return f(*args, **kwargs)
         return decorated
@@ -253,6 +267,17 @@ def create_admin_app() -> Flask:
     def kb_delete(entry_id):
         db.delete_kb_entry(entry_id)
         mark_index_stale()
+        if request.headers.get("HX-Request"):
+            if db.count_kb_entries(active_only=False) == 0:
+                resp = app.make_response(
+                    render_template("partials/kb_empty.html")
+                )
+                resp.headers["HX-Retarget"] = "#kb-table-wrapper"
+                resp.headers["HX-Reswap"] = "outerHTML"
+            else:
+                resp = app.make_response("")
+            resp.headers["HX-Trigger"] = "showStaleWarning"
+            return resp
         flash("הרשומה נמחקה.", "success")
         return redirect(url_for("kb_list"))
     
@@ -305,9 +330,20 @@ def create_admin_app() -> Flask:
     def handle_request(request_id):
         status = request.form.get("status", "handled")
         if status not in VALID_AGENT_REQUEST_STATUSES:
+            if request.headers.get("HX-Request"):
+                resp = app.make_response(("", 422))
+                resp.headers["HX-Trigger"] = json.dumps(
+                    {"showToast": {"message": "סטטוס לא חוקי.", "type": "danger"}}
+                )
+                return resp
             flash("סטטוס לא חוקי.", "danger")
             return redirect(url_for("agent_requests"))
         db.update_agent_request_status(request_id, status)
+        if request.headers.get("HX-Request"):
+            req = db.get_agent_request(request_id)
+            if req:
+                return render_template("partials/request_row.html", req=req)
+            return ""
         flash(f"בקשה #{request_id} סומנה כ-{status}.", "success")
         return redirect(url_for("agent_requests"))
     
@@ -328,9 +364,20 @@ def create_admin_app() -> Flask:
     def update_appointment(appt_id):
         status = request.form.get("status", "confirmed")
         if status not in VALID_APPOINTMENT_STATUSES:
+            if request.headers.get("HX-Request"):
+                resp = app.make_response(("", 422))
+                resp.headers["HX-Trigger"] = json.dumps(
+                    {"showToast": {"message": "סטטוס לא חוקי.", "type": "danger"}}
+                )
+                return resp
             flash("סטטוס לא חוקי.", "danger")
             return redirect(url_for("appointments"))
         db.update_appointment_status(appt_id, status)
+        if request.headers.get("HX-Request"):
+            appt = db.get_appointment(appt_id)
+            if appt:
+                return render_template("partials/appointment_row.html", appt=appt)
+            return ""
         flash(f"תור #{appt_id} סומן כ-{status}.", "success")
         return redirect(url_for("appointments"))
     

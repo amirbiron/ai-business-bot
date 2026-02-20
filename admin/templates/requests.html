@@ -1,13 +1,15 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h2 class="mb-4"><i class="bi bi-bell"></i> בקשות נציג</h2>
+<div class="page-header animate-fade-in">
+    <h1><i class="bi bi-bell"></i> בקשות נציג</h1>
+</div>
 
-<div class="card">
-    <div class="card-body">
+<div class="card animate-slide-up">
+    <div class="card-body" style="padding: 0;">
         {% if requests %}
-        <div class="table-responsive">
-            <table class="table table-hover">
+        <div class="table-wrapper">
+            <table>
                 <thead>
                     <tr>
                         <th>מזהה</th>
@@ -18,59 +20,18 @@
                         <th>פעולות</th>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody id="requests-table-body">
                     {% for req in requests %}
-                    <tr>
-                        <td>{{ req.id }}</td>
-                        <td>
-                            <strong>{{ req.username }}</strong>
-                            {% if req.telegram_username %}
-                            <br>
-                            <a class="small text-decoration-none" href="https://t.me/{{ req.telegram_username }}" target="_blank" rel="noopener">
-                                @{{ req.telegram_username }}
-                            </a>
-                            {% else %}
-                            <br><small class="text-muted">ללא שם משתמש בטלגרם</small>
-                            {% endif %}
-                        </td>
-                        <td>{{ req.message }}</td>
-                        <td>
-                            {% if req.status == 'pending' %}
-                            <span class="badge bg-warning text-dark">ממתין</span>
-                            {% elif req.status == 'handled' %}
-                            <span class="badge bg-success">טופל</span>
-                            {% else %}
-                            <span class="badge bg-secondary">{{ req.status }}</span>
-                            {% endif %}
-                        </td>
-                        <td><small>{{ req.created_at }}</small></td>
-                        <td>
-                            {% if req.status == 'pending' %}
-                            <form method="POST" action="/requests/{{ req.id }}/handle" class="d-inline">
-                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                <input type="hidden" name="status" value="handled">
-                                <button type="submit" class="btn btn-sm btn-success">
-                                    <i class="bi bi-check-lg"></i> סמן כטופל
-                                </button>
-                            </form>
-                            <form method="POST" action="/requests/{{ req.id }}/handle" class="d-inline">
-                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                <input type="hidden" name="status" value="dismissed">
-                                <button type="submit" class="btn btn-sm btn-outline-secondary">
-                                    <i class="bi bi-x-lg"></i> דחה
-                                </button>
-                            </form>
-                            {% elif req.handled_at %}
-                            <small class="text-muted">{{ req.handled_at }}</small>
-                            {% endif %}
-                        </td>
-                    </tr>
+                    {% include "partials/request_row.html" %}
                     {% endfor %}
                 </tbody>
             </table>
         </div>
         {% else %}
-        <p class="text-muted text-center py-4">אין עדיין בקשות נציג.</p>
+        <div class="empty-state">
+            <i class="bi bi-check-circle"></i>
+            <p>אין עדיין בקשות נציג.</p>
+        </div>
         {% endif %}
     </div>
 </div>
