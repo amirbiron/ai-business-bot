@@ -80,7 +80,7 @@ def _build_messages(
         })
 
     # Recent conversation history (last CONTEXT_WINDOW_SIZE messages for continuity)
-    if conversation_history:
+    if conversation_history and CONTEXT_WINDOW_SIZE > 0:
         for msg in conversation_history[-CONTEXT_WINDOW_SIZE:]:
             messages.append({
                 "role": msg["role"],
