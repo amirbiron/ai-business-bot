@@ -318,24 +318,39 @@ def get_messages_for_summarization(user_id: str, limit: int) -> list[dict]:
 
 
 def save_conversation_summary(user_id: str, summary_text: str, message_count: int):
-    """Save a conversation summary for a user."""
+    """
+    Save a conversation summary for a user.
+
+    Replaces all previous summaries with a single merged summary.
+    The message_count is accumulated from prior summaries so that
+    offset tracking remains correct.
+    """
     with get_connection() as conn:
+        # Accumulate total message count from existing summaries
+        row = conn.execute(
+            "SELECT COALESCE(SUM(message_count), 0) AS total FROM conversation_summaries WHERE user_id=?",
+            (user_id,)
+        ).fetchone()
+        total_message_count = int(row["total"]) + message_count
+
+        # Replace all previous summaries with the new merged one
+        conn.execute("DELETE FROM conversation_summaries WHERE user_id=?", (user_id,))
         conn.execute(
             "INSERT INTO conversation_summaries (user_id, summary_text, message_count) VALUES (?, ?, ?)",
-            (user_id, summary_text, message_count)
+            (user_id, summary_text, total_message_count)
         )
 
 
-def get_conversation_summaries(user_id: str) -> list[dict]:
-    """Get all conversation summaries for a user, ordered chronologically."""
+def get_latest_summary(user_id: str) -> dict | None:
+    """Get the latest (single) conversation summary for a user."""
     with get_connection() as conn:
-        rows = conn.execute(
+        row = conn.execute(
             """SELECT summary_text, message_count, created_at
                FROM conversation_summaries WHERE user_id=?
-               ORDER BY id ASC""",
+               ORDER BY id DESC LIMIT 1""",
             (user_id,)
-        ).fetchall()
-        return [dict(r) for r in rows]
+        ).fetchone()
+        return dict(row) if row else None
 
 
 def count_unique_users() -> int:

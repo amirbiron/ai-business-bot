@@ -42,6 +42,14 @@ async def _generate_answer_async(*args, **kwargs):
     return await asyncio.to_thread(generate_answer, *args, **kwargs)
 
 
+async def _summarize_safe(user_id: str):
+    """Run summarization in background without blocking the caller."""
+    try:
+        await asyncio.to_thread(maybe_summarize, user_id)
+    except Exception as e:
+        logger.error("Background summarization failed for user %s: %s", user_id, e)
+
+
 async def _reply_markdown_safe(message, text: str, **kwargs):
     """
     Send a Markdown-formatted message, with a fallback to plain text if Telegram
@@ -380,15 +388,15 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Save assistant response (raw, with citation) for history consistency
     db.save_message(user_id, username, "assistant", result["answer"], ", ".join(result["sources"]))
 
-    # Trigger summarization if threshold reached (runs in background)
-    await asyncio.to_thread(maybe_summarize, user_id)
-
     # Send citation-stripped response to customer
     await _reply_markdown_safe(
         update.message,
         strip_source_citation(result["answer"]),
         reply_markup=_get_main_keyboard(),
     )
+
+    # Trigger summarization in background (fire-and-forget, after response is sent)
+    asyncio.create_task(_summarize_safe(user_id))
 
 
 # ─── Error Handler ───────────────────────────────────────────────────────────

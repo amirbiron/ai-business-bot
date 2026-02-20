@@ -8,6 +8,7 @@ LLM Module — Integrates the three-layer architecture:
 
 import re
 import logging
+import threading
 from ai_chatbot.openai_client import get_openai_client
 
 from ai_chatbot.config import (
@@ -23,6 +24,10 @@ from ai_chatbot.rag.engine import retrieve, format_context
 from ai_chatbot import database as db
 
 logger = logging.getLogger(__name__)
+
+# Per-user locks to prevent concurrent summarizations for the same user
+_summarize_locks: dict[str, threading.Lock] = {}
+_summarize_locks_guard = threading.Lock()
 
 
 def _build_messages(
@@ -65,9 +70,10 @@ def _build_messages(
         messages.append({
             "role": "system",
             "content": (
-                "סיכום השיחה הקודמת עם הלקוח:\n\n"
-                f"{conversation_summary}\n\n"
-                "השתמש בסיכום זה כהקשר לשיחה הנוכחית."
+                "סיכום השיחה הקודמת עם הלקוח (להמשכיות שיחה בלבד — "
+                "אל תשתמש בסיכום זה כמקור לעובדות עסקיות כמו מחירים או שעות פתיחה; "
+                "עובדות עסקיות מגיעות רק ממידע ההקשר למעלה):\n\n"
+                f"{conversation_summary}"
             )
         })
 
@@ -122,7 +128,7 @@ def strip_source_citation(response_text: str) -> str:
     return cleaned.strip()
 
 
-def _generate_summary(messages: list[dict], existing_summary: str = None) -> str:
+def _generate_summary(messages: list[dict], existing_summary: str = None) -> str | None:
     """
     Generate a concise summary of conversation messages using the LLM.
 
@@ -134,7 +140,7 @@ def _generate_summary(messages: list[dict], existing_summary: str = None) -> str
         existing_summary: Optional previous summary to merge with.
 
     Returns:
-        A concise summary string.
+        A concise summary string, or None if generation failed.
     """
     conversation_text = "\n".join(
         f"{'לקוח' if m['role'] == 'user' else 'נציג'}: {m['message']}"
@@ -153,6 +159,8 @@ def _generate_summary(messages: list[dict], existing_summary: str = None) -> str
         "- מה היו התשובות העיקריות\n"
         "- החלטות או פעולות שנעשו\n"
         "- העדפות או מידע חשוב על הלקוח\n\n"
+        "חשוב: אל תכלול עובדות עסקיות (כמו מחירים, שעות פתיחה, כתובת). "
+        "התמקד רק בהעדפות הלקוח, בקשותיו, והמשכיות השיחה.\n\n"
         + "\n".join(prompt_parts)
         + "\n\nסיכום:"
     )
@@ -168,8 +176,15 @@ def _generate_summary(messages: list[dict], existing_summary: str = None) -> str
         return response.choices[0].message.content.strip()
     except Exception as e:
         logger.error("Summary generation failed: %s", e)
-        # Fallback: return a simple concatenation of key points
-        return existing_summary or ""
+        return None
+
+
+def _get_user_lock(user_id: str) -> threading.Lock:
+    """Get or create a per-user lock for summarization."""
+    with _summarize_locks_guard:
+        if user_id not in _summarize_locks:
+            _summarize_locks[user_id] = threading.Lock()
+        return _summarize_locks[user_id]
 
 
 def maybe_summarize(user_id: str):
@@ -177,50 +192,63 @@ def maybe_summarize(user_id: str):
     Check if summarization is needed for a user and create a summary if so.
 
     Summarization is triggered when the number of unsummarized messages
-    reaches SUMMARY_THRESHOLD. The summary is merged with any existing
-    summaries (recursive summarization).
+    reaches SUMMARY_THRESHOLD. The new summary replaces all prior summaries
+    (recursive merge into a single row).
+
+    Uses a per-user lock to prevent concurrent summarizations.
     """
-    unsummarized_count = db.get_unsummarized_message_count(user_id)
-
-    if unsummarized_count < SUMMARY_THRESHOLD:
+    lock = _get_user_lock(user_id)
+    if not lock.acquire(blocking=False):
+        # Another summarization is already running for this user
         return
 
-    # Get the messages that need summarizing
-    messages_to_summarize = db.get_messages_for_summarization(
-        user_id, SUMMARY_THRESHOLD
-    )
+    try:
+        unsummarized_count = db.get_unsummarized_message_count(user_id)
 
-    if not messages_to_summarize:
-        return
+        if unsummarized_count < SUMMARY_THRESHOLD:
+            return
 
-    # Get existing summaries to merge with (recursive summarization)
-    existing_summaries = db.get_conversation_summaries(user_id)
-    existing_summary = None
-    if existing_summaries:
-        # Combine all existing summaries into one for context
-        existing_summary = "\n".join(s["summary_text"] for s in existing_summaries)
+        # Get the messages that need summarizing
+        messages_to_summarize = db.get_messages_for_summarization(
+            user_id, SUMMARY_THRESHOLD
+        )
 
-    # Generate the new summary
-    summary_text = _generate_summary(messages_to_summarize, existing_summary)
+        if not messages_to_summarize:
+            return
 
-    if summary_text:
+        # Get the latest summary to merge with (recursive summarization)
+        latest = db.get_latest_summary(user_id)
+        existing_summary = latest["summary_text"] if latest else None
+
+        # Generate the new merged summary
+        summary_text = _generate_summary(messages_to_summarize, existing_summary)
+
+        if summary_text is None:
+            # LLM failed — don't advance the offset, messages will be retried next time
+            logger.warning(
+                "Skipping summary save for user %s due to generation failure", user_id
+            )
+            return
+
         db.save_conversation_summary(user_id, summary_text, len(messages_to_summarize))
         logger.info(
             "Created conversation summary for user %s (%d messages summarized)",
             user_id, len(messages_to_summarize),
         )
+    finally:
+        lock.release()
 
 
-def _get_combined_summary(user_id: str) -> str | None:
+def _get_conversation_summary(user_id: str) -> str | None:
     """
-    Get the combined conversation summary for a user.
+    Get the conversation summary for a user.
 
-    Returns all summaries concatenated, or None if no summaries exist.
+    Returns the single merged summary, or None if no summary exists.
     """
-    summaries = db.get_conversation_summaries(user_id)
-    if not summaries:
+    latest = db.get_latest_summary(user_id)
+    if not latest:
         return None
-    return "\n".join(s["summary_text"] for s in summaries)
+    return latest["summary_text"]
 
 
 def generate_answer(
@@ -260,7 +288,7 @@ def generate_answer(
     # Step 2: Load conversation summary
     conversation_summary = None
     if user_id:
-        conversation_summary = _get_combined_summary(user_id)
+        conversation_summary = _get_conversation_summary(user_id)
 
     # Step 3: Build messages (Layer A + B + summary + history)
     messages = _build_messages(
