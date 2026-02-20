@@ -20,7 +20,29 @@ from ai_chatbot.rag.vector_store import get_vector_store, reset_vector_store
 logger = logging.getLogger(__name__)
 
 _INDEX_STALE_FLAG: Path = FAISS_INDEX_PATH / ".stale"
-_REBUILD_LOCK = threading.Lock()
+_REBUILD_LOCK = threading.RLock()
+
+
+def _stale_token() -> int | None:
+    try:
+        return _INDEX_STALE_FLAG.stat().st_mtime_ns
+    except FileNotFoundError:
+        return None
+    except OSError:
+        return None
+
+
+def _maybe_clear_stale(start_token: int | None) -> None:
+    """
+    Clear the stale flag only if it was not touched during the rebuild.
+    """
+    if start_token is None:
+        # Either there was no stale flag at rebuild start, or we couldn't read it.
+        # If it exists now, assume new KB changes happened during rebuild.
+        return
+    end_token = _stale_token()
+    if end_token == start_token:
+        clear_index_stale()
 
 
 def mark_index_stale() -> None:
@@ -50,78 +72,80 @@ def rebuild_index():
     4. Build the FAISS index.
     5. Save chunks to the database and index to disk.
     """
-    logger.info("Rebuilding RAG index...")
-    
-    entries = db.get_all_kb_entries(active_only=True)
-    if not entries:
-        logger.warning("No KB entries found. Creating empty index.")
+    with _REBUILD_LOCK:
+        logger.info("Rebuilding RAG index...")
+        start_stale_token = _stale_token()
+
+        entries = db.get_all_kb_entries(active_only=True)
+        if not entries:
+            logger.warning("No KB entries found. Creating empty index.")
+            store = get_vector_store()
+            store.build_index(np.array([]), [])
+            store.save()
+            _maybe_clear_stale(start_stale_token)
+            return
+
+        # Step 1: Create chunks for all entries
+        all_chunks = []
+        for entry in entries:
+            chunks = create_chunks_for_entry(
+                entry_id=entry["id"],
+                category=entry["category"],
+                title=entry["title"],
+                content=entry["content"]
+            )
+            all_chunks.extend(chunks)
+
+        if not all_chunks:
+            logger.warning("No chunks created. Creating empty index.")
+            store = get_vector_store()
+            store.build_index(np.array([]), [])
+            store.save()
+            _maybe_clear_stale(start_stale_token)
+            return
+
+        logger.info(f"Created {len(all_chunks)} chunks from {len(entries)} entries")
+
+        # Step 2: Generate embeddings
+        chunk_texts = [c["text"] for c in all_chunks]
+        embeddings = get_embeddings_batch(chunk_texts)
+
+        logger.info(f"Generated {len(embeddings)} embeddings")
+
+        # Step 3: Prepare metadata
+        metadata = []
+        for chunk in all_chunks:
+            metadata.append({
+                "entry_id": chunk["entry_id"],
+                "chunk_index": chunk["index"],
+                "category": chunk["category"],
+                "title": chunk["title"],
+                "text": chunk["text"]
+            })
+
+        # Step 4: Build and save the index
+        reset_vector_store()
         store = get_vector_store()
-        store.build_index(np.array([]), [])
+        store.build_index(embeddings, metadata)
         store.save()
-        clear_index_stale()
-        return
-    
-    # Step 1: Create chunks for all entries
-    all_chunks = []
-    for entry in entries:
-        chunks = create_chunks_for_entry(
-            entry_id=entry["id"],
-            category=entry["category"],
-            title=entry["title"],
-            content=entry["content"]
-        )
-        all_chunks.extend(chunks)
-    
-    if not all_chunks:
-        logger.warning("No chunks created. Creating empty index.")
-        store = get_vector_store()
-        store.build_index(np.array([]), [])
-        store.save()
-        clear_index_stale()
-        return
-    
-    logger.info(f"Created {len(all_chunks)} chunks from {len(entries)} entries")
-    
-    # Step 2: Generate embeddings
-    chunk_texts = [c["text"] for c in all_chunks]
-    embeddings = get_embeddings_batch(chunk_texts)
-    
-    logger.info(f"Generated {len(embeddings)} embeddings")
-    
-    # Step 3: Prepare metadata
-    metadata = []
-    for i, chunk in enumerate(all_chunks):
-        metadata.append({
-            "entry_id": chunk["entry_id"],
-            "chunk_index": chunk["index"],
-            "category": chunk["category"],
-            "title": chunk["title"],
-            "text": chunk["text"]
-        })
-    
-    # Step 4: Build and save the index
-    reset_vector_store()
-    store = get_vector_store()
-    store.build_index(embeddings, metadata)
-    store.save()
-    
-    # Step 5: Save chunks with embeddings to database
-    chunks_by_entry = {}
-    for i, chunk in enumerate(all_chunks):
-        eid = chunk["entry_id"]
-        if eid not in chunks_by_entry:
-            chunks_by_entry[eid] = []
-        chunks_by_entry[eid].append({
-            "index": chunk["index"],
-            "text": chunk["text"],
-            "embedding": embeddings[i].tobytes()
-        })
-    
-    for entry_id, entry_chunks in chunks_by_entry.items():
-        db.save_chunks(entry_id, entry_chunks)
-    
-    clear_index_stale()
-    logger.info("RAG index rebuild complete!")
+
+        # Step 5: Save chunks with embeddings to database
+        chunks_by_entry = {}
+        for i, chunk in enumerate(all_chunks):
+            eid = chunk["entry_id"]
+            if eid not in chunks_by_entry:
+                chunks_by_entry[eid] = []
+            chunks_by_entry[eid].append({
+                "index": chunk["index"],
+                "text": chunk["text"],
+                "embedding": embeddings[i].tobytes()
+            })
+
+        for entry_id, entry_chunks in chunks_by_entry.items():
+            db.save_chunks(entry_id, entry_chunks)
+
+        _maybe_clear_stale(start_stale_token)
+        logger.info("RAG index rebuild complete!")
 
 
 def retrieve(query: str, top_k: int = None) -> list[dict]:
