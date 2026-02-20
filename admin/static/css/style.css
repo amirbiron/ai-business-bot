@@ -1057,6 +1057,7 @@ textarea:focus-visible,
 @media (max-width: 768px) {
     html {
         font-size: 14px;
+        overflow-x: hidden;
     }
 
     .sidebar {
