@@ -154,13 +154,9 @@ async def _handoff_to_human(
         message=reason,
     )
 
-    response_text = (
-        "אין לי את המידע הזה כרגע. תנו לי להעביר אתכם לנציג אנושי שיוכל לעזור. "
-        "נציג אנושי יחזור אליכם בקרוב!"
-    )
-    db.save_message(user_id, display_name, "assistant", response_text)
+    db.save_message(user_id, display_name, "assistant", FALLBACK_RESPONSE)
     await update.message.reply_text(
-        response_text,
+        FALLBACK_RESPONSE,
         reply_markup=_get_main_keyboard(),
     )
 
@@ -318,6 +314,8 @@ async def booking_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     """Start the appointment booking conversation."""
     user_id, display_name, telegram_username = _get_user_info(update)
     
+    db.save_message(user_id, display_name, "user", "📅 Book Appointment")
+
     # Get available services from KB
     result = await _generate_answer_async("What services do you offer? List them briefly.")
 
@@ -332,15 +330,13 @@ async def booking_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
             reason="הלקוח ביקש לקבוע תור, אך אין מידע זמין על השירותים במאגר.",
         )
         return ConversationHandler.END
-    
+
     text = (
         "📅 *קביעת תור*\n\n"
         f"{stripped}\n\n"
         "אנא כתבו את *השירות* שתרצו להזמין "
         "(או הקלידו /cancel כדי לחזור):"
     )
-    
-    db.save_message(user_id, display_name, "user", "📅 Book Appointment")
     
     await _reply_markdown_safe(update.message, text)
     return BOOKING_SERVICE
