@@ -3,6 +3,7 @@ Telegram Bot Runner — sets up and starts the Telegram bot with all handlers.
 """
 
 import logging
+import re
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
@@ -22,11 +23,14 @@ from ai_chatbot.bot.handlers import (
     booking_time,
     booking_confirm,
     booking_cancel,
+    booking_button_interrupt,
     error_handler,
     BOOKING_SERVICE,
     BOOKING_DATE,
     BOOKING_TIME,
     BOOKING_CONFIRM,
+    ALL_BUTTON_TEXTS,
+    BUTTON_BOOKING,
 )
 
 logger = logging.getLogger(__name__)
@@ -49,18 +53,27 @@ def create_bot_application():
     app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
     
     # ─── Conversation handler for appointment booking ─────────────────────
+    # Filter that matches any main-menu button text — used to let button
+    # clicks break out of an active booking conversation.
+    button_filter = filters.TEXT & filters.Regex(
+        r"^(" + "|".join(re.escape(t) for t in ALL_BUTTON_TEXTS) + r")$"
+    )
+
     booking_handler = ConversationHandler(
         entry_points=[
-            MessageHandler(filters.Regex(r"^📅 קביעת תור$"), booking_start),
+            MessageHandler(filters.Regex(r"^" + re.escape(BUTTON_BOOKING) + r"$"), booking_start),
             CommandHandler("book", booking_start),
         ],
         states={
-            BOOKING_SERVICE: [MessageHandler(filters.TEXT & ~filters.COMMAND, booking_service)],
-            BOOKING_DATE: [MessageHandler(filters.TEXT & ~filters.COMMAND, booking_date)],
-            BOOKING_TIME: [MessageHandler(filters.TEXT & ~filters.COMMAND, booking_time)],
-            BOOKING_CONFIRM: [MessageHandler(filters.TEXT & ~filters.COMMAND, booking_confirm)],
+            BOOKING_SERVICE: [MessageHandler(filters.TEXT & ~filters.COMMAND & ~button_filter, booking_service)],
+            BOOKING_DATE: [MessageHandler(filters.TEXT & ~filters.COMMAND & ~button_filter, booking_date)],
+            BOOKING_TIME: [MessageHandler(filters.TEXT & ~filters.COMMAND & ~button_filter, booking_time)],
+            BOOKING_CONFIRM: [MessageHandler(filters.TEXT & ~filters.COMMAND & ~button_filter, booking_confirm)],
         },
-        fallbacks=[CommandHandler("cancel", booking_cancel)],
+        fallbacks=[
+            CommandHandler("cancel", booking_cancel),
+            MessageHandler(button_filter, booking_button_interrupt),
+        ],
     )
     
     # ─── Register handlers (order matters!) ───────────────────────────────
