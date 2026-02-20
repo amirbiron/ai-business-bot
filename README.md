@@ -70,21 +70,27 @@ This acts as a final guardrail, preventing the bot from providing unverified inf
 
 ```
 ./
-├── ai_chatbot/           # Canonical application package
-│   ├── admin/            # Flask Web Admin Panel (templates/static live here)
-│   ├── bot/              # Telegram Bot
-│   ├── rag/              # RAG engine (chunking/embeddings/vector store)
-│   ├── config.py         # Configuration
-│   ├── database.py       # SQLite access layer
-│   ├── llm.py            # LLM integration (Layers A, B, C)
-│   └── main.py           # Main runner
+├── admin/                # Flask Web Admin Panel
+│   ├── templates/        # HTML templates
+│   ├── static/           # CSS, JS files
+│   └── app.py            # Flask application
+├── bot/                  # Telegram Bot
+│   ├── handlers.py       # Command and message handlers
+│   └── telegram_bot.py   # Bot setup and runner
 ├── data/                 # Data files (database, FAISS index)
-├── main.py               # Backwards-compatible wrapper (runs ai_chatbot.main)
-├── config.py             # Backwards-compatible wrapper
-├── database.py           # Backwards-compatible wrapper
-├── llm.py                # Backwards-compatible wrapper
-├── openai_client.py      # Backwards-compatible wrapper
-├── seed_data.py          # Demo seeding script
+├── rag/                  # RAG Engine
+│   ├── chunker.py        # Text chunking logic
+│   ├── embeddings.py     # OpenAI embedding generation
+│   ├── engine.py         # RAG pipeline orchestration
+│   └── vector_store.py   # FAISS index management
+├── utils/                # Utility functions (TBD)
+├── __init__.py
+├── __main__.py           # Main entry point for running the app
+├── config.py             # All configuration settings
+├── database.py           # SQLite database management
+├── llm.py                # LLM integration (Layers A, B, C)
+├── main.py               # Main script to run bot/admin
+├── seed_data.py          # Script to seed demo data
 ├── requirements.txt      # Python dependencies
 └── .env.example          # Example environment variables file
 ```

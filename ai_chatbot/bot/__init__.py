@@ -1,2 +1,2 @@
-"""Telegram bot package."""
+"""Wrappers for the root-level `bot/` package."""
 
