@@ -1,121 +1,108 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h2 class="mb-4"><i class="bi bi-speedometer2"></i> לוח בקרה</h2>
+<div class="page-header animate-fade-in">
+    <h1><i class="bi bi-speedometer2"></i> לוח בקרה</h1>
+</div>
 
 <!-- Stats Cards -->
-<div class="row g-4 mb-4">
-    <div class="col-md-4 col-lg">
-        <div class="card stat-card bg-primary text-white">
-            <div class="card-body text-center">
-                <i class="bi bi-book" style="font-size: 2rem;"></i>
-                <h3 class="mt-2">{{ stats.kb_entries }}</h3>
-                <p class="mb-0">רשומות בסיס ידע</p>
-            </div>
-        </div>
+<div class="stats-grid">
+    <div class="stat-card gradient-blue animate-slide-up stagger-1">
+        <div class="stat-icon"><i class="bi bi-book"></i></div>
+        <div class="stat-value">{{ stats.kb_entries }}</div>
+        <div class="stat-label">רשומות בסיס ידע</div>
     </div>
-    <div class="col-md-4 col-lg">
-        <div class="card stat-card bg-success text-white">
-            <div class="card-body text-center">
-                <i class="bi bi-tags" style="font-size: 2rem;"></i>
-                <h3 class="mt-2">{{ stats.categories }}</h3>
-                <p class="mb-0">קטגוריות</p>
-            </div>
-        </div>
+    <div class="stat-card gradient-success animate-slide-up stagger-2">
+        <div class="stat-icon"><i class="bi bi-tags"></i></div>
+        <div class="stat-value">{{ stats.categories }}</div>
+        <div class="stat-label">קטגוריות</div>
     </div>
-    <div class="col-md-4 col-lg">
-        <div class="card stat-card bg-info text-white">
-            <div class="card-body text-center">
-                <i class="bi bi-people" style="font-size: 2rem;"></i>
-                <h3 class="mt-2">{{ stats.users }}</h3>
-                <p class="mb-0">משתמשים</p>
-            </div>
-        </div>
+    <div class="stat-card gradient-info animate-slide-up stagger-3">
+        <div class="stat-icon"><i class="bi bi-people"></i></div>
+        <div class="stat-value">{{ stats.users }}</div>
+        <div class="stat-label">משתמשים</div>
     </div>
-    <div class="col-md-4 col-lg">
-        <div class="card stat-card bg-warning text-dark">
-            <div class="card-body text-center">
-                <i class="bi bi-bell" style="font-size: 2rem;"></i>
-                <h3 class="mt-2">{{ stats.pending_requests }}</h3>
-                <p class="mb-0">בקשות ממתינות</p>
-            </div>
-        </div>
+    <div class="stat-card gradient-warning animate-slide-up stagger-4">
+        <div class="stat-icon"><i class="bi bi-bell"></i></div>
+        <div class="stat-value">{{ stats.pending_requests }}</div>
+        <div class="stat-label">בקשות ממתינות</div>
     </div>
-    <div class="col-md-4 col-lg">
-        <div class="card stat-card bg-secondary text-white">
-            <div class="card-body text-center">
-                <i class="bi bi-calendar-check" style="font-size: 2rem;"></i>
-                <h3 class="mt-2">{{ stats.pending_appointments }}</h3>
-                <p class="mb-0">תורים ממתינים</p>
-            </div>
-        </div>
+    <div class="stat-card gradient-purple animate-slide-up stagger-5">
+        <div class="stat-icon"><i class="bi bi-calendar-check"></i></div>
+        <div class="stat-value">{{ stats.pending_appointments }}</div>
+        <div class="stat-label">תורים ממתינים</div>
     </div>
 </div>
 
-<div class="row g-4">
+<!-- Recent Items -->
+<div class="content-two-col">
     <!-- Recent Agent Requests -->
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <strong><i class="bi bi-bell"></i> בקשות נציג אחרונות</strong>
-                <a href="/requests" class="btn btn-sm btn-outline-primary">הצג הכל</a>
-            </div>
-            <div class="card-body">
-                {% if recent_requests %}
-                <div class="list-group list-group-flush">
-                    {% for req in recent_requests %}
-                    <div class="list-group-item d-flex justify-content-between align-items-center">
+    <div class="card animate-slide-up stagger-3">
+        <div class="card-header">
+            <span><i class="bi bi-bell"></i> בקשות נציג אחרונות</span>
+            <a href="/requests" class="btn btn-secondary btn-sm">הצג הכל</a>
+        </div>
+        <div class="card-body">
+            {% if recent_requests %}
+            <div class="list-group">
+                {% for req in recent_requests %}
+                <div class="list-group-item">
+                    <div class="d-flex justify-between align-center">
                         <div>
-                            <strong>{{ req.username }}</strong>
+                            <span class="fw-semibold">{{ req.username }}</span>
                             {% if req.telegram_username %}
                             <br>
-                            <a class="small text-decoration-none" href="https://t.me/{{ req.telegram_username }}" target="_blank" rel="noopener">
+                            <a class="text-small" href="https://t.me/{{ req.telegram_username }}" target="_blank" rel="noopener">
                                 @{{ req.telegram_username }}
                             </a>
                             {% endif %}
-                            <br><small class="text-muted">{{ req.created_at }}</small>
+                            <br><span class="text-small text-muted">{{ req.created_at }}</span>
                         </div>
-                        <span class="badge badge-pending">ממתין</span>
+                        <span class="badge badge-warning">ממתין</span>
                     </div>
-                    {% endfor %}
                 </div>
-                {% else %}
-                <p class="text-muted mb-0">אין בקשות ממתינות.</p>
-                {% endif %}
+                {% endfor %}
             </div>
+            {% else %}
+            <div class="empty-state">
+                <i class="bi bi-check-circle"></i>
+                <p>אין בקשות ממתינות.</p>
+            </div>
+            {% endif %}
         </div>
     </div>
 
     <!-- Recent Appointments -->
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <strong><i class="bi bi-calendar-check"></i> תורים אחרונים</strong>
-                <a href="/appointments" class="btn btn-sm btn-outline-primary">הצג הכל</a>
-            </div>
-            <div class="card-body">
-                {% if recent_appointments %}
-                <div class="list-group list-group-flush">
-                    {% for appt in recent_appointments %}
-                    <div class="list-group-item">
-                        <div class="d-flex justify-content-between">
-                            <strong>{{ appt.username }}</strong>
-                            <span class="badge badge-pending">{{ appt.status }}</span>
-                        </div>
-                        {% if appt.telegram_username %}
-                        <a class="small text-decoration-none" href="https://t.me/{{ appt.telegram_username }}" target="_blank" rel="noopener">
-                            @{{ appt.telegram_username }}
-                        </a>
-                        <br>
-                        {% endif %}
-                        <small>{{ appt.service }} — {{ appt.preferred_date }} בשעה {{ appt.preferred_time }}</small>
+    <div class="card animate-slide-up stagger-4">
+        <div class="card-header">
+            <span><i class="bi bi-calendar-check"></i> תורים אחרונים</span>
+            <a href="/appointments" class="btn btn-secondary btn-sm">הצג הכל</a>
+        </div>
+        <div class="card-body">
+            {% if recent_appointments %}
+            <div class="list-group">
+                {% for appt in recent_appointments %}
+                <div class="list-group-item">
+                    <div class="d-flex justify-between align-center" style="margin-bottom: 0.25rem;">
+                        <span class="fw-semibold">{{ appt.username }}</span>
+                        <span class="badge badge-warning">{{ appt.status }}</span>
                     </div>
-                    {% endfor %}
+                    {% if appt.telegram_username %}
+                    <a class="text-small" href="https://t.me/{{ appt.telegram_username }}" target="_blank" rel="noopener">
+                        @{{ appt.telegram_username }}
+                    </a>
+                    <br>
+                    {% endif %}
+                    <span class="text-small text-muted">{{ appt.service }} — {{ appt.preferred_date }} בשעה {{ appt.preferred_time }}</span>
                 </div>
-                {% else %}
-                <p class="text-muted mb-0">אין תורים ממתינים.</p>
-                {% endif %}
+                {% endfor %}
             </div>
+            {% else %}
+            <div class="empty-state">
+                <i class="bi bi-check-circle"></i>
+                <p>אין תורים ממתינים.</p>
+            </div>
+            {% endif %}
         </div>
     </div>
 </div>

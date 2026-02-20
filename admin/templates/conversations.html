@@ -1,26 +1,32 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h2 class="mb-4"><i class="bi bi-chat-dots"></i> יומן שיחות</h2>
+<div class="page-header animate-fade-in">
+    <h1><i class="bi bi-chat-dots"></i> יומן שיחות</h1>
+</div>
 
-<div class="row">
+<div class="conversation-layout animate-slide-up">
     <!-- User List -->
-    <div class="col-md-3">
-        <div class="card">
-            <div class="card-header"><strong>משתמשים</strong></div>
-            <div class="list-group list-group-flush" style="max-height: 70vh; overflow-y: auto;">
+    <div class="card">
+        <div class="card-header">
+            <span class="fw-semibold">משתמשים</span>
+        </div>
+        <div class="user-list">
+            <div class="list-group">
                 <a href="/conversations"
-                   class="list-group-item list-group-item-action {% if not selected_user %}active{% endif %}">
-                    <i class="bi bi-chat-dots"></i> כל ההודעות
+                   class="list-group-item {% if not selected_user %}active{% endif %}">
+                    <div class="d-flex justify-between align-center">
+                        <span><i class="bi bi-chat-dots"></i> כל ההודעות</span>
+                    </div>
                 </a>
                 {% for user in users %}
                 <a href="/conversations?user_id={{ user.user_id }}"
-                   class="list-group-item list-group-item-action {% if selected_user == user.user_id %}active{% endif %}">
-                    <div class="d-flex justify-content-between">
-                        <strong>{{ user.username or 'לא ידוע' }}</strong>
-                        <span class="badge bg-secondary">{{ user.message_count }}</span>
+                   class="list-group-item {% if selected_user == user.user_id %}active{% endif %}">
+                    <div class="d-flex justify-between align-center">
+                        <span class="fw-semibold">{{ user.username or 'לא ידוע' }}</span>
+                        <span class="badge badge-info">{{ user.message_count }}</span>
                     </div>
-                    <small class="text-muted">אחרון: {{ user.last_active }}</small>
+                    <span class="text-small text-muted">אחרון: {{ user.last_active }}</span>
                 </a>
                 {% endfor %}
             </div>
@@ -28,42 +34,45 @@
     </div>
 
     <!-- Messages -->
-    <div class="col-md-9">
-        <div class="card">
-            <div class="card-header">
-                <strong>
-                    {% if selected_user %}
-                    הודעות עם משתמש {{ selected_user }}
-                    {% else %}
-                    כל ההודעות האחרונות
-                    {% endif %}
-                </strong>
-            </div>
-            <div class="card-body" style="max-height: 70vh; overflow-y: auto;">
-                {% if messages %}
-                {% for msg in messages %}
-                <div class="mb-3 p-3 rounded {% if msg.role == 'user' %}bg-light{% else %}bg-white border{% endif %}">
-                    <div class="d-flex justify-content-between mb-1">
-                        <strong>
-                            {% if msg.role == 'user' %}
-                            <i class="bi bi-person-circle text-primary"></i>
-                            {{ msg.get('username', 'לקוח') if msg.get('username') else 'לקוח' }}
-                            {% else %}
-                            <i class="bi bi-robot text-success"></i> בוט
-                            {% endif %}
-                        </strong>
-                        <small class="text-muted">{{ msg.created_at }}</small>
-                    </div>
-                    <p class="mb-1">{{ msg.message }}</p>
-                    {% if msg.sources %}
-                    <small class="text-muted"><i class="bi bi-link-45deg"></i> מקורות: {{ msg.sources }}</small>
-                    {% endif %}
-                </div>
-                {% endfor %}
+    <div class="card">
+        <div class="card-header">
+            <span class="fw-semibold">
+                {% if selected_user %}
+                הודעות עם משתמש {{ selected_user }}
                 {% else %}
-                <p class="text-muted text-center py-4">אין הודעות עדיין.</p>
+                כל ההודעות האחרונות
+                {% endif %}
+            </span>
+        </div>
+        <div class="messages-container">
+            {% if messages %}
+            {% for msg in messages %}
+            <div class="message-bubble {% if msg.role == 'user' %}user-msg{% else %}bot-msg{% endif %}">
+                <div class="message-meta">
+                    <span class="sender">
+                        {% if msg.role == 'user' %}
+                        <i class="bi bi-person-circle" style="color: var(--brand-blue);"></i>
+                        {{ msg.get('username', 'לקוח') if msg.get('username') else 'לקוח' }}
+                        {% else %}
+                        <i class="bi bi-robot" style="color: var(--success);"></i> בוט
+                        {% endif %}
+                    </span>
+                    <span class="time">{{ msg.created_at }}</span>
+                </div>
+                <div class="message-content">{{ msg.message }}</div>
+                {% if msg.sources %}
+                <div class="message-sources">
+                    <i class="bi bi-link-45deg"></i> מקורות: {{ msg.sources }}
+                </div>
                 {% endif %}
             </div>
+            {% endfor %}
+            {% else %}
+            <div class="empty-state">
+                <i class="bi bi-chat"></i>
+                <p>אין הודעות עדיין.</p>
+            </div>
+            {% endif %}
         </div>
     </div>
 </div>

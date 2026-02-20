@@ -1,0 +1,49 @@
+<tr id="request-row-{{ req.id }}">
+    <td>{{ req.id }}</td>
+    <td>
+        <span class="fw-semibold" style="color: var(--text-primary);">{{ req.username }}</span>
+        {% if req.telegram_username %}
+        <br>
+        <a class="text-small" href="https://t.me/{{ req.telegram_username }}" target="_blank" rel="noopener">
+            @{{ req.telegram_username }}
+        </a>
+        {% else %}
+        <br><span class="text-small text-muted">ללא שם משתמש בטלגרם</span>
+        {% endif %}
+    </td>
+    <td>{{ req.message }}</td>
+    <td>
+        {% if req.status == 'pending' %}
+        <span class="badge badge-warning">ממתין</span>
+        {% elif req.status == 'handled' %}
+        <span class="badge badge-success">טופל</span>
+        {% elif req.status == 'dismissed' %}
+        <span class="badge badge-muted">נדחה</span>
+        {% else %}
+        <span class="badge badge-muted">{{ req.status }}</span>
+        {% endif %}
+    </td>
+    <td class="text-small text-muted">{{ req.created_at }}</td>
+    <td>
+        {% if req.status == 'pending' %}
+        <div class="actions-cell">
+            <button class="btn btn-success btn-sm"
+                    hx-post="/requests/{{ req.id }}/handle"
+                    hx-vals='{"status": "handled"}'
+                    hx-target="#request-row-{{ req.id }}"
+                    hx-swap="outerHTML swap:0.2s">
+                <i class="bi bi-check-lg"></i> סמן כטופל
+            </button>
+            <button class="btn btn-secondary btn-sm"
+                    hx-post="/requests/{{ req.id }}/handle"
+                    hx-vals='{"status": "dismissed"}'
+                    hx-target="#request-row-{{ req.id }}"
+                    hx-swap="outerHTML swap:0.2s">
+                <i class="bi bi-x-lg"></i> דחה
+            </button>
+        </div>
+        {% elif req.handled_at %}
+        <span class="text-small text-muted">{{ req.handled_at }}</span>
+        {% endif %}
+    </td>
+</tr>

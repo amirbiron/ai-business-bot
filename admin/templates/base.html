@@ -3,153 +3,137 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{{ business_name }} — פאנל ניהול</title>
-    <!-- Bootstrap 5 CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Google Fonts: Assistant (RTL optimized) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <!-- Bootstrap Icons -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-    <style>
-        :root {
-            --primary: #6c5ce7;
-            --primary-light: #a29bfe;
-            --sidebar-bg: #2d3436;
-            --sidebar-text: #dfe6e9;
-        }
-        body { background-color: #f8f9fa; }
-        .sidebar {
-            min-height: 100vh;
-            background-color: var(--sidebar-bg);
-            padding-top: 1rem;
-        }
-        .sidebar .nav-link {
-            color: var(--sidebar-text);
-            padding: 0.75rem 1.25rem;
-            border-radius: 0.5rem;
-            margin: 0.15rem 0.5rem;
-        }
-        .sidebar .nav-link:hover,
-        .sidebar .nav-link.active {
-            background-color: var(--primary);
-            color: white;
-        }
-        .sidebar .brand {
-            color: white;
-            font-size: 1.25rem;
-            font-weight: 700;
-            padding: 0.75rem 1.25rem;
-            margin-bottom: 1rem;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
-        }
-        .stat-card {
-            border: none;
-            border-radius: 1rem;
-            transition: transform 0.2s;
-        }
-        .stat-card:hover { transform: translateY(-2px); }
-        .badge-pending { background-color: #fdcb6e; color: #2d3436; }
-        .badge-handled { background-color: #00b894; color: white; }
-        .content-area { padding: 2rem; }
-        .notification-badge {
-            position: absolute;
-            top: 5px;
-            left: 10px;
-            font-size: 0.7rem;
-        }
-    </style>
+    <!-- Design System CSS -->
+    <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
+    <!-- HTMX -->
+    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
 </head>
-<body>
-    <div class="container-fluid">
-        <div class="row">
-            <!-- Sidebar -->
-            <nav class="col-md-3 col-lg-2 d-md-block sidebar collapse">
-                <div class="brand">
-                    <i class="bi bi-robot"></i> {{ business_name }}
-                </div>
-                <ul class="nav flex-column">
-                    <li class="nav-item">
-                        <a class="nav-link {% if request.endpoint == 'dashboard' %}active{% endif %}" href="/">
-                            <i class="bi bi-speedometer2"></i> לוח בקרה
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link {% if request.endpoint in ['kb_list', 'kb_add', 'kb_edit'] %}active{% endif %}" href="/kb">
-                            <i class="bi bi-book"></i> בסיס ידע
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link {% if request.endpoint == 'conversations' %}active{% endif %}" href="/conversations">
-                            <i class="bi bi-chat-dots"></i> שיחות
-                        </a>
-                    </li>
-                    <li class="nav-item position-relative">
-                        <a class="nav-link {% if request.endpoint == 'agent_requests' %}active{% endif %}" href="/requests">
-                            <i class="bi bi-bell"></i> בקשות נציג
-                            <span id="request-badge" class="badge bg-danger notification-badge" style="display:none;"></span>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link {% if request.endpoint == 'appointments' %}active{% endif %}" href="/appointments">
-                            <i class="bi bi-calendar-check"></i> תורים
-                        </a>
-                    </li>
-                    <li class="nav-item mt-4">
-                        <a class="nav-link text-danger" href="/logout">
-                            <i class="bi bi-box-arrow-right"></i> התנתקות
-                        </a>
-                    </li>
-                </ul>
-            </nav>
-
-            <!-- Main Content -->
-            <main class="col-md-9 me-sm-auto col-lg-10 content-area">
-                <!-- Flash Messages -->
-                {% with messages = get_flashed_messages(with_categories=true) %}
-                {% if messages %}
-                <div class="mb-3">
-                    {% for category, message in messages %}
-                    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-                        {{ message }}
-                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                    </div>
-                    {% endfor %}
-                </div>
-                {% endif %}
-                {% endwith %}
-
-                {% if rag_index_stale %}
-                <div class="alert alert-warning d-flex justify-content-between align-items-center" role="alert">
-                    <div>
-                        <strong>האינדקס לא מעודכן.</strong>
-                        שינוי בבסיס הידע עדיין לא משוקף בבוט — מומלץ לבנות מחדש את אינדקס ה‑RAG.
-                    </div>
-                    <form method="POST" action="/kb/rebuild" class="m-0">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <button type="submit" class="btn btn-sm btn-outline-dark"
-                                onclick="return confirm('לבנות מחדש את אינדקס ה-RAG? זה עשוי לקחת רגע.')">
-                            <i class="bi bi-arrow-clockwise"></i> בנייה מחדש
-                        </button>
-                    </form>
-                </div>
-                {% endif %}
-
-                {% block content %}{% endblock %}
-            </main>
-        </div>
+<body hx-headers='{"X-CSRFToken": "{{ csrf_token() }}"}'>
+    <!-- Mobile Top Bar -->
+    <div class="mobile-topbar">
+        <button class="hamburger" onclick="toggleSidebar()" aria-label="תפריט">
+            <i class="bi bi-list"></i>
+        </button>
+        <span class="brand-name">{{ business_name }}</span>
+        <div style="width:32px"></div>
     </div>
 
-    <!-- Bootstrap JS -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    
-    <!-- Auto-refresh notification badge -->
+    <!-- Sidebar Overlay (mobile) -->
+    <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+
+    <div class="app-layout">
+        <!-- Sidebar -->
+        <nav class="sidebar" id="sidebar">
+            <div class="sidebar-brand">
+                <div class="brand-icon"><i class="bi bi-robot"></i></div>
+                <span class="brand-name">{{ business_name }}</span>
+            </div>
+
+            <ul class="sidebar-nav">
+                <li>
+                    <a href="/" class="{% if request.endpoint == 'dashboard' %}active{% endif %}">
+                        <i class="bi bi-speedometer2"></i> לוח בקרה
+                    </a>
+                </li>
+                <li>
+                    <a href="/kb" class="{% if request.endpoint in ['kb_list', 'kb_add', 'kb_edit'] %}active{% endif %}">
+                        <i class="bi bi-book"></i> בסיס ידע
+                    </a>
+                </li>
+                <li>
+                    <a href="/conversations" class="{% if request.endpoint == 'conversations' %}active{% endif %}">
+                        <i class="bi bi-chat-dots"></i> שיחות
+                    </a>
+                </li>
+                <li>
+                    <a href="/requests" class="{% if request.endpoint == 'agent_requests' %}active{% endif %}">
+                        <i class="bi bi-bell"></i> בקשות נציג
+                        <span id="request-badge" class="nav-badge" style="display:none;"></span>
+                    </a>
+                </li>
+                <li>
+                    <a href="/appointments" class="{% if request.endpoint == 'appointments' %}active{% endif %}">
+                        <i class="bi bi-calendar-check"></i> תורים
+                    </a>
+                </li>
+            </ul>
+
+            <div class="sidebar-footer">
+                <a href="/logout">
+                    <i class="bi bi-box-arrow-right"></i> התנתקות
+                </a>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Flash Messages -->
+            <div id="flash-container">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                <div class="alert alert-{{ category }}">
+                    <span>{{ message }}</span>
+                    <button class="btn-close" onclick="this.parentElement.remove()" aria-label="סגור">&times;</button>
+                </div>
+                {% endfor %}
+            {% endif %}
+            {% endwith %}
+            </div>
+
+            {% if rag_index_stale %}
+            <div class="rag-stale-warning">
+                <div>
+                    <strong>האינדקס לא מעודכן.</strong>
+                    שינוי בבסיס הידע עדיין לא משוקף בבוט — מומלץ לבנות מחדש את אינדקס ה‑RAG.
+                </div>
+                <form method="POST" action="/kb/rebuild">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-warning btn-sm"
+                            onclick="return confirm('לבנות מחדש את אינדקס ה-RAG? זה עשוי לקחת רגע.')">
+                        <i class="bi bi-arrow-clockwise"></i> בנייה מחדש
+                    </button>
+                </form>
+            </div>
+            {% endif %}
+
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+
     <script>
+        // Sidebar toggle for mobile
+        function toggleSidebar() {
+            document.getElementById('sidebar').classList.toggle('open');
+            document.getElementById('sidebarOverlay').classList.toggle('active');
+        }
+
+        // Close sidebar on nav link click (mobile)
+        document.querySelectorAll('.sidebar-nav a').forEach(function(link) {
+            link.addEventListener('click', function() {
+                if (window.innerWidth <= 768) {
+                    toggleSidebar();
+                }
+            });
+        });
+
+        // Auto-update notification badge
         async function updateBadge() {
             try {
-                const resp = await fetch('/api/stats');
-                const data = await resp.json();
-                const badge = document.getElementById('request-badge');
+                var resp = await fetch('/api/stats');
+                var data = await resp.json();
+                var badge = document.getElementById('request-badge');
                 if (data.pending_requests > 0) {
                     badge.textContent = data.pending_requests;
-                    badge.style.display = 'inline';
+                    badge.style.display = 'flex';
                 } else {
                     badge.style.display = 'none';
                 }
@@ -157,8 +141,17 @@
         }
         updateBadge();
         setInterval(updateBadge, 30000);
+
+        // Auto-dismiss flash messages after 5s
+        setTimeout(function() {
+            document.querySelectorAll('#flash-container .alert').forEach(function(el) {
+                el.style.opacity = '0';
+                el.style.transition = 'opacity 0.3s ease';
+                setTimeout(function() { el.remove(); }, 300);
+            });
+        }, 5000);
     </script>
-    
+
     {% block scripts %}{% endblock %}
 </body>
 </html>

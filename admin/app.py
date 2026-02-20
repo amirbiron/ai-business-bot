@@ -16,6 +16,7 @@ from functools import wraps
 from urllib.parse import urlparse
 from flask import (
     Flask,
+    make_response,
     render_template,
     request,
     redirect,
@@ -253,6 +254,8 @@ def create_admin_app() -> Flask:
     def kb_delete(entry_id):
         db.delete_kb_entry(entry_id)
         mark_index_stale()
+        if request.headers.get("HX-Request"):
+            return ""
         flash("הרשומה נמחקה.", "success")
         return redirect(url_for("kb_list"))
     
@@ -308,6 +311,11 @@ def create_admin_app() -> Flask:
             flash("סטטוס לא חוקי.", "danger")
             return redirect(url_for("agent_requests"))
         db.update_agent_request_status(request_id, status)
+        if request.headers.get("HX-Request"):
+            req = db.get_agent_request(request_id)
+            if req:
+                return render_template("partials/request_row.html", req=req)
+            return ""
         flash(f"בקשה #{request_id} סומנה כ-{status}.", "success")
         return redirect(url_for("agent_requests"))
     
@@ -331,6 +339,11 @@ def create_admin_app() -> Flask:
             flash("סטטוס לא חוקי.", "danger")
             return redirect(url_for("appointments"))
         db.update_appointment_status(appt_id, status)
+        if request.headers.get("HX-Request"):
+            appt = db.get_appointment(appt_id)
+            if appt:
+                return render_template("partials/appointment_row.html", appt=appt)
+            return ""
         flash(f"תור #{appt_id} סומן כ-{status}.", "success")
         return redirect(url_for("appointments"))
     

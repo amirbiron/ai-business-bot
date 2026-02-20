@@ -1,0 +1,48 @@
+<tr id="appointment-row-{{ appt.id }}">
+    <td>{{ appt.id }}</td>
+    <td>
+        <span class="fw-semibold" style="color: var(--text-primary);">{{ appt.username }}</span>
+        {% if appt.telegram_username %}
+        <br>
+        <a class="text-small" href="https://t.me/{{ appt.telegram_username }}" target="_blank" rel="noopener">
+            @{{ appt.telegram_username }}
+        </a>
+        {% else %}
+        <br><span class="text-small text-muted">ללא שם משתמש בטלגרם</span>
+        {% endif %}
+    </td>
+    <td>{{ appt.service }}</td>
+    <td>{{ appt.preferred_date }}</td>
+    <td>{{ appt.preferred_time }}</td>
+    <td>{{ appt.notes }}</td>
+    <td>
+        {% if appt.status == 'pending' %}
+        <span class="badge badge-warning">ממתין</span>
+        {% elif appt.status == 'confirmed' %}
+        <span class="badge badge-success">מאושר</span>
+        {% elif appt.status == 'cancelled' %}
+        <span class="badge badge-danger">בוטל</span>
+        {% endif %}
+    </td>
+    <td class="text-small text-muted">{{ appt.created_at }}</td>
+    <td>
+        {% if appt.status == 'pending' %}
+        <div class="actions-cell">
+            <button class="btn btn-success btn-sm"
+                    hx-post="/appointments/{{ appt.id }}/update"
+                    hx-vals='{"status": "confirmed"}'
+                    hx-target="#appointment-row-{{ appt.id }}"
+                    hx-swap="outerHTML swap:0.2s">
+                <i class="bi bi-check-lg"></i> אשר
+            </button>
+            <button class="btn btn-outline-danger btn-sm"
+                    hx-post="/appointments/{{ appt.id }}/update"
+                    hx-vals='{"status": "cancelled"}'
+                    hx-target="#appointment-row-{{ appt.id }}"
+                    hx-swap="outerHTML swap:0.2s">
+                <i class="bi bi-x-lg"></i> בטל
+            </button>
+        </div>
+        {% endif %}
+    </td>
+</tr>
