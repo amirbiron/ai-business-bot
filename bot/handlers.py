@@ -337,29 +337,15 @@ async def price_list_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     user_id, display_name, telegram_username = _get_user_info(update)
 
     await update.message.reply_text("📋 תנו לי רגע לחפש את המחירון שלנו...")
-    
-    # Use the RAG pipeline to find pricing information
-    result = await _generate_answer_async("הצג לי את המחירון המלא עם כל השירותים והמחירים")
-    
-    db.save_message(user_id, display_name, "user", "📋 מחירון")
-    stripped = strip_source_citation(result["answer"])
-    if _should_handoff_to_human(stripped):
-        await _handoff_to_human(
-            update,
-            context,
-            user_id=user_id,
-            display_name=display_name,
-            telegram_username=telegram_username,
-            reason="הלקוח ביקש מחירון, אך אין מידע זמין במאגר.",
-        )
-        return
 
-    db.save_message(user_id, display_name, "assistant", result["answer"], ", ".join(result["sources"]))
-
-    await _reply_markdown_safe(
-        update.message,
-        stripped,
-        reply_markup=_get_main_keyboard(),
+    await _handle_rag_query(
+        update, context,
+        user_id=user_id,
+        display_name=display_name,
+        telegram_username=telegram_username,
+        user_message="📋 מחירון",
+        query="הצג לי את המחירון המלא עם כל השירותים והמחירים",
+        handoff_reason="הלקוח ביקש מחירון, אך אין מידע זמין במאגר.",
     )
 
 
@@ -371,29 +357,14 @@ async def location_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle the Send Location button — send business location info."""
     user_id, display_name, telegram_username = _get_user_info(update)
 
-    # Use RAG to find location/address info
-    result = await _generate_answer_async("מה הכתובת והמיקום של העסק? איך מגיעים?")
-    
-    db.save_message(user_id, display_name, "user", "📍 מיקום")
-
-    stripped = strip_source_citation(result["answer"])
-    if _should_handoff_to_human(stripped):
-        await _handoff_to_human(
-            update,
-            context,
-            user_id=user_id,
-            display_name=display_name,
-            telegram_username=telegram_username,
-            reason="הלקוח ביקש לקבל מיקום/כתובת, אך אין מידע זמין במאגר.",
-        )
-        return
-
-    db.save_message(user_id, display_name, "assistant", result["answer"], ", ".join(result["sources"]))
-
-    await _reply_markdown_safe(
-        update.message,
-        stripped,
-        reply_markup=_get_main_keyboard(),
+    await _handle_rag_query(
+        update, context,
+        user_id=user_id,
+        display_name=display_name,
+        telegram_username=telegram_username,
+        user_message="📍 מיקום",
+        query="מה הכתובת והמיקום של העסק? איך מגיעים?",
+        handoff_reason="הלקוח ביקש לקבל מיקום/כתובת, אך אין מידע זמין במאגר.",
     )
 
 
