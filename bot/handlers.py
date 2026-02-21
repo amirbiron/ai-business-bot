@@ -32,6 +32,7 @@ from ai_chatbot.config import (
     FALLBACK_RESPONSE,
     CONTEXT_WINDOW_SIZE,
 )
+from ai_chatbot.live_chat_service import live_chat_guard, live_chat_guard_booking
 
 logger = logging.getLogger(__name__)
 
@@ -168,13 +169,10 @@ async def _handoff_to_human(
 
 # ─── /start Command ──────────────────────────────────────────────────────────
 
+@live_chat_guard
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle the /start command — send welcome message with menu."""
     user_id, display_name, _telegram_username = _get_user_info(update)
-
-    if db.is_live_chat_active(user_id):
-        db.save_message(user_id, display_name, "user", "/start")
-        return
 
     welcome_text = (
         f"👋 ברוכים הבאים ל-*{BUSINESS_NAME}*!\n\n"
@@ -199,13 +197,10 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ─── /help Command ───────────────────────────────────────────────────────────
 
+@live_chat_guard
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle the /help command."""
     user_id, display_name, _ = _get_user_info(update)
-
-    if db.is_live_chat_active(user_id):
-        db.save_message(user_id, display_name, "user", "/help")
-        return
 
     help_text = (
         "🤖 *איך להשתמש בבוט:*\n\n"
@@ -229,14 +224,11 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ─── Price List Button ───────────────────────────────────────────────────────
 
+@live_chat_guard
 async def price_list_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle the Price List button — retrieve pricing info from KB."""
     user_id, display_name, telegram_username = _get_user_info(update)
 
-    if db.is_live_chat_active(user_id):
-        db.save_message(user_id, display_name, "user", "📋 מחירון")
-        return
-    
     await update.message.reply_text("📋 תנו לי רגע לחפש את המחירון שלנו...")
     
     # Use the RAG pipeline to find pricing information
@@ -266,14 +258,11 @@ async def price_list_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 # ─── Send Location Button ────────────────────────────────────────────────────
 
+@live_chat_guard
 async def location_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle the Send Location button — send business location info."""
     user_id, display_name, telegram_username = _get_user_info(update)
 
-    if db.is_live_chat_active(user_id):
-        db.save_message(user_id, display_name, "user", "📍 מיקום")
-        return
-    
     # Use RAG to find location/address info
     result = await _generate_answer_async("מה הכתובת והמיקום של העסק? איך מגיעים?")
     
@@ -302,14 +291,11 @@ async def location_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ─── Talk to Agent Button ────────────────────────────────────────────────────
 
+@live_chat_guard
 async def talk_to_agent_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle the Talk to Agent button — notify the business owner."""
     user_id, display_name, telegram_username = _get_user_info(update)
 
-    if db.is_live_chat_active(user_id):
-        db.save_message(user_id, display_name, "user", "👤 שיחה עם נציג")
-        return
-    
     # Create agent request in database
     await _create_request_and_notify_owner(
         context,
@@ -336,15 +322,10 @@ async def talk_to_agent_handler(update: Update, context: ContextTypes.DEFAULT_TY
 
 # ─── Appointment Booking Flow ────────────────────────────────────────────────
 
+@live_chat_guard_booking
 async def booking_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Start the appointment booking conversation."""
     user_id, display_name, telegram_username = _get_user_info(update)
-
-    # If live chat is active, the bot should stay silent — save the message
-    # for the human agent but don't enter the booking flow.
-    if db.is_live_chat_active(user_id):
-        db.save_message(user_id, display_name, "user", "📅 קביעת תור")
-        return ConversationHandler.END
 
     # Log the user's booking attempt even if we handoff to human.
     db.save_message(user_id, display_name, "user", "📅 קביעת תור")
@@ -375,20 +356,9 @@ async def booking_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     return BOOKING_SERVICE
 
 
-async def _check_live_chat_during_booking(update: Update) -> bool:
-    """If live chat started mid-booking, save message and signal exit."""
-    user_id, display_name, _ = _get_user_info(update)
-    if db.is_live_chat_active(user_id):
-        db.save_message(user_id, display_name, "user", update.message.text)
-        return True
-    return False
-
-
+@live_chat_guard_booking
 async def booking_service(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Receive the service selection."""
-    if await _check_live_chat_during_booking(update):
-        context.user_data.clear()
-        return ConversationHandler.END
     context.user_data["booking_service"] = update.message.text
 
     await update.message.reply_text(
@@ -400,11 +370,9 @@ async def booking_service(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     return BOOKING_DATE
 
 
+@live_chat_guard_booking
 async def booking_date(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Receive the preferred date."""
-    if await _check_live_chat_during_booking(update):
-        context.user_data.clear()
-        return ConversationHandler.END
     context.user_data["booking_date"] = update.message.text
 
     await update.message.reply_text(
@@ -416,11 +384,9 @@ async def booking_date(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     return BOOKING_TIME
 
 
+@live_chat_guard_booking
 async def booking_time(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Receive the preferred time and show confirmation."""
-    if await _check_live_chat_during_booking(update):
-        context.user_data.clear()
-        return ConversationHandler.END
     context.user_data["booking_time"] = update.message.text
 
     service = context.user_data.get("booking_service", "")
@@ -439,11 +405,9 @@ async def booking_time(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     return BOOKING_CONFIRM
 
 
+@live_chat_guard_booking
 async def booking_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Handle booking confirmation."""
-    if await _check_live_chat_during_booking(update):
-        context.user_data.clear()
-        return ConversationHandler.END
     user_id, display_name, telegram_username = _get_user_info(update)
     answer = update.message.text.lower().strip()
     
@@ -504,11 +468,9 @@ async def booking_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     return ConversationHandler.END
 
 
+@live_chat_guard_booking
 async def booking_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Cancel the booking flow."""
-    if await _check_live_chat_during_booking(update):
-        context.user_data.clear()
-        return ConversationHandler.END
     context.user_data.clear()
     await update.message.reply_text(
         "ההזמנה בוטלה. איך עוד אפשר לעזור לכם?",
@@ -517,6 +479,7 @@ async def booking_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     return ConversationHandler.END
 
 
+@live_chat_guard_booking
 async def booking_button_interrupt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Handle button clicks during an active booking — cancel booking and route to the clicked button."""
     context.user_data.clear()
@@ -586,6 +549,7 @@ async def _handle_rag_query(
 
 # ─── Free-Text Message Handler ───────────────────────────────────────────────
 
+@live_chat_guard
 async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Handle any free-text message from the user.
@@ -596,11 +560,6 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     user_id, display_name, telegram_username = _get_user_info(update)
     user_message = update.message.text
-
-    # ── Live-chat mode: bot is paused, business owner handles the conversation
-    if db.is_live_chat_active(user_id):
-        db.save_message(user_id, display_name, "user", user_message)
-        return
 
     # Check for button texts and route accordingly
     if user_message == BUTTON_PRICE_LIST:
@@ -673,13 +632,17 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def cancel_appointment_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle the inline-button response to the cancellation confirmation prompt."""
     query = update.callback_query
+    # Always answer the callback query first to dismiss Telegram's loading
+    # indicator — the live chat guard cannot do this because it returns
+    # before the handler body runs.
     await query.answer()
 
-    user_id, display_name, telegram_username = _get_user_info(update)
-
-    # If a live chat started after the inline buttons were shown, stay silent.
-    if db.is_live_chat_active(user_id):
+    from ai_chatbot.live_chat_service import LiveChatService
+    user = update.effective_user
+    if LiveChatService.is_active(str(user.id)):
         return
+
+    user_id, display_name, telegram_username = _get_user_info(update)
 
     if query.data == "cancel_appt_yes":
         await _create_request_and_notify_owner(

@@ -54,7 +54,8 @@ def run_telegram_bot():
     # Clean up live chat sessions from a previous bot run so users aren't
     # permanently silenced.  Done here (not in init_db) so an admin-only
     # restart doesn't kill sessions that are still actively managed.
-    db.cleanup_stale_live_chats()
+    from ai_chatbot.live_chat_service import LiveChatService
+    LiveChatService.cleanup_stale()
 
     logger.info("Starting Telegram Bot...")
     run_bot()
