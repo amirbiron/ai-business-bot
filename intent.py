@@ -60,11 +60,12 @@ _INTENT_PATTERNS: list[tuple[Intent, re.Pattern]] = [
         Intent.APPOINTMENT_BOOKING,
         re.compile(
             r"("
-            r"book\s*(an?\s*)?appointment|make\s*(an?\s*)?appointment|schedule"
-            r"|set\s*up\s*(an?\s*)?appointment|i\s*want\s*(an?\s*)?appointment"
-            r"|רוצה\s*תור|רוצה\s*לקבוע\s*תור|לקבוע\s*תור|אפשר\s*תור|אפשר\s*לקבוע"
-            r"|קביעת\s*תור|לזמן\s*תור|אני\s*רוצה\s*לקבוע"
-            r"|בואו\s*נקבע\s*תור|יש\s*תורים|מתי\s*אפשר\s*להגיע"
+            r"book\s*(an?\s*)?appointment|make\s*(an?\s*)?appointment"
+            r"|schedule\s*(an?\s*)?appointment|set\s*up\s*(an?\s*)?appointment"
+            r"|i\s*want\s*(an?\s*)?appointment|i\s*want\s*to\s*book"
+            r"|רוצה\s*תור|רוצה\s*לקבוע\s*תור|לקבוע\s*תור|אפשר\s*תור|אפשר\s*לקבוע\s*תור"
+            r"|קביעת\s*תור|לזמן\s*תור|אני\s*רוצה\s*לקבוע\s*תור"
+            r"|בואו\s*נקבע\s*תור|יש\s*תורים\s*פנויים|מתי\s*אפשר\s*לקבוע\s*תור"
             r")",
             re.IGNORECASE,
         ),
@@ -74,10 +75,10 @@ _INTENT_PATTERNS: list[tuple[Intent, re.Pattern]] = [
         Intent.APPOINTMENT_CANCEL,
         re.compile(
             r"("
-            r"cancel\s*(my\s*)?appointment|cancel\s*booking"
-            r"|i\s*want\s*to\s*cancel|cancellation"
-            r"|לבטל\s*תור|ביטול\s*תור|רוצה\s*לבטל|אני\s*מבטל"
-            r"|אני\s*רוצה\s*לבטל\s*את\s*התור|אני\s*צריך\s*לבטל"
+            r"cancel\s*(my\s*)?appointment|cancel\s*(my\s*)?booking"
+            r"|i\s*want\s*to\s*cancel\s*(my\s*)?(appointment|booking|the\s*appointment)"
+            r"|לבטל\s*(את\s*)?ה?תור|ביטול\s*(ה)?תור|רוצה\s*לבטל\s*(את\s*)?ה?תור|אני\s*מבטל\s*(את\s*)?ה?תור"
+            r"|אני\s*רוצה\s*לבטל\s*את\s*התור|אני\s*צריך\s*לבטל\s*(את\s*)?ה?תור"
             r")",
             re.IGNORECASE,
         ),

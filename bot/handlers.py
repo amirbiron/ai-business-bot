@@ -531,9 +531,21 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(response, reply_markup=_get_main_keyboard())
         return
 
-    # Appointment booking — redirect to the booking flow
+    # Appointment booking — guide the user to the booking button so the
+    # ConversationHandler state machine is properly engaged.  Calling
+    # booking_start() directly from here would bypass the ConversationHandler
+    # entry points, breaking the multi-step booking flow.
     if intent == Intent.APPOINTMENT_BOOKING:
-        return await booking_start(update, context)
+        db.save_message(user_id, display_name, "user", user_message)
+        response = (
+            "אשמח לעזור לכם לקבוע תור! 📅\n\n"
+            "לחצו על הכפתור *📅 קביעת תור* למטה כדי להתחיל."
+        )
+        db.save_message(user_id, display_name, "assistant", response)
+        await _reply_markdown_safe(
+            update.message, response, reply_markup=_get_main_keyboard()
+        )
+        return
 
     # Appointment cancellation — notify the owner
     if intent == Intent.APPOINTMENT_CANCEL:
@@ -556,9 +568,9 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Pricing — use targeted RAG query focused on pricing
     if intent == Intent.PRICING:
         await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
-        db.save_message(user_id, display_name, "user", user_message)
 
         history = db.get_conversation_history(user_id, limit=CONTEXT_WINDOW_SIZE)
+        db.save_message(user_id, display_name, "user", user_message)
         result = await _generate_answer_async(
             user_query="מחירון: " + user_message,
             conversation_history=history,
