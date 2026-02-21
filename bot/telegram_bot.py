@@ -6,6 +6,7 @@ import logging
 import re
 from telegram.ext import (
     ApplicationBuilder,
+    CallbackQueryHandler,
     CommandHandler,
     MessageHandler,
     ConversationHandler,
@@ -24,6 +25,7 @@ from ai_chatbot.bot.handlers import (
     booking_confirm,
     booking_cancel,
     booking_button_interrupt,
+    cancel_appointment_callback,
     error_handler,
     BOOKING_SERVICE,
     BOOKING_DATE,
@@ -85,6 +87,9 @@ def create_bot_application():
     # Booking conversation (must be before the general message handler)
     app.add_handler(booking_handler)
     
+    # Cancellation confirmation (inline keyboard callback)
+    app.add_handler(CallbackQueryHandler(cancel_appointment_callback, pattern=r"^cancel_appt_"))
+
     # General text messages (catch-all)
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, message_handler))
     

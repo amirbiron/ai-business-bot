@@ -491,6 +491,47 @@ async def booking_button_interrupt(update: Update, context: ContextTypes.DEFAULT
     return ConversationHandler.END
 
 
+# ─── Shared RAG pipeline ─────────────────────────────────────────────────────
+
+async def _handle_rag_query(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    *,
+    user_id: str,
+    display_name: str,
+    telegram_username: str,
+    user_message: str,
+    query: str,
+    handoff_reason: str,
+) -> None:
+    """Run the RAG + LLM pipeline and send the result (or hand off to a human)."""
+    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
+
+    history = db.get_conversation_history(user_id, limit=CONTEXT_WINDOW_SIZE)
+    db.save_message(user_id, display_name, "user", user_message)
+
+    result = await _generate_answer_async(
+        user_query=query,
+        conversation_history=history,
+        user_id=user_id,
+    )
+
+    stripped = strip_source_citation(result["answer"])
+    if _should_handoff_to_human(stripped):
+        await _handoff_to_human(
+            update, context,
+            user_id=user_id,
+            display_name=display_name,
+            telegram_username=telegram_username,
+            reason=handoff_reason,
+        )
+    else:
+        db.save_message(user_id, display_name, "assistant", result["answer"], ", ".join(result["sources"]))
+        await _reply_markdown_safe(update.message, stripped, reply_markup=_get_main_keyboard())
+
+    context.application.create_task(_summarize_safe(user_id))
+
+
 # ─── Free-Text Message Handler ───────────────────────────────────────────────
 
 async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -515,16 +556,8 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ── Intent Detection ──────────────────────────────────────────────────
     intent = detect_intent(user_message)
 
-    # Greeting — respond directly, no RAG needed
-    if intent == Intent.GREETING:
-        db.save_message(user_id, display_name, "user", user_message)
-        response = get_direct_response(intent)
-        db.save_message(user_id, display_name, "assistant", response)
-        await update.message.reply_text(response, reply_markup=_get_main_keyboard())
-        return
-
-    # Farewell — respond directly with feedback prompt
-    if intent == Intent.FAREWELL:
+    # Greeting / Farewell — respond directly, no RAG needed
+    if intent in (Intent.GREETING, Intent.FAREWELL):
         db.save_message(user_id, display_name, "user", user_message)
         response = get_direct_response(intent)
         db.save_message(user_id, display_name, "assistant", response)
@@ -547,94 +580,71 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # Appointment cancellation — notify the owner
+    # Appointment cancellation — ask the user to confirm before taking action
     if intent == Intent.APPOINTMENT_CANCEL:
         db.save_message(user_id, display_name, "user", user_message)
+        confirm_kb = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton("כן, לבטל", callback_data="cancel_appt_yes"),
+                InlineKeyboardButton("לא, טעות", callback_data="cancel_appt_no"),
+            ]
+        ])
+        await update.message.reply_text(
+            "האם אתם בטוחים שתרצו לבטל את התור?",
+            reply_markup=confirm_kb,
+        )
+        return
+
+    # ── Pricing / General — both go through the RAG pipeline ────────────
+    query = ("מחירון: " + user_message) if intent == Intent.PRICING else user_message
+    handoff_reason = (
+        f"הלקוח שאל על מחירים: {user_message}" if intent == Intent.PRICING
+        else f"הלקוח ביקש עזרה בנושא: {user_message}"
+    )
+    await _handle_rag_query(
+        update, context,
+        user_id=user_id,
+        display_name=display_name,
+        telegram_username=telegram_username,
+        user_message=user_message,
+        query=query,
+        handoff_reason=handoff_reason,
+    )
+
+
+# ─── Cancellation Confirmation Callback ──────────────────────────────────────
+
+async def cancel_appointment_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle the inline-button response to the cancellation confirmation prompt."""
+    query = update.callback_query
+    await query.answer()
+
+    user_id, display_name, telegram_username = _get_user_info(update)
+
+    if query.data == "cancel_appt_yes":
         await _create_request_and_notify_owner(
             context,
             user_id=user_id,
             display_name=display_name,
             telegram_username=telegram_username,
-            message=f"הלקוח מבקש לבטל תור. הודעת הלקוח: {user_message}",
+            message=f"הלקוח אישר ביטול תור.",
         )
         response = (
             "קיבלתי את בקשתכם לביטול התור. ✅\n\n"
             "העברתי את הבקשה לצוות שלנו — נציג יחזור אליכם בקרוב לאשר את הביטול."
         )
-        db.save_message(user_id, display_name, "assistant", response)
-        await update.message.reply_text(response, reply_markup=_get_main_keyboard())
-        return
-
-    # Pricing — use targeted RAG query focused on pricing
-    if intent == Intent.PRICING:
-        await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
-
-        history = db.get_conversation_history(user_id, limit=CONTEXT_WINDOW_SIZE)
-        db.save_message(user_id, display_name, "user", user_message)
-        result = await _generate_answer_async(
-            user_query="מחירון: " + user_message,
-            conversation_history=history,
-            user_id=user_id,
-        )
-
-        stripped = strip_source_citation(result["answer"])
-        if _should_handoff_to_human(stripped):
-            await _handoff_to_human(
-                update, context,
-                user_id=user_id,
-                display_name=display_name,
-                telegram_username=telegram_username,
-                reason=f"הלקוח שאל על מחירים: {user_message}",
-            )
-        else:
-            db.save_message(user_id, display_name, "assistant", result["answer"], ", ".join(result["sources"]))
-            await _reply_markdown_safe(update.message, stripped, reply_markup=_get_main_keyboard())
-
-        context.application.create_task(_summarize_safe(user_id))
-        return
-
-    # ── General (default) — full RAG pipeline ─────────────────────────────
-    # Show typing indicator
-    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
-
-    # Get conversation history for context continuity
-    history = db.get_conversation_history(user_id, limit=CONTEXT_WINDOW_SIZE)
-
-    # Save user message
-    db.save_message(user_id, display_name, "user", user_message)
-
-    # Generate answer via RAG + LLM (with user_id for summary loading)
-    result = await _generate_answer_async(
-        user_query=user_message,
-        conversation_history=history,
-        user_id=user_id,
-    )
-
-    stripped = strip_source_citation(result["answer"])
-    if _should_handoff_to_human(stripped):
-        await _handoff_to_human(
-            update,
-            context,
-            user_id=user_id,
-            display_name=display_name,
-            telegram_username=telegram_username,
-            reason=f"הלקוח ביקש עזרה בנושא: {user_message}",
-        )
     else:
-        # Save assistant response (raw, with citation) for history consistency
-        db.save_message(user_id, display_name, "assistant", result["answer"], ", ".join(result["sources"]))
+        response = "בסדר גמור, התור נשאר! 👍\nאיך עוד אפשר לעזור?"
 
-        # Send citation-stripped response to customer
-        await _reply_markdown_safe(
-            update.message,
-            stripped,
-            reply_markup=_get_main_keyboard(),
-        )
-
-    # Trigger summarization in background (fire-and-forget, after response is sent).
-    # context.application.create_task keeps a strong reference so the task
-    # is not garbage-collected mid-execution.
-    context.application.create_task(_summarize_safe(user_id))
+    db.save_message(user_id, display_name, "assistant", response)
+    await query.edit_message_text(response)
+    # Re-show the main keyboard via a follow-up message so the user keeps
+    # the persistent reply keyboard visible after the inline button is resolved.
+    await context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text="👇",
+        reply_markup=_get_main_keyboard(),
+    )
 
 
 # ─── Error Handler ───────────────────────────────────────────────────────────
