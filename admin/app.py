@@ -428,6 +428,10 @@ def create_admin_app() -> Flask:
     @app.route("/live-chat/<user_id>/start", methods=["POST"])
     @login_required
     def live_chat_start(user_id):
+        # Guard against duplicate starts (e.g. double-click, stale tab).
+        if db.is_live_chat_active(user_id):
+            flash("השיחה החיה כבר פעילה.", "info")
+            return redirect(url_for("live_chat", user_id=user_id))
         sent = _do_start_live_chat(user_id)
         if not sent:
             flash("השיחה החיה הופעלה, אך ההודעה ללקוח בטלגרם נכשלה.", "warning")

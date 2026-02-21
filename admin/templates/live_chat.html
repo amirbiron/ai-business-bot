@@ -39,10 +39,12 @@
 <div class="live-chat-container card animate-slide-up">
     <!-- Messages area with auto-polling -->
     <div class="live-chat-messages" id="live-chat-messages"
+         {% if live_session %}
          hx-get="/api/live-chat/{{ user_id }}/messages"
          hx-trigger="every 3s"
          hx-swap="innerHTML"
-         hx-target="#live-chat-messages">
+         hx-target="#live-chat-messages"
+         {% endif %}>
         {% include "partials/live_chat_messages.html" %}
     </div>
 
