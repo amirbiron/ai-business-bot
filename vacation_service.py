@@ -6,8 +6,7 @@ VacationService — שירות מצב חופשה / חירום.
 - בקשות תורים מקבלות הודעת חופשה עם תאריך חזרה.
 - בקשות לנציג אנושי מקבלות הודעת חופשה.
 
-מספק decorator (guard) שנכנס אחרי rate_limit_guard בשרשרת ה-handlers,
-כך ש-__wrapped__ מדלג על rate_limit בלבד ועדיין עובר דרך vacation guard.
+מספק decorator (guard) שנכנס לפני rate_limit_guard בשרשרת ה-handlers.
 """
 
 import logging
@@ -29,11 +28,6 @@ class VacationService:
         """בדיקה האם מצב חופשה פעיל."""
         vacation = db.get_vacation_mode()
         return bool(vacation["is_active"])
-
-    @staticmethod
-    def get_settings() -> dict:
-        """קבלת כל הגדרות מצב חופשה."""
-        return db.get_vacation_mode()
 
     @staticmethod
     def get_booking_message() -> str:

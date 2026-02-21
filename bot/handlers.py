@@ -302,8 +302,8 @@ async def location_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ─── Talk to Agent Button ────────────────────────────────────────────────────
 
-@rate_limit_guard
 @vacation_guard_agent
+@rate_limit_guard
 @live_chat_guard
 async def talk_to_agent_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle the Talk to Agent button — notify the business owner."""
@@ -317,26 +317,32 @@ async def talk_to_agent_handler(update: Update, context: ContextTypes.DEFAULT_TY
         telegram_username=telegram_username,
         message="הלקוח מבקש לדבר עם נציג אנושי.",
     )
-    
+
     response_text = (
         "👤 הודעתי לצוות שלנו שאתם מעוניינים לדבר עם מישהו.\n\n"
         "נציג אנושי יחזור אליכם בקרוב. "
         "בינתיים, אתם מוזמנים לשאול אותי כל שאלה נוספת!"
     )
-    
+
     db.save_message(user_id, display_name, "user", "👤 שיחה עם נציג")
     db.save_message(user_id, display_name, "assistant", response_text)
-    
+
     await update.message.reply_text(
         response_text,
         reply_markup=_get_main_keyboard()
     )
 
+# שרשרת ניתוב פנימי — מדלגת על rate_limit (הקורא כבר עבר אותו)
+# אבל שומרת על vacation_guard + live_chat_guard.
+_talk_to_agent_skip_ratelimit = vacation_guard_agent(
+    talk_to_agent_handler.__wrapped__.__wrapped__
+)
+
 
 # ─── Appointment Booking Flow ────────────────────────────────────────────────
 
-@rate_limit_guard_booking
 @vacation_guard_booking
+@rate_limit_guard_booking
 @live_chat_guard_booking
 async def booking_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Start the appointment booking conversation."""
@@ -344,7 +350,7 @@ async def booking_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
 
     # Log the user's booking attempt even if we handoff to human.
     db.save_message(user_id, display_name, "user", "📅 בקשת תור")
-    
+
     # Get available services from KB
     result = await _generate_answer_async("אילו שירותים אתם מציעים? פרטו בקצרה.")
 
@@ -359,16 +365,22 @@ async def booking_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
             reason="הלקוח ביקש לקבוע תור, אך אין מידע זמין על השירותים במאגר.",
         )
         return ConversationHandler.END
-    
+
     text = (
         "📅 *בקשת תור*\n\n"
         f"{stripped}\n\n"
         "אנא כתבו את *השירות* שתרצו להזמין "
         "(או הקלידו /cancel כדי לחזור):"
     )
-    
+
     await _reply_markdown_safe(update.message, text)
     return BOOKING_SERVICE
+
+# שרשרת ניתוב פנימי — מדלגת על rate_limit (הקורא כבר עבר אותו)
+# אבל שומרת על vacation_guard + live_chat_guard.
+_booking_start_skip_ratelimit = vacation_guard_booking(
+    booking_start.__wrapped__.__wrapped__
+)
 
 
 @rate_limit_guard_booking
@@ -506,18 +518,18 @@ async def booking_button_interrupt(update: Update, context: ContextTypes.DEFAULT
     context.user_data.clear()
     user_message = update.message.text
 
-    # Use __wrapped__ to skip the rate_limit_guard layer — the current
-    # handler already recorded the message.
+    # מדלגים על rate_limit (הקורא כבר עבר אותו) אבל שומרים על
+    # vacation_guard + live_chat_guard דרך ה-_skip_ratelimit references.
+    # handlers ללא vacation guard (price_list, location) משתמשים ב-__wrapped__.
     if user_message == BUTTON_BOOKING:
-        # Restart the booking flow from scratch
-        return await booking_start.__wrapped__(update, context)
+        return await _booking_start_skip_ratelimit(update, context)
 
     if user_message == BUTTON_PRICE_LIST:
         await price_list_handler.__wrapped__(update, context)
     elif user_message == BUTTON_LOCATION:
         await location_handler.__wrapped__(update, context)
     elif user_message == BUTTON_AGENT:
-        await talk_to_agent_handler.__wrapped__(update, context)
+        await _talk_to_agent_skip_ratelimit(update, context)
     else:
         # Safety fallback — should not happen, but avoid a silent dead-end
         logger.warning("booking_button_interrupt: unexpected text %r", user_message)
@@ -586,16 +598,14 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id, display_name, telegram_username = _get_user_info(update)
     user_message = update.message.text
 
-    # Check for button texts and route accordingly.
-    # Use __wrapped__ to skip the rate_limit_guard layer — the current
-    # handler already recorded the message so re-entering the decorated
-    # version would count it twice.
+    # ניתוב כפתורים — מדלגים על rate_limit (כבר נספר פעם אחת) אבל
+    # שומרים על vacation_guard + live_chat_guard דרך _skip_ratelimit.
     if user_message == BUTTON_PRICE_LIST:
         return await price_list_handler.__wrapped__(update, context)
     elif user_message == BUTTON_LOCATION:
         return await location_handler.__wrapped__(update, context)
     elif user_message == BUTTON_AGENT:
-        return await talk_to_agent_handler.__wrapped__(update, context)
+        return await _talk_to_agent_skip_ratelimit(update, context)
 
     # ── Intent Detection ──────────────────────────────────────────────────
     intent = detect_intent(user_message)
