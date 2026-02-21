@@ -1,0 +1,34 @@
+<tr id="gap-row-{{ q.id }}">
+    <td data-label="מזהה">{{ q.id }}</td>
+    <td data-label="לקוח">
+        <span class="fw-semibold" style="color: var(--text-primary);">{{ q.username or q.user_id }}</span>
+    </td>
+    <td data-label="שאלה" style="max-width: 300px; word-wrap: break-word;">{{ q.question }}</td>
+    <td data-label="סטטוס">
+        {% if q.status == 'open' %}
+        <span class="badge badge-warning">פתוח</span>
+        {% else %}
+        <span class="badge badge-success">טופל</span>
+        {% endif %}
+    </td>
+    <td data-label="נוצר" class="text-small text-muted">{{ q.created_at|il_datetime }}</td>
+    <td data-label="פעולות">
+        {% if q.status == 'open' %}
+        <div class="actions-cell">
+            <a href="/kb/add?question={{ q.question|urlencode }}&gap_id={{ q.id }}"
+               class="btn btn-primary btn-sm">
+                <i class="bi bi-plus-circle"></i> הוסף תשובה
+            </a>
+            <button class="btn btn-success btn-sm"
+                    hx-post="/knowledge-gaps/{{ q.id }}/resolve"
+                    hx-vals='{"status": "resolved"}'
+                    hx-target="#gap-row-{{ q.id }}"
+                    hx-swap="outerHTML swap:0.2s">
+                <i class="bi bi-check-lg"></i> סמן כטופל
+            </button>
+        </div>
+        {% elif q.resolved_at %}
+        <span class="text-small text-muted">{{ q.resolved_at|il_datetime }}</span>
+        {% endif %}
+    </td>
+</tr>

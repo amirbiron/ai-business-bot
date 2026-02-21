@@ -233,11 +233,13 @@ def create_admin_app() -> Flask:
             "pending_requests": db.count_agent_requests(status="pending"),
             "pending_appointments": db.count_appointments(status="pending"),
             "active_live_chats": LiveChatService.count_active(),
+            "open_knowledge_gaps": db.count_unanswered_questions(status="open"),
         }
 
         pending_requests = db.get_agent_requests(status="pending", limit=5)
         pending_appointments = db.get_appointments(status="pending", limit=5)
         active_live_chats = LiveChatService.get_all_active()
+        recent_gaps = db.get_unanswered_questions(status="open", limit=5)
 
         return render_template(
             "dashboard.html",
@@ -246,6 +248,7 @@ def create_admin_app() -> Flask:
             recent_requests=pending_requests,
             recent_appointments=pending_appointments,
             active_live_chats=active_live_chats,
+            recent_gaps=recent_gaps,
         )
     
     # ─── Knowledge Base Management ────────────────────────────────────────
@@ -271,15 +274,26 @@ def create_admin_app() -> Flask:
             category = request.form.get("category", "").strip()
             title = request.form.get("title", "").strip()
             content = request.form.get("content", "").strip()
-            
+            gap_id = request.form.get("gap_id", "").strip()
+
             if not all([category, title, content]):
                 flash("כל השדות הם חובה.", "danger")
             else:
                 db.add_kb_entry(category, title, content)
                 mark_index_stale()
+                # Auto-resolve the knowledge gap if this entry was added from one
+                if gap_id:
+                    try:
+                        db.update_unanswered_question_status(int(gap_id), "resolved")
+                    except (ValueError, Exception):
+                        pass
                 flash(f"הרשומה '{title}' נוספה בהצלחה!", "success")
                 return redirect(url_for("kb_list"))
-        
+
+        # Pre-fill from knowledge gap link
+        prefill_question = request.args.get("question", "")
+        gap_id = request.args.get("gap_id", "")
+
         categories = db.get_kb_categories()
         return render_template(
             "kb_form.html",
@@ -287,6 +301,8 @@ def create_admin_app() -> Flask:
             entry=None,
             categories=categories,
             action="Add",
+            prefill_question=prefill_question,
+            gap_id=gap_id,
         )
     
     @app.route("/kb/edit/<int:entry_id>", methods=["GET", "POST"])
@@ -537,8 +553,49 @@ def create_admin_app() -> Flask:
         flash(f"תור #{appt_id} סומן כ-{status}.", "success")
         return redirect(url_for("appointments"))
     
+    # ─── Knowledge Gaps (Unanswered Questions) ─────────────────────────────
+
+    VALID_UNANSWERED_STATUSES = {"open", "resolved"}
+
+    @app.route("/knowledge-gaps")
+    @login_required
+    def knowledge_gaps():
+        status_filter = request.args.get("status", None)
+        questions = db.get_unanswered_questions(status=status_filter)
+        open_count = db.count_unanswered_questions(status="open")
+        return render_template(
+            "knowledge_gaps.html",
+            business_name=BUSINESS_NAME,
+            questions=questions,
+            current_status=status_filter,
+            open_count=open_count,
+        )
+
+    @app.route("/knowledge-gaps/<int:question_id>/resolve", methods=["POST"])
+    @login_required
+    def resolve_question(question_id):
+        status = request.form.get("status", "resolved")
+        if status not in VALID_UNANSWERED_STATUSES:
+            if request.headers.get("HX-Request"):
+                resp = app.make_response(("", 422))
+                resp.headers["HX-Trigger"] = json.dumps(
+                    {"showToast": {"message": "סטטוס לא חוקי.", "type": "danger"}}
+                )
+                return resp
+            flash("סטטוס לא חוקי.", "danger")
+            return redirect(url_for("knowledge_gaps"))
+        db.update_unanswered_question_status(question_id, status)
+
+        if request.headers.get("HX-Request"):
+            q = db.get_unanswered_question(question_id)
+            if q:
+                return render_template("partials/knowledge_gap_row.html", q=q)
+            return ""
+        flash(f"שאלה #{question_id} עודכנה.", "success")
+        return redirect(url_for("knowledge_gaps"))
+
     # ─── API Endpoints (for AJAX) ─────────────────────────────────────────
-    
+
     @app.route("/api/stats")
     @login_required
     def api_stats():
@@ -546,8 +603,9 @@ def create_admin_app() -> Flask:
             "pending_requests": db.count_agent_requests(status="pending"),
             "pending_appointments": db.count_appointments(status="pending"),
             "active_live_chats": LiveChatService.count_active(),
+            "open_knowledge_gaps": db.count_unanswered_questions(status="open"),
         })
-    
+
     return app
 
 

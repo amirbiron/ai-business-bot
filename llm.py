@@ -269,6 +269,7 @@ def generate_answer(
     conversation_history: list[dict] = None,
     top_k: int = None,
     user_id: str = None,
+    username: str = None,
 ) -> dict:
     """
     Generate an answer for a user query using the full RAG pipeline.
@@ -328,6 +329,13 @@ def generate_answer(
 
     # Step 5: Quality check (Layer C)
     final_answer = _quality_check(raw_answer)
+
+    # Log unanswered question if fallback was triggered
+    if final_answer == FALLBACK_RESPONSE and user_id:
+        try:
+            db.save_unanswered_question(user_id, username or "", user_query)
+        except Exception as e:
+            logger.error("Failed to log unanswered question: %s", e)
 
     return {
         "answer": final_answer,
