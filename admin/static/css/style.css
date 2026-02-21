@@ -917,6 +917,11 @@ table tbody tr:last-child td {
     flex-shrink: 0;
 }
 
+/* ביטול fadeIn על בועות הודעות בצ'אט חי — מונע בהוב בכל swap */
+#live-chat-messages .message-bubble {
+    animation: none;
+}
+
 /* Transfer alert banner in conversations page */
 .transfer-alerts {
     margin-bottom: var(--space-sm);
