@@ -589,10 +589,9 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 InlineKeyboardButton("לא, טעות", callback_data="cancel_appt_no"),
             ]
         ])
-        await update.message.reply_text(
-            "האם אתם בטוחים שתרצו לבטל את התור?",
-            reply_markup=confirm_kb,
-        )
+        confirm_text = "האם אתם בטוחים שתרצו לבטל את התור?"
+        db.save_message(user_id, display_name, "assistant", confirm_text)
+        await update.message.reply_text(confirm_text, reply_markup=confirm_kb)
         return
 
     # ── Pricing / General — both go through the RAG pipeline ────────────
