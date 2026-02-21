@@ -155,6 +155,16 @@ def init_db():
                 created_at  TEXT DEFAULT (datetime('now'))
             );
 
+            -- Vacation mode (שורה בודדת — תמיד id=1)
+            CREATE TABLE IF NOT EXISTS vacation_mode (
+                id                  INTEGER PRIMARY KEY CHECK(id = 1),
+                is_active           INTEGER DEFAULT 0,
+                vacation_end_date   TEXT DEFAULT '',
+                vacation_message    TEXT DEFAULT '',
+                updated_at          TEXT DEFAULT (datetime('now'))
+            );
+            INSERT OR IGNORE INTO vacation_mode (id) VALUES (1);
+
             -- Create indexes
             CREATE INDEX IF NOT EXISTS idx_kb_entries_category ON kb_entries(category);
             CREATE INDEX IF NOT EXISTS idx_kb_chunks_entry ON kb_chunks(entry_id);
@@ -924,3 +934,27 @@ def delete_special_day(special_day_id: int):
     """Delete a special day entry."""
     with get_connection() as conn:
         conn.execute("DELETE FROM special_days WHERE id=?", (special_day_id,))
+
+
+# ─── Vacation Mode ──────────────────────────────────────────────────────────
+
+def get_vacation_mode() -> dict:
+    """קבלת מצב חופשה נוכחי. מחזיר dict עם is_active, vacation_end_date, vacation_message."""
+    with get_connection() as conn:
+        row = conn.execute("SELECT * FROM vacation_mode WHERE id = 1").fetchone()
+        if row:
+            return dict(row)
+        # fallback — לא אמור לקרות כי init_db מכניס שורה
+        return {"id": 1, "is_active": 0, "vacation_end_date": "", "vacation_message": "", "updated_at": ""}
+
+
+def update_vacation_mode(is_active: bool, vacation_end_date: str = "", vacation_message: str = ""):
+    """עדכון הגדרות מצב חופשה."""
+    with get_connection() as conn:
+        conn.execute(
+            """UPDATE vacation_mode
+               SET is_active = ?, vacation_end_date = ?, vacation_message = ?,
+                   updated_at = datetime('now')
+               WHERE id = 1""",
+            (int(is_active), vacation_end_date, vacation_message),
+        )

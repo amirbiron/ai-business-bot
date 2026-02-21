@@ -44,6 +44,7 @@ from ai_chatbot.config import (
 )
 from ai_chatbot.rag.engine import rebuild_index, mark_index_stale, is_index_stale
 from ai_chatbot.live_chat_service import LiveChatService
+from ai_chatbot.vacation_service import VacationService
 from ai_chatbot.business_hours import DAY_NAMES_HE
 
 logger = logging.getLogger(__name__)
@@ -670,16 +671,46 @@ def create_admin_app() -> Flask:
         flash("יום מיוחד נמחק.", "success")
         return redirect(url_for("business_hours"))
 
+    # ─── Vacation Mode ─────────────────────────────────────────────────────
+
+    @app.route("/vacation-mode", methods=["GET", "POST"])
+    @login_required
+    def vacation_mode():
+        if request.method == "POST":
+            is_active = request.form.get("is_active") == "on"
+            vacation_end_date = request.form.get("vacation_end_date", "").strip()
+            vacation_message = request.form.get("vacation_message", "").strip()
+            db.update_vacation_mode(is_active, vacation_end_date, vacation_message)
+            if is_active:
+                flash("מצב חופשה הופעל!", "success")
+            else:
+                flash("מצב חופשה כובה.", "info")
+            return redirect(url_for("vacation_mode"))
+
+        vacation = db.get_vacation_mode()
+        # תצוגה מקדימה — משתמש ב-VacationService כדי שהטקסט תמיד יתאים למה שהלקוח רואה
+        preview_booking = VacationService.get_booking_message()
+        preview_agent = VacationService.get_agent_message()
+        return render_template(
+            "vacation_mode.html",
+            business_name=BUSINESS_NAME,
+            vacation=vacation,
+            preview_booking=preview_booking,
+            preview_agent=preview_agent,
+        )
+
     # ─── API Endpoints (for AJAX) ─────────────────────────────────────────
 
     @app.route("/api/stats")
     @login_required
     def api_stats():
+        vacation = db.get_vacation_mode()
         return jsonify({
             "pending_requests": db.count_agent_requests(status="pending"),
             "pending_appointments": db.count_appointments(status="pending"),
             "active_live_chats": LiveChatService.count_active(),
             "open_knowledge_gaps": db.count_unanswered_questions(status="open"),
+            "vacation_active": bool(vacation["is_active"]),
         })
 
     return app

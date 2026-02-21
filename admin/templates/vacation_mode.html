@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header animate-fade-in">
+    <h1><i class="bi bi-airplane"></i> מצב חופשה</h1>
+</div>
+
+<div class="card animate-slide-up stagger-1">
+    <div class="card-header">
+        <span><i class="bi bi-gear"></i> הגדרות מצב חופשה</span>
+        {% if vacation.is_active %}
+        <span class="badge badge-warning">פעיל</span>
+        {% else %}
+        <span class="badge badge-success">כבוי</span>
+        {% endif %}
+    </div>
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('vacation_mode') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <!-- הפעלה / כיבוי -->
+            <div class="form-group" style="margin-bottom: var(--space-md);">
+                <label class="form-label" style="display: flex; align-items: center; gap: var(--space-sm); cursor: pointer;">
+                    <input type="checkbox"
+                           name="is_active"
+                           {% if vacation.is_active %}checked{% endif %}
+                           style="width: 18px; height: 18px;">
+                    <span style="font-weight: 600; font-size: 1.05rem;">
+                        הפעלת מצב חופשה
+                    </span>
+                </label>
+                <div class="text-small text-muted" style="margin-top: var(--space-xs);">
+                    כשמצב חופשה פעיל, הבוט ימשיך לענות על שאלות מידע כלליות אך יחסום בקשות תורים ופניות לנציג.
+                </div>
+            </div>
+
+            <!-- תאריך חזרה -->
+            <div class="form-group" style="margin-bottom: var(--space-md);">
+                <label class="form-label" for="vacation_end_date">תאריך חזרה מחופשה</label>
+                <input type="date"
+                       class="form-control"
+                       id="vacation_end_date"
+                       name="vacation_end_date"
+                       value="{{ vacation.vacation_end_date }}"
+                       style="max-width: 300px;">
+                <div class="text-small text-muted" style="margin-top: var(--space-xs);">
+                    התאריך שבו העסק חוזר לפעילות. יופיע בהודעות ללקוחות.
+                </div>
+            </div>
+
+            <!-- הודעה מותאמת אישית -->
+            <div class="form-group" style="margin-bottom: var(--space-md);">
+                <label class="form-label" for="vacation_message">הודעה מותאמת אישית (אופציונלי)</label>
+                <textarea class="form-control"
+                          id="vacation_message"
+                          name="vacation_message"
+                          rows="4"
+                          placeholder="אנחנו בחופשה עד... ניתן לקבוע תורים החל מ...">{{ vacation.vacation_message }}</textarea>
+                <div class="text-small text-muted" style="margin-top: var(--space-xs);">
+                    הודעה שתוצג ללקוחות שמנסים לקבוע תור. אם ריק — תיווצר הודעה אוטומטית לפי תאריך החזרה.
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary">
+                <i class="bi bi-check-lg"></i> שמירת הגדרות
+            </button>
+        </form>
+    </div>
+</div>
+
+<!-- תצוגה מקדימה -->
+<div class="card animate-slide-up stagger-2" style="margin-top: var(--space-sm);">
+    <div class="card-header">
+        <span><i class="bi bi-eye"></i> תצוגה מקדימה — מה הלקוח יראה</span>
+    </div>
+    <div class="card-body">
+        {% if vacation.is_active %}
+        <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: var(--space-md);">
+            <p class="fw-semibold" style="margin-bottom: var(--space-xs);">בקשת תור:</p>
+            <p id="preview-booking" style="white-space: pre-line; color: var(--text-secondary);">{{ vacation.vacation_message or preview_booking }}</p>
+
+            <hr style="border-color: var(--border-color); margin: var(--space-sm) 0;">
+
+            <p class="fw-semibold" style="margin-bottom: var(--space-xs);">בקשת נציג:</p>
+            <p id="preview-agent" style="white-space: pre-line; color: var(--text-secondary);">{{ preview_agent }}</p>
+
+            <hr style="border-color: var(--border-color); margin: var(--space-sm) 0;">
+
+            <p class="fw-semibold" style="margin-bottom: var(--space-xs);">שאלות מידע (RAG):</p>
+            <p style="color: var(--text-secondary);">ממשיכות לעבוד כרגיל — הבוט עונה כרגיל על שאלות.</p>
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <i class="bi bi-sun"></i>
+            <p>מצב חופשה כבוי — הבוט פועל כרגיל.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

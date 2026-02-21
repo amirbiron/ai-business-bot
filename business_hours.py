@@ -316,6 +316,7 @@ def get_hours_context_for_llm() -> str:
 
     This is injected into the system prompt so the LLM can give
     time-aware answers without a RAG lookup.
+    כולל מידע על מצב חופשה כשפעיל.
     """
     now = _now_israel()
     status = is_currently_open()
@@ -341,5 +342,22 @@ def get_hours_context_for_llm() -> str:
         parts.append("")
         parts.append("ימים מיוחדים קרובים:")
         parts.extend(upcoming)
+
+    # מצב חופשה — מיידע את ה-LLM כדי שיוכל להזכיר בתשובותיו
+    try:
+        vacation = db.get_vacation_mode()
+        if vacation["is_active"]:
+            parts.append("")
+            parts.append("*** מצב חופשה פעיל ***")
+            end_date = vacation.get("vacation_end_date", "").strip()
+            if end_date:
+                parts.append(f"העסק בחופשה עד {end_date}.")
+                parts.append(f"אי אפשר לקבוע תורים כרגע. ניתן לקבוע תורים החל מ-{end_date}.")
+            else:
+                parts.append("העסק בחופשה כרגע.")
+                parts.append("אי אפשר לקבוע תורים כרגע.")
+            parts.append("שאלות מידע כלליות — ענה כרגיל.")
+    except Exception as e:
+        logger.error("Failed to get vacation mode for LLM context: %s", e)
 
     return "\n".join(parts)

@@ -76,6 +76,12 @@
                         <span id="gaps-badge" class="nav-badge" style="display:none;"></span>
                     </a>
                 </li>
+                <li>
+                    <a href="/vacation-mode" class="{% if request.endpoint == 'vacation_mode' %}active{% endif %}">
+                        <i class="bi bi-airplane"></i> מצב חופשה
+                        <span id="vacation-badge" class="nav-badge" style="display:none;"></span>
+                    </a>
+                </li>
             </ul>
 
             <div class="sidebar-footer">
@@ -163,6 +169,15 @@
                         gapsBadge.style.display = 'flex';
                     } else {
                         gapsBadge.style.display = 'none';
+                    }
+                }
+                var vacationBadge = document.getElementById('vacation-badge');
+                if (vacationBadge) {
+                    if (data.vacation_active) {
+                        vacationBadge.textContent = '!';
+                        vacationBadge.style.display = 'flex';
+                    } else {
+                        vacationBadge.style.display = 'none';
                     }
                 }
             } catch (e) {}
