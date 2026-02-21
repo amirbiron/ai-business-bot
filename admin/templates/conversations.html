@@ -72,14 +72,25 @@
                 {% endif %}
             </span>
             {% if selected_user %}
-            <a href="/live-chat/{{ selected_user }}" class="btn btn-primary btn-sm">
-                <i class="bi bi-headset"></i>
+            <div class="d-flex gap-sm align-center">
+                <a href="/live-chat/{{ selected_user }}" class="btn btn-primary btn-sm">
+                    <i class="bi bi-headset"></i>
+                    {% if selected_user in active_live_chats %}
+                    כנס לשיחה חיה
+                    {% else %}
+                    התחל שיחה חיה
+                    {% endif %}
+                </a>
                 {% if selected_user in active_live_chats %}
-                כנס לשיחה חיה
-                {% else %}
-                התחל שיחה חיה
+                <form method="POST" action="/live-chat/{{ selected_user }}/end" style="margin: 0;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-danger btn-sm"
+                            onclick="return confirm('להחזיר את השיחה לבוט?')">
+                        <i class="bi bi-robot"></i> החזר לבוט
+                    </button>
+                </form>
                 {% endif %}
-            </a>
+            </div>
             {% endif %}
         </div>
         <div class="messages-container">
