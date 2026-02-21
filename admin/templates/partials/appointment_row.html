@@ -1,21 +1,23 @@
 <tr id="appointment-row-{{ appt.id }}">
-    <td>{{ appt.id }}</td>
-    <td>
-        <span class="fw-semibold" style="color: var(--text-primary);">{{ appt.username }}</span>
-        {% if appt.telegram_username %}
-        <br>
-        <a class="text-small" href="https://t.me/{{ appt.telegram_username }}" target="_blank" rel="noopener">
-            @{{ appt.telegram_username }}
-        </a>
-        {% else %}
-        <br><span class="text-small text-muted">ללא שם משתמש בטלגרם</span>
-        {% endif %}
+    <td data-label="מזהה">{{ appt.id }}</td>
+    <td data-label="לקוח">
+        <div>
+            <span class="fw-semibold" style="color: var(--text-primary);">{{ appt.username }}</span>
+            {% if appt.telegram_username %}
+            <br>
+            <a class="text-small" href="https://t.me/{{ appt.telegram_username }}" target="_blank" rel="noopener">
+                @{{ appt.telegram_username }}
+            </a>
+            {% else %}
+            <br><span class="text-small text-muted">ללא שם משתמש בטלגרם</span>
+            {% endif %}
+        </div>
     </td>
-    <td>{{ appt.service }}</td>
-    <td>{{ appt.preferred_date }}</td>
-    <td>{{ appt.preferred_time }}</td>
-    <td>{{ appt.notes }}</td>
-    <td>
+    <td data-label="שירות">{{ appt.service }}</td>
+    <td data-label="תאריך">{{ appt.preferred_date }}</td>
+    <td data-label="שעה">{{ appt.preferred_time }}</td>
+    <td data-label="הערות">{{ appt.notes }}</td>
+    <td data-label="סטטוס">
         {% if appt.status == 'pending' %}
         <span class="badge badge-warning">ממתין</span>
         {% elif appt.status == 'confirmed' %}
@@ -24,8 +26,8 @@
         <span class="badge badge-danger">בוטל</span>
         {% endif %}
     </td>
-    <td class="text-small text-muted">{{ appt.created_at|il_datetime }}</td>
-    <td>
+    <td data-label="נוצר" class="text-small text-muted">{{ appt.created_at|il_datetime }}</td>
+    <td data-label="פעולות">
         {% if appt.status == 'pending' %}
         <div class="actions-cell">
             <button class="btn btn-success btn-sm"
