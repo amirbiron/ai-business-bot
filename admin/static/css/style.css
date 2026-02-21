@@ -1165,7 +1165,7 @@ textarea:focus-visible,
         padding: 0.5rem 0.25rem;
         font-size: 0.9375rem;
         border-bottom: 1px solid rgba(51, 65, 85, 0.3);
-        text-align: left;
+        text-align: right;
     }
 
     table td:last-child {

@@ -1,15 +1,17 @@
 <tr id="appointment-row-{{ appt.id }}">
     <td data-label="מזהה">{{ appt.id }}</td>
     <td data-label="לקוח">
-        <span class="fw-semibold" style="color: var(--text-primary);">{{ appt.username }}</span>
-        {% if appt.telegram_username %}
-        <br>
-        <a class="text-small" href="https://t.me/{{ appt.telegram_username }}" target="_blank" rel="noopener">
-            @{{ appt.telegram_username }}
-        </a>
-        {% else %}
-        <br><span class="text-small text-muted">ללא שם משתמש בטלגרם</span>
-        {% endif %}
+        <div>
+            <span class="fw-semibold" style="color: var(--text-primary);">{{ appt.username }}</span>
+            {% if appt.telegram_username %}
+            <br>
+            <a class="text-small" href="https://t.me/{{ appt.telegram_username }}" target="_blank" rel="noopener">
+                @{{ appt.telegram_username }}
+            </a>
+            {% else %}
+            <br><span class="text-small text-muted">ללא שם משתמש בטלגרם</span>
+            {% endif %}
+        </div>
     </td>
     <td data-label="שירות">{{ appt.service }}</td>
     <td data-label="תאריך">{{ appt.preferred_date }}</td>

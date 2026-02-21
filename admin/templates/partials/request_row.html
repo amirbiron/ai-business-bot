@@ -1,15 +1,17 @@
 <tr id="request-row-{{ req.id }}">
     <td data-label="מזהה">{{ req.id }}</td>
     <td data-label="לקוח">
-        <span class="fw-semibold" style="color: var(--text-primary);">{{ req.username }}</span>
-        {% if req.telegram_username %}
-        <br>
-        <a class="text-small" href="https://t.me/{{ req.telegram_username }}" target="_blank" rel="noopener">
-            @{{ req.telegram_username }}
-        </a>
-        {% else %}
-        <br><span class="text-small text-muted">ללא שם משתמש בטלגרם</span>
-        {% endif %}
+        <div>
+            <span class="fw-semibold" style="color: var(--text-primary);">{{ req.username }}</span>
+            {% if req.telegram_username %}
+            <br>
+            <a class="text-small" href="https://t.me/{{ req.telegram_username }}" target="_blank" rel="noopener">
+                @{{ req.telegram_username }}
+            </a>
+            {% else %}
+            <br><span class="text-small text-muted">ללא שם משתמש בטלגרם</span>
+            {% endif %}
+        </div>
     </td>
     <td data-label="הודעה">{{ req.message }}</td>
     <td data-label="סטטוס">
