@@ -1,0 +1,23 @@
+{% if messages %}
+{% for msg in messages %}
+<div class="message-bubble {% if msg.role == 'user' %}user-msg{% else %}bot-msg{% endif %}">
+    <div class="message-meta">
+        <span class="sender">
+            {% if msg.role == 'user' %}
+            <i class="bi bi-person-circle" style="color: var(--brand-blue);"></i>
+            {{ msg.get('username', 'לקוח') if msg.get('username') else 'לקוח' }}
+            {% else %}
+            <i class="bi bi-robot" style="color: var(--success);"></i> בוט / נציג
+            {% endif %}
+        </span>
+        <span class="time">{{ msg.created_at|il_datetime }}</span>
+    </div>
+    <div class="message-content">{{ msg.message }}</div>
+</div>
+{% endfor %}
+{% else %}
+<div class="empty-state">
+    <i class="bi bi-chat"></i>
+    <p>אין הודעות עדיין.</p>
+</div>
+{% endif %}

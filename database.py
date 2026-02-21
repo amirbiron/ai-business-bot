@@ -2,12 +2,15 @@
 Database module — SQLite storage for knowledge base, conversations, and notifications.
 """
 
+import logging
 import sqlite3
 import json
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 from ai_chatbot.config import DB_PATH
 
@@ -108,12 +111,23 @@ def init_db():
                 created_at      TEXT DEFAULT (datetime('now'))
             );
 
+            -- Live chat sessions (business owner takes over a conversation)
+            CREATE TABLE IF NOT EXISTS live_chats (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id     TEXT NOT NULL,
+                username    TEXT DEFAULT '',
+                is_active   INTEGER DEFAULT 1,
+                started_at  TEXT DEFAULT (datetime('now')),
+                ended_at    TEXT
+            );
+
             -- Create indexes
             CREATE INDEX IF NOT EXISTS idx_kb_entries_category ON kb_entries(category);
             CREATE INDEX IF NOT EXISTS idx_kb_chunks_entry ON kb_chunks(entry_id);
             CREATE INDEX IF NOT EXISTS idx_conversations_user ON conversations(user_id);
             CREATE INDEX IF NOT EXISTS idx_agent_requests_status ON agent_requests(status);
             CREATE INDEX IF NOT EXISTS idx_conversation_summaries_user ON conversation_summaries(user_id);
+            CREATE INDEX IF NOT EXISTS idx_live_chats_user_active ON live_chats(user_id, is_active);
         """)
 
         # Lightweight migrations for existing databases (SQLite can only ADD COLUMN).
@@ -125,6 +139,24 @@ def init_db():
 
         _ensure_column("agent_requests", "telegram_username", "TEXT DEFAULT ''")
         _ensure_column("appointments", "telegram_username", "TEXT DEFAULT ''")
+
+
+def cleanup_stale_live_chats():
+    """Deactivate live chat sessions left over from a previous bot run.
+
+    Called from the bot startup path only — not from init_db() — so that
+    a bot-only restart doesn't silently end sessions still managed by
+    the admin panel running in a separate process.
+    """
+    with get_connection() as conn:
+        stale = conn.execute(
+            "SELECT COUNT(*) AS cnt FROM live_chats WHERE is_active = 1"
+        ).fetchone()["cnt"]
+        if stale:
+            conn.execute(
+                "UPDATE live_chats SET is_active = 0, ended_at = datetime('now') WHERE is_active = 1"
+            )
+            logger.info("Cleaned up %d stale live chat session(s) from previous run.", stale)
 
 
 # ─── Knowledge Base CRUD ─────────────────────────────────────────────────────
@@ -258,8 +290,8 @@ def get_conversation_history(user_id: str, limit: int = 20) -> list[dict]:
     """Get recent conversation history for a user."""
     with get_connection() as conn:
         rows = conn.execute(
-            """SELECT role, message, sources, created_at 
-               FROM conversations WHERE user_id=? 
+            """SELECT role, username, message, sources, created_at
+               FROM conversations WHERE user_id=?
                ORDER BY id DESC LIMIT ?""",
             (user_id, limit)
         ).fetchall()
@@ -281,14 +313,25 @@ def get_unique_users() -> list[dict]:
     """Get list of unique users with their last message time."""
     with get_connection() as conn:
         rows = conn.execute("""
-            SELECT user_id, username, 
+            SELECT user_id, username,
                    MAX(created_at) as last_active,
                    COUNT(*) as message_count
-            FROM conversations 
-            GROUP BY user_id 
+            FROM conversations
+            GROUP BY user_id
             ORDER BY last_active DESC
         """).fetchall()
         return [dict(r) for r in rows]
+
+
+def get_username_for_user(user_id: str) -> Optional[str]:
+    """Look up the display name for a single user without scanning all users."""
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT username FROM conversations WHERE user_id = ? AND username != '' "
+            "ORDER BY id DESC LIMIT 1",
+            (user_id,),
+        ).fetchone()
+        return row["username"] if row else None
 
 
 def get_unsummarized_message_count(user_id: str) -> int:
@@ -506,3 +549,63 @@ def get_appointment(appt_id: int) -> Optional[dict]:
     with get_connection() as conn:
         row = conn.execute("SELECT * FROM appointments WHERE id=?", (appt_id,)).fetchone()
         return dict(row) if row else None
+
+
+# ─── Live Chats ─────────────────────────────────────────────────────────────
+
+def start_live_chat(user_id: str, username: str = "") -> int:
+    """Start a live chat session for a user. Returns the session ID."""
+    with get_connection() as conn:
+        # End any existing active session for this user first
+        conn.execute(
+            "UPDATE live_chats SET is_active=0, ended_at=datetime('now') WHERE user_id=? AND is_active=1",
+            (user_id,)
+        )
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO live_chats (user_id, username) VALUES (?, ?)",
+            (user_id, username)
+        )
+        return cursor.lastrowid
+
+
+def end_live_chat(user_id: str):
+    """End the active live chat session for a user."""
+    with get_connection() as conn:
+        conn.execute(
+            "UPDATE live_chats SET is_active=0, ended_at=datetime('now') WHERE user_id=? AND is_active=1",
+            (user_id,)
+        )
+
+
+def get_active_live_chat(user_id: str) -> Optional[dict]:
+    """Get the active live chat session for a user, or None."""
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM live_chats WHERE user_id=? AND is_active=1 ORDER BY id DESC LIMIT 1",
+            (user_id,)
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def is_live_chat_active(user_id: str) -> bool:
+    """Check if a user has an active live chat session."""
+    return get_active_live_chat(user_id) is not None
+
+
+def get_all_active_live_chats() -> list[dict]:
+    """Get all currently active live chat sessions."""
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT * FROM live_chats WHERE is_active=1 ORDER BY started_at DESC"
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def count_active_live_chats() -> int:
+    """Count currently active live chat sessions."""
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT COUNT(*) AS count FROM live_chats WHERE is_active=1"
+        ).fetchone()
+        return int(row["count"]) if row else 0

@@ -15,6 +15,7 @@ numpy
 flask
 flask-wtf
 gunicorn
+requests
 
 # Configuration
 python-dotenv

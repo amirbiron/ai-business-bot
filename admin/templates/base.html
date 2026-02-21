@@ -49,8 +49,9 @@
                     </a>
                 </li>
                 <li>
-                    <a href="/conversations" class="{% if request.endpoint == 'conversations' %}active{% endif %}">
+                    <a href="/conversations" class="{% if request.endpoint in ['conversations', 'live_chat'] %}active{% endif %}">
                         <i class="bi bi-chat-dots"></i> שיחות
+                        <span id="live-chat-badge" class="nav-badge" style="display:none;"></span>
                     </a>
                 </li>
                 <li>
@@ -123,7 +124,7 @@
             });
         });
 
-        // Auto-update notification badge
+        // Auto-update notification badges
         async function updateBadge() {
             try {
                 var resp = await fetch('/api/stats');
@@ -134,6 +135,15 @@
                     badge.style.display = 'flex';
                 } else {
                     badge.style.display = 'none';
+                }
+                var liveBadge = document.getElementById('live-chat-badge');
+                if (liveBadge) {
+                    if (data.active_live_chats > 0) {
+                        liveBadge.textContent = data.active_live_chats;
+                        liveBadge.style.display = 'flex';
+                    } else {
+                        liveBadge.style.display = 'none';
+                    }
                 }
             } catch (e) {}
         }

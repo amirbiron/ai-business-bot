@@ -42,7 +42,7 @@ def run_admin_panel():
 def run_telegram_bot():
     """Start the Telegram bot."""
     from ai_chatbot.bot.telegram_bot import run_bot
-    
+
     if not TELEGRAM_BOT_TOKEN:
         logger.error(
             "TELEGRAM_BOT_TOKEN is not set! "
@@ -50,7 +50,12 @@ def run_telegram_bot():
             "Starting admin panel only..."
         )
         return
-    
+
+    # Clean up live chat sessions from a previous bot run so users aren't
+    # permanently silenced.  Done here (not in init_db) so an admin-only
+    # restart doesn't kill sessions that are still actively managed.
+    db.cleanup_stale_live_chats()
+
     logger.info("Starting Telegram Bot...")
     run_bot()
 

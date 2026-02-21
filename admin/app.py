@@ -18,6 +18,8 @@ from functools import wraps
 from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
 
+import requests as http_requests
+
 from flask import (
     Flask,
     render_template,
@@ -41,6 +43,7 @@ from ai_chatbot.config import (
     ADMIN_HOST,
     ADMIN_PORT,
     BUSINESS_NAME,
+    TELEGRAM_BOT_TOKEN,
 )
 from ai_chatbot.rag.engine import rebuild_index, mark_index_stale, is_index_stale
 
@@ -228,17 +231,20 @@ def create_admin_app() -> Flask:
             "users": db.count_unique_users(),
             "pending_requests": db.count_agent_requests(status="pending"),
             "pending_appointments": db.count_appointments(status="pending"),
+            "active_live_chats": db.count_active_live_chats(),
         }
 
         pending_requests = db.get_agent_requests(status="pending", limit=5)
         pending_appointments = db.get_appointments(status="pending", limit=5)
-        
+        active_live_chats = db.get_all_active_live_chats()
+
         return render_template(
             "dashboard.html",
             business_name=BUSINESS_NAME,
             stats=stats,
             recent_requests=pending_requests,
             recent_appointments=pending_appointments,
+            active_live_chats=active_live_chats,
         )
     
     # ─── Knowledge Base Management ────────────────────────────────────────
@@ -349,22 +355,163 @@ def create_admin_app() -> Flask:
     def conversations():
         users = db.get_unique_users()
         selected_user = request.args.get("user_id", None)
-        
+
         if selected_user:
             messages = db.get_conversation_history(selected_user, limit=100)
         else:
             messages = db.get_all_conversations(limit=200)
-        
+
+        # Build a set of user_ids with active live chats for quick lookup
+        active_live_chats = {lc["user_id"] for lc in db.get_all_active_live_chats()}
+        # Pending agent requests (transfer notifications)
+        pending_requests = db.get_agent_requests(status="pending")
+
         return render_template(
             "conversations.html",
             business_name=BUSINESS_NAME,
             users=users,
             messages=messages,
             selected_user=selected_user,
+            active_live_chats=active_live_chats,
+            pending_requests=pending_requests,
         )
     
+    # ─── Live Chat ────────────────────────────────────────────────────────
+
+    def _send_telegram_message(chat_id: str, text: str) -> bool:
+        """Send a message to a Telegram user via the Bot API."""
+        if not TELEGRAM_BOT_TOKEN:
+            return False
+        try:
+            resp = http_requests.post(
+                f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
+                json={"chat_id": chat_id, "text": text},
+                timeout=10,
+            )
+            return resp.ok
+        except Exception as e:
+            logger.error("Failed to send Telegram message to %s: %s", chat_id, e)
+            return False
+
+    def _get_customer_username(user_id: str) -> str:
+        """Look up the customer's display name for a given user_id."""
+        return db.get_username_for_user(user_id) or user_id
+
+    @app.route("/live-chat/<user_id>")
+    @login_required
+    def live_chat(user_id):
+        live_session = db.get_active_live_chat(user_id)
+        messages = db.get_conversation_history(user_id, limit=100)
+        username = _get_customer_username(user_id)
+        return render_template(
+            "live_chat.html",
+            business_name=BUSINESS_NAME,
+            user_id=user_id,
+            username=username,
+            messages=messages,
+            live_session=live_session,
+        )
+
+    def _do_start_live_chat(user_id: str) -> bool:
+        """Shared logic: activate live chat, notify customer, save message.
+
+        Returns True if the Telegram notification was sent successfully.
+        """
+        username = _get_customer_username(user_id)
+        db.start_live_chat(user_id, username)
+        notify_msg = "👤 נציג אנושי הצטרף לשיחה. כעת תקבלו מענה ישיר."
+        sent = _send_telegram_message(user_id, notify_msg)
+        if sent:
+            db.save_message(user_id, username, "assistant", notify_msg)
+        return sent
+
+    @app.route("/live-chat/<user_id>/start", methods=["POST"])
+    @login_required
+    def live_chat_start(user_id):
+        # Guard against duplicate starts (e.g. double-click, stale tab).
+        if db.is_live_chat_active(user_id):
+            flash("השיחה החיה כבר פעילה.", "info")
+            return redirect(url_for("live_chat", user_id=user_id))
+        sent = _do_start_live_chat(user_id)
+        if not sent:
+            flash("השיחה החיה הופעלה, אך ההודעה ללקוח בטלגרם נכשלה.", "warning")
+        return redirect(url_for("live_chat", user_id=user_id))
+
+    @app.route("/live-chat/<user_id>/end", methods=["POST"])
+    @login_required
+    def live_chat_end(user_id):
+        # Guard against duplicate "end" clicks (e.g. stale page in another tab).
+        if not db.is_live_chat_active(user_id):
+            flash("השיחה החיה כבר הסתיימה.", "info")
+            return redirect(url_for("conversations"))
+        username = _get_customer_username(user_id)
+        # Notify the customer that the bot is back
+        end_msg = "🤖 הבוט חזר לנהל את השיחה. אם תרצו לדבר עם נציג שוב, לחצו על 'דברו עם נציג'."
+        sent = _send_telegram_message(user_id, end_msg)
+        if sent:
+            db.save_message(user_id, username, "assistant", end_msg)
+        # Deactivate *after* sending the notification so the bot stays
+        # suspended until the customer receives the transition message.
+        db.end_live_chat(user_id)
+        if not sent:
+            flash("השיחה הוחזרה לבוט, אך ההודעה ללקוח בטלגרם נכשלה.", "warning")
+        return redirect(url_for("conversations"))
+
+    @app.route("/live-chat/<user_id>/send", methods=["POST"])
+    @login_required
+    def live_chat_send(user_id):
+        # Reject if the session was ended (e.g. from another tab) while
+        # the form was still visible due to stale HTMX state.
+        if not db.is_live_chat_active(user_id):
+            if request.headers.get("HX-Request"):
+                resp = app.make_response(("", 409))
+                resp.headers["HX-Trigger"] = json.dumps(
+                    {"showToast": {"message": "השיחה החיה הסתיימה. רעננו את הדף.", "type": "warning"}}
+                )
+                return resp
+            flash("השיחה החיה הסתיימה.", "warning")
+            return redirect(url_for("live_chat", user_id=user_id))
+
+        message_text = request.form.get("message", "").strip()
+        if not message_text:
+            if request.headers.get("HX-Request"):
+                return "", 422
+            flash("לא ניתן לשלוח הודעה ריקה.", "danger")
+            return redirect(url_for("live_chat", user_id=user_id))
+
+        # Send via Telegram
+        sent = _send_telegram_message(user_id, message_text)
+        if not sent:
+            if request.headers.get("HX-Request"):
+                resp = app.make_response(("", 500))
+                resp.headers["HX-Trigger"] = json.dumps(
+                    {"showToast": {"message": "שליחת ההודעה בטלגרם נכשלה.", "type": "danger"}}
+                )
+                return resp
+            flash("שליחת ההודעה בטלגרם נכשלה.", "danger")
+            return redirect(url_for("live_chat", user_id=user_id))
+
+        # Save in conversation history using the customer's display name
+        # so get_unique_users() isn't corrupted by BUSINESS_NAME.
+        username = _get_customer_username(user_id)
+        db.save_message(user_id, username, "assistant", message_text)
+
+        if request.headers.get("HX-Request"):
+            # Return updated messages list
+            messages = db.get_conversation_history(user_id, limit=100)
+            return render_template("partials/live_chat_messages.html", messages=messages)
+
+        return redirect(url_for("live_chat", user_id=user_id))
+
+    @app.route("/api/live-chat/<user_id>/messages")
+    @login_required
+    def api_live_chat_messages(user_id):
+        """Polling endpoint for live chat messages (HTMX)."""
+        messages = db.get_conversation_history(user_id, limit=100)
+        return render_template("partials/live_chat_messages.html", messages=messages)
+
     # ─── Agent Requests ───────────────────────────────────────────────────
-    
+
     @app.route("/requests")
     @login_required
     def agent_requests():
@@ -389,6 +536,7 @@ def create_admin_app() -> Flask:
             flash("סטטוס לא חוקי.", "danger")
             return redirect(url_for("agent_requests"))
         db.update_agent_request_status(request_id, status)
+
         if request.headers.get("HX-Request"):
             req = db.get_agent_request(request_id)
             if req:
@@ -439,6 +587,7 @@ def create_admin_app() -> Flask:
         return jsonify({
             "pending_requests": db.count_agent_requests(status="pending"),
             "pending_appointments": db.count_appointments(status="pending"),
+            "active_live_chats": db.count_active_live_chats(),
         })
     
     return app
