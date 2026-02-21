@@ -13,6 +13,7 @@ Features:
 
 import asyncio
 import logging
+import time
 from io import BytesIO
 from telegram import (
     Update,
@@ -36,9 +37,10 @@ from ai_chatbot.config import (
     TELEGRAM_OWNER_CHAT_ID,
     FALLBACK_RESPONSE,
     CONTEXT_WINDOW_SIZE,
+    FOLLOW_UP_ENABLED,
 )
 from ai_chatbot.live_chat_service import live_chat_guard, live_chat_guard_booking
-from ai_chatbot.rate_limiter import rate_limit_guard, rate_limit_guard_booking
+from ai_chatbot.rate_limiter import rate_limit_guard, rate_limit_guard_booking, check_rate_limit, record_message
 from ai_chatbot.vacation_service import (
     VacationService,
     vacation_guard_booking,
@@ -84,6 +86,14 @@ async def _reply_markdown_safe(message, text: str, **kwargs):
         return await message.reply_text(text, **kwargs)
 
 
+async def _send_markdown_safe(bot, chat_id: int, text: str, **kwargs):
+    """שליחת הודעה עם Markdown ל-chat_id, עם fallback לטקסט רגיל."""
+    try:
+        return await bot.send_message(chat_id=chat_id, text=text, parse_mode="Markdown", **kwargs)
+    except BadRequest:
+        return await bot.send_message(chat_id=chat_id, text=text, **kwargs)
+
+
 def _get_main_keyboard() -> ReplyKeyboardMarkup:
     """Create the main menu keyboard with action buttons."""
     keyboard = [
@@ -120,6 +130,57 @@ def _should_handoff_to_human(text: str) -> bool:
     if "תנו לי להעביר" in t and "נציג אנושי" in t:
         return True
     return False
+
+
+# ─── Follow-up Questions (שאלות המשך) ────────────────────────────────────
+
+# קידומת callback_data לשאלות המשך — הטקסט מאוחסן ב-context.bot_data
+FOLLOW_UP_CB_PREFIX = "followup_"
+
+# זמן תפוגה (בשניות) לכפתורי שאלות המשך שלא נלחצו — מנקים כדי למנוע דליפת זיכרון
+_FOLLOW_UP_TTL_SECONDS = 3600  # שעה
+
+
+def _cleanup_stale_follow_ups(bot_data: dict) -> None:
+    """ניקוי רשומות שאלות המשך ישנות מ-bot_data כדי למנוע צמיחה בלתי מוגבלת."""
+    now = int(time.time())
+    stale_keys = []
+    for key in bot_data:
+        if not key.startswith(FOLLOW_UP_CB_PREFIX):
+            continue
+        # חילוץ ה-timestamp מהמפתח: followup_{user_id}_{timestamp}_{index}
+        parts = key.split("_")
+        try:
+            ts = int(parts[-2])
+            if now - ts > _FOLLOW_UP_TTL_SECONDS:
+                stale_keys.append(key)
+        except (ValueError, IndexError):
+            continue
+    for key in stale_keys:
+        bot_data.pop(key, None)
+
+
+def _build_follow_up_keyboard(questions: list[str], bot_data: dict, user_id: str) -> InlineKeyboardMarkup | None:
+    """בניית מקלדת inline עם שאלות המשך.
+
+    שומר את טקסט השאלה ב-bot_data כדי לאפשר שליפה ב-callback
+    (callback_data מוגבל ל-64 בתים בטלגרם).
+    המפתח כולל user_id למניעת התנגשויות בין משתמשים בו-זמניים.
+    """
+    if not questions:
+        return None
+
+    # ניקוי רשומות ישנות שלא נלחצו
+    _cleanup_stale_follow_ups(bot_data)
+
+    buttons = []
+    now = int(time.time())
+    for i, q in enumerate(questions):
+        # מזהה ייחודי לכל שאלה — כולל user_id למניעת התנגשויות
+        cb_id = f"{FOLLOW_UP_CB_PREFIX}{user_id}_{now}_{i}"
+        bot_data[cb_id] = q
+        buttons.append([InlineKeyboardButton(f"💡 {q}", callback_data=cb_id)])
+    return InlineKeyboardMarkup(buttons)
 
 
 async def _create_request_and_notify_owner(
@@ -163,6 +224,8 @@ async def _handoff_to_human(
     display_name: str,
     telegram_username: str,
     reason: str,
+    *,
+    chat_id: int | None = None,
 ) -> None:
     await _create_request_and_notify_owner(
         context,
@@ -174,10 +237,18 @@ async def _handoff_to_human(
 
     response_text = FALLBACK_RESPONSE
     db.save_message(user_id, display_name, "assistant", response_text)
-    await update.message.reply_text(
-        response_text,
-        reply_markup=_get_main_keyboard(),
-    )
+    # callback queries לא מספקים update.message — שליחה ישירה לצ'אט
+    if chat_id is not None and update.message is None:
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=response_text,
+            reply_markup=_get_main_keyboard(),
+        )
+    else:
+        await update.message.reply_text(
+            response_text,
+            reply_markup=_get_main_keyboard(),
+        )
 
 
 # ─── /start Command ──────────────────────────────────────────────────────────
@@ -644,9 +715,17 @@ async def _handle_rag_query(
     user_message: str,
     query: str,
     handoff_reason: str,
+    chat_id: int | None = None,
 ) -> None:
-    """Run the RAG + LLM pipeline and send the result (or hand off to a human)."""
-    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
+    """הרצת צינור RAG + LLM ושליחת התוצאה (או העברה לנציג).
+
+    כש-chat_id מסופק ו-update.message לא קיים (למשל callback query),
+    השליחה נעשית ישירות לצ'אט במקום כ-reply.
+    """
+    effective_chat_id = chat_id or update.effective_chat.id
+    use_direct_send = chat_id is not None and update.message is None
+
+    await context.bot.send_chat_action(chat_id=effective_chat_id, action="typing")
 
     history = db.get_conversation_history(user_id, limit=CONTEXT_WINDOW_SIZE)
     db.save_message(user_id, display_name, "user", user_message)
@@ -666,10 +745,32 @@ async def _handle_rag_query(
             display_name=display_name,
             telegram_username=telegram_username,
             reason=handoff_reason,
+            chat_id=effective_chat_id,
         )
     else:
         db.save_message(user_id, display_name, "assistant", result["answer"], ", ".join(result["sources"]))
-        await _reply_markdown_safe(update.message, stripped, reply_markup=_get_main_keyboard())
+        if use_direct_send:
+            await _send_markdown_safe(context.bot, effective_chat_id, stripped, reply_markup=_get_main_keyboard())
+        else:
+            await _reply_markdown_safe(update.message, stripped, reply_markup=_get_main_keyboard())
+
+        # שאלות המשך — שליחה כהודעה נפרדת עם כפתורי inline
+        follow_up_qs = result.get("follow_up_questions", [])
+        if FOLLOW_UP_ENABLED and follow_up_qs:
+            follow_up_kb = _build_follow_up_keyboard(follow_up_qs, context.bot_data, user_id)
+            if follow_up_kb:
+                if use_direct_send:
+                    await _send_markdown_safe(
+                        context.bot, effective_chat_id,
+                        "💡 *אולי תרצו גם לשאול:*",
+                        reply_markup=follow_up_kb,
+                    )
+                else:
+                    await update.message.reply_text(
+                        "💡 *אולי תרצו גם לשאול:*",
+                        parse_mode="Markdown",
+                        reply_markup=follow_up_kb,
+                    )
 
     context.application.create_task(_summarize_safe(user_id))
 
@@ -890,6 +991,64 @@ async def _check_high_engagement_referral(update: Update, user_id: str):
 
     if should_send:
         await _maybe_send_referral_code(update, user_id)
+
+
+# ─── Follow-up Question Callback ─────────────────────────────────────────────
+
+async def follow_up_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """טיפול בלחיצה על כפתור שאלת המשך — שולח את השאלה כאילו המשתמש הקליד אותה."""
+    query = update.callback_query
+    await query.answer()
+
+    from ai_chatbot.live_chat_service import LiveChatService
+    user = update.effective_user
+    if LiveChatService.is_active(str(user.id)):
+        return
+
+    user_id, display_name, telegram_username = _get_user_info(update)
+
+    # בדיקת rate limit — שאלות המשך צורכות קריאת LLM כמו הודעה רגילה
+    limit_msg = check_rate_limit(user_id)
+    if limit_msg is not None:
+        try:
+            await query.edit_message_text(limit_msg, parse_mode="Markdown")
+        except Exception:
+            await query.edit_message_text(limit_msg)
+        return
+
+    cb_data = query.data
+    # שליפת טקסט השאלה מ-bot_data (נתונים in-memory — נמחקים ברסטרט)
+    question_text = context.bot_data.pop(cb_data, None)
+    if not question_text:
+        logger.warning("follow_up_callback: missing question for %s", cb_data)
+        try:
+            await query.edit_message_text("⏳ השאלה כבר לא זמינה. אפשר לשאול אותי ישירות!")
+        except Exception as e:
+            logger.error("Failed to edit expired follow-up message: %s", e)
+        return
+
+    # רישום rate limit רק אחרי שוידאנו שהשאלה קיימת
+    record_message(user_id)
+
+    chat_id = update.effective_chat.id
+
+    # עדכון ההודעה המקורית — להראות איזו שאלה נבחרה
+    try:
+        await query.edit_message_text(f"💡 {question_text}")
+    except Exception as e:
+        logger.error("Failed to edit follow-up message: %s", e)
+
+    # שימוש בצינור RAG המשותף
+    await _handle_rag_query(
+        update, context,
+        user_id=user_id,
+        display_name=display_name,
+        telegram_username=telegram_username,
+        user_message=question_text,
+        query=question_text,
+        handoff_reason=f"הלקוח שאל שאלת המשך: {question_text}",
+        chat_id=chat_id,
+    )
 
 
 # ─── Error Handler ───────────────────────────────────────────────────────────
