@@ -302,8 +302,8 @@ async def location_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ─── Talk to Agent Button ────────────────────────────────────────────────────
 
-@vacation_guard_agent
 @rate_limit_guard
+@vacation_guard_agent
 @live_chat_guard
 async def talk_to_agent_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle the Talk to Agent button — notify the business owner."""
@@ -335,8 +335,8 @@ async def talk_to_agent_handler(update: Update, context: ContextTypes.DEFAULT_TY
 
 # ─── Appointment Booking Flow ────────────────────────────────────────────────
 
-@vacation_guard_booking
 @rate_limit_guard_booking
+@vacation_guard_booking
 @live_chat_guard_booking
 async def booking_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Start the appointment booking conversation."""

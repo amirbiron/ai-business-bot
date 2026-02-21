@@ -6,7 +6,8 @@ VacationService — שירות מצב חופשה / חירום.
 - בקשות תורים מקבלות הודעת חופשה עם תאריך חזרה.
 - בקשות לנציג אנושי מקבלות הודעת חופשה.
 
-מספק decorator (guard) שנכנס לפני rate_limit_guard בשרשרת ה-handlers.
+מספק decorator (guard) שנכנס אחרי rate_limit_guard בשרשרת ה-handlers,
+כך ש-__wrapped__ מדלג על rate_limit בלבד ועדיין עובר דרך vacation guard.
 """
 
 import logging
@@ -78,27 +79,6 @@ class VacationService:
 
 
 # ── Bot-Layer Decorators ─────────────────────────────────────────────────────
-
-
-def vacation_guard(handler):
-    """Decorator עבור handlers רגילים — חוסם בקשות תורים ונציג בזמן חופשה.
-
-    משמש על booking_start ו-talk_to_agent_handler.
-    לא חוסם שאלות מידע כלליות (message_handler עובר כרגיל).
-    """
-
-    @wraps(handler)
-    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
-        if not VacationService.is_active():
-            return await handler(update, context)
-
-        # חופשה פעילה — שולח הודעת חופשה במקום להפעיל את ה-handler
-        if update.message:
-            msg = VacationService.get_booking_message()
-            await update.message.reply_text(msg)
-        return
-
-    return wrapper
 
 
 def vacation_guard_booking(handler):

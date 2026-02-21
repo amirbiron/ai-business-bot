@@ -44,6 +44,7 @@ from ai_chatbot.config import (
 )
 from ai_chatbot.rag.engine import rebuild_index, mark_index_stale, is_index_stale
 from ai_chatbot.live_chat_service import LiveChatService
+from ai_chatbot.vacation_service import VacationService
 from ai_chatbot.business_hours import DAY_NAMES_HE
 
 logger = logging.getLogger(__name__)
@@ -687,30 +688,9 @@ def create_admin_app() -> Flask:
             return redirect(url_for("vacation_mode"))
 
         vacation = db.get_vacation_mode()
-        # תצוגה מקדימה של הודעות החופשה
-        end_date = vacation.get("vacation_end_date", "").strip()
-        if end_date:
-            preview_booking = (
-                f"אנחנו בחופשה עד {end_date}.\n"
-                f"ניתן לקבוע תורים החל מ-{end_date}.\n"
-                "בינתיים, אתם מוזמנים לשאול אותי כל שאלה על השירותים שלנו!"
-            )
-            preview_agent = (
-                f"אנחנו בחופשה עד {end_date}.\n"
-                "ניצור קשר כשנחזור.\n"
-                "בינתיים, אני יכול לענות על שאלות לגבי השירותים שלנו!"
-            )
-        else:
-            preview_booking = (
-                "אנחנו כרגע בחופשה.\n"
-                "נחזור בקרוב — עקבו אחרי העדכונים שלנו.\n"
-                "בינתיים, אתם מוזמנים לשאול אותי כל שאלה על השירותים שלנו!"
-            )
-            preview_agent = (
-                "אנחנו כרגע בחופשה.\n"
-                "ניצור קשר כשנחזור.\n"
-                "בינתיים, אני יכול לענות על שאלות לגבי השירותים שלנו!"
-            )
+        # תצוגה מקדימה — משתמש ב-VacationService כדי שהטקסט תמיד יתאים למה שהלקוח רואה
+        preview_booking = VacationService.get_booking_message()
+        preview_agent = VacationService.get_agent_message()
         return render_template(
             "vacation_mode.html",
             business_name=BUSINESS_NAME,
