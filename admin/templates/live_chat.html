@@ -86,9 +86,15 @@
     }
     // Scroll on initial page load
     scrollToBottom();
-    // Capture scroll position *before* HTMX replaces the DOM
+    // דילוג על swap אם התוכן לא השתנה — מונע בהוב מיותר
     document.body.addEventListener('htmx:beforeSwap', function(e) {
         if (e.detail.target && e.detail.target.id === 'live-chat-messages') {
+            var newHtml = (e.detail.serverResponse || '').trim();
+            var oldHtml = e.detail.target.innerHTML.trim();
+            if (newHtml === oldHtml) {
+                e.detail.shouldSwap = false;
+                return;
+            }
             _wasNearBottom = checkNearBottom();
         }
     });
