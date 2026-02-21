@@ -677,6 +677,10 @@ async def cancel_appointment_callback(update: Update, context: ContextTypes.DEFA
 
     user_id, display_name, telegram_username = _get_user_info(update)
 
+    # If a live chat started after the inline buttons were shown, stay silent.
+    if db.is_live_chat_active(user_id):
+        return
+
     if query.data == "cancel_appt_yes":
         await _create_request_and_notify_owner(
             context,

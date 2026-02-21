@@ -519,18 +519,6 @@ def create_admin_app() -> Flask:
             return redirect(url_for("agent_requests"))
         db.update_agent_request_status(request_id, status)
 
-        # Only start a live chat when the request is being marked as handled
-        # (not dismissed or other statuses) to avoid contradictory state.
-        start_chat = request.form.get("start_live_chat")
-        if start_chat and status == "handled":
-            req = db.get_agent_request(request_id)
-            if req:
-                uid = req["user_id"]
-                sent = _do_start_live_chat(uid)
-                if not sent:
-                    flash("השיחה החיה הופעלה, אך ההודעה ללקוח בטלגרם נכשלה.", "warning")
-                return redirect(url_for("live_chat", user_id=uid))
-
         if request.headers.get("HX-Request"):
             req = db.get_agent_request(request_id)
             if req:
