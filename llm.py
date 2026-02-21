@@ -56,32 +56,29 @@ def _build_messages(
         "content": SYSTEM_PROMPT
     })
 
-    # Layer B — RAG context
+    # Layer B — RAG context + business hours context
+    # Build hours context first so it can be included in the combined message
+    hours_section = ""
+    try:
+        hours_context = get_hours_context_for_llm()
+        hours_section = (
+            "\n\nמידע שעות פעילות (מעודכן בזמן אמת):\n\n"
+            f"{hours_context}"
+        )
+    except Exception:
+        pass  # Don't break the pipeline if hours context fails
+
     context_message = (
-        "מידע הקשר (השתמש רק במידע זה כדי לענות על שאלת הלקוח):\n\n"
-        f"{context}\n\n"
-        "חשוב: בסס את תשובתך רק על המידע למעלה. "
+        "מידע הקשר:\n\n"
+        f"{context}"
+        f"{hours_section}\n\n"
+        "חשוב: בסס את תשובתך רק על המידע למעלה (כולל מידע הקשר ושעות הפעילות). "
         "תמיד סיים את התשובה עם 'מקור: [שם המקור]' בציון ההקשר שבו השתמשת."
     )
     messages.append({
         "role": "system",
         "content": context_message
     })
-
-    # Business hours context (real-time status)
-    try:
-        hours_context = get_hours_context_for_llm()
-        messages.append({
-            "role": "system",
-            "content": (
-                "מידע שעות פעילות (מעודכן בזמן אמת):\n\n"
-                f"{hours_context}\n\n"
-                "השתמש במידע זה כדי לענות על שאלות לגבי שעות פתיחה, "
-                "האם העסק פתוח/סגור, ומידע על חגים וימים מיוחדים."
-            ),
-        })
-    except Exception:
-        pass  # Don't break the pipeline if hours context fails
 
     # Conversation summary (condensed older messages)
     if conversation_summary:
