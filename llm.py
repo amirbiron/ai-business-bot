@@ -22,6 +22,7 @@ from ai_chatbot.config import (
 )
 from ai_chatbot.rag.engine import retrieve, format_context
 from ai_chatbot import database as db
+from ai_chatbot.business_hours import get_hours_context_for_llm
 
 logger = logging.getLogger(__name__)
 
@@ -55,11 +56,23 @@ def _build_messages(
         "content": SYSTEM_PROMPT
     })
 
-    # Layer B — RAG context
+    # Layer B — RAG context + business hours context
+    # Build hours context first so it can be included in the combined message
+    hours_section = ""
+    try:
+        hours_context = get_hours_context_for_llm()
+        hours_section = (
+            "\n\nמידע שעות פעילות (מעודכן בזמן אמת):\n\n"
+            f"{hours_context}"
+        )
+    except Exception as e:
+        logger.error("Failed to build business hours context: %s", e)
+
     context_message = (
-        "מידע הקשר (השתמש רק במידע זה כדי לענות על שאלת הלקוח):\n\n"
-        f"{context}\n\n"
-        "חשוב: בסס את תשובתך רק על המידע למעלה. "
+        "מידע הקשר:\n\n"
+        f"{context}"
+        f"{hours_section}\n\n"
+        "חשוב: בסס את תשובתך רק על המידע למעלה (כולל מידע הקשר ושעות הפעילות). "
         "תמיד סיים את התשובה עם 'מקור: [שם המקור]' בציון ההקשר שבו השתמשת."
     )
     messages.append({

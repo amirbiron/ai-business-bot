@@ -4,6 +4,7 @@ Intent Detection Module — classifies user messages to optimize routing.
 Supported intents (checked in priority order):
   GREETING              — "Hi", "Hello", "שלום"           → Direct response (no RAG)
   FAREWELL              — "Thanks", "Bye", "תודה"         → Direct response + feedback
+  BUSINESS_HOURS        — "Are you open?", "שעות פתיחה"   → Direct response (hours status)
   PRICING               — "How much?", "כמה עולה?"       → Targeted RAG (pricing)
   APPOINTMENT_BOOKING   — "Want appointment", "רוצה תור"  → Trigger booking flow
   APPOINTMENT_CANCEL    — "Want to cancel", "לבטל תור"    → Trigger cancellation flow
@@ -22,6 +23,7 @@ logger = logging.getLogger(__name__)
 class Intent(Enum):
     GREETING = "greeting"
     FAREWELL = "farewell"
+    BUSINESS_HOURS = "business_hours"
     APPOINTMENT_BOOKING = "appointment_booking"
     APPOINTMENT_CANCEL = "appointment_cancel"
     PRICING = "pricing"
@@ -52,6 +54,25 @@ _INTENT_PATTERNS: list[tuple[Intent, re.Pattern]] = [
             r"thanks|thank you|bye|goodbye|see you|have a good day|good night"
             r"|תודה|תודה רבה|ביי|ביביי|להתראות|יום טוב|לילה טוב|שבוע טוב|יאללה ביי"
             r")[.!?\s]*$",
+            re.IGNORECASE,
+        ),
+    ),
+    # Business hours — "are you open?", "when do you close?", "שעות פתיחה"
+    (
+        Intent.BUSINESS_HOURS,
+        re.compile(
+            r"("
+            r"are\s*you\s*open|when\s*(do\s*you|are\s*you)\s*(open|close)"
+            r"|what\s*(are\s*)?your\s*hours|opening\s*hours|business\s*hours"
+            r"|what\s*time\s*(do\s*you|are\s*you)\s*(open|close)"
+            r"|is\s*(the\s*)?(store|shop|salon)\s*open"
+            r"|שעות\s*פתיחה|שעות\s*פעילות|שעות\s*עבודה"
+            r"|מתי\s*(אתם\s*)?(פותחים|סוגרים|פתוחים)"
+            r"|אתם\s*פתוחים|פתוח\s*היום|פתוח\s*עכשיו|פתוחים\s*היום|פתוחים\s*עכשיו"
+            r"|האם\s*(אתם\s*)?פתוחים|סגור\s*היום|סגורים\s*היום"
+            r"|עד\s*מתי\s*(אתם\s*)?(פתוחים|פתוח)|עד\s*כמה\s*(אתם\s*)?פתוחים"
+            r"|מה\s*שעות\s*(הפתיחה|הפעילות)"
+            r")",
             re.IGNORECASE,
         ),
     ),

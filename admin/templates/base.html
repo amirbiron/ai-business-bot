@@ -66,6 +66,11 @@
                     </a>
                 </li>
                 <li>
+                    <a href="/business-hours" class="{% if request.endpoint == 'business_hours' %}active{% endif %}">
+                        <i class="bi bi-clock"></i> שעות פעילות
+                    </a>
+                </li>
+                <li>
                     <a href="/knowledge-gaps" class="{% if request.endpoint == 'knowledge_gaps' %}active{% endif %}">
                         <i class="bi bi-question-circle"></i> פערי ידע
                         <span id="gaps-badge" class="nav-badge" style="display:none;"></span>

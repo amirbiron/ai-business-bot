@@ -133,6 +133,28 @@ def init_db():
                 resolved_at TEXT
             );
 
+            -- Business hours (weekly schedule)
+            CREATE TABLE IF NOT EXISTS business_hours (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                day_of_week INTEGER NOT NULL CHECK(day_of_week BETWEEN 0 AND 6),
+                open_time   TEXT,
+                close_time  TEXT,
+                is_closed   INTEGER DEFAULT 0,
+                UNIQUE(day_of_week)
+            );
+
+            -- Special days (holidays, one-time closures, custom hours)
+            CREATE TABLE IF NOT EXISTS special_days (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                date        TEXT NOT NULL UNIQUE,
+                name        TEXT NOT NULL,
+                open_time   TEXT,
+                close_time  TEXT,
+                is_closed   INTEGER DEFAULT 1,
+                notes       TEXT DEFAULT '',
+                created_at  TEXT DEFAULT (datetime('now'))
+            );
+
             -- Create indexes
             CREATE INDEX IF NOT EXISTS idx_kb_entries_category ON kb_entries(category);
             CREATE INDEX IF NOT EXISTS idx_kb_chunks_entry ON kb_chunks(entry_id);
@@ -141,6 +163,7 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_conversation_summaries_user ON conversation_summaries(user_id);
             CREATE INDEX IF NOT EXISTS idx_live_chats_user_active ON live_chats(user_id, is_active);
             CREATE INDEX IF NOT EXISTS idx_unanswered_questions_status ON unanswered_questions(status);
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_special_days_date_unique ON special_days(date);
         """)
 
         # Lightweight migrations for existing databases (SQLite can only ADD COLUMN).
@@ -177,6 +200,25 @@ def init_db():
                     "UPDATE conversation_summaries SET last_summarized_message_id = ? WHERE id = ?",
                     (last_msg["id"], row["id"]),
                 )
+
+        # Migrate special_days: deduplicate and add UNIQUE index on date.
+        # Check if the unique index already exists.
+        existing_indexes = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='special_days' AND name='idx_special_days_date_unique'"
+        ).fetchone()
+        if not existing_indexes:
+            # Remove duplicates, keeping the most recent entry per date
+            conn.execute("""
+                DELETE FROM special_days WHERE id NOT IN (
+                    SELECT MAX(id) FROM special_days GROUP BY date
+                )
+            """)
+            # The idx_special_days_date index (non-unique) was created above;
+            # drop it and create a unique one instead.
+            conn.execute("DROP INDEX IF EXISTS idx_special_days_date")
+            conn.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_special_days_date_unique ON special_days(date)"
+            )
 
 
 def cleanup_stale_live_chats():
@@ -756,3 +798,129 @@ def get_unanswered_question(question_id: int) -> Optional[dict]:
             "SELECT * FROM unanswered_questions WHERE id=?", (question_id,)
         ).fetchone()
         return dict(row) if row else None
+
+
+# ─── Business Hours ─────────────────────────────────────────────────────────
+
+def get_all_business_hours() -> list[dict]:
+    """Get all business hours entries, ordered by day of week."""
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT * FROM business_hours ORDER BY day_of_week"
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def get_business_hours_for_day(day_of_week: int) -> Optional[dict]:
+    """Get business hours for a specific day of week (0=Sunday .. 6=Saturday)."""
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM business_hours WHERE day_of_week=?",
+            (day_of_week,),
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def upsert_business_hours(day_of_week: int, open_time: str, close_time: str, is_closed: bool):
+    """Insert or update business hours for a day of week."""
+    with get_connection() as conn:
+        conn.execute(
+            """INSERT INTO business_hours (day_of_week, open_time, close_time, is_closed)
+               VALUES (?, ?, ?, ?)
+               ON CONFLICT(day_of_week)
+               DO UPDATE SET open_time=excluded.open_time,
+                             close_time=excluded.close_time,
+                             is_closed=excluded.is_closed""",
+            (day_of_week, open_time, close_time, int(is_closed)),
+        )
+
+
+def seed_default_business_hours():
+    """Populate default business hours if table is empty."""
+    with get_connection() as conn:
+        count = conn.execute("SELECT COUNT(*) AS c FROM business_hours").fetchone()["c"]
+        if count > 0:
+            return
+        defaults = [
+            # day_of_week, open_time, close_time, is_closed
+            (0, "09:00", "19:00", 0),  # Sunday
+            (1, "09:00", "19:00", 0),  # Monday
+            (2, "09:00", "20:00", 0),  # Tuesday
+            (3, "09:00", "19:00", 0),  # Wednesday
+            (4, "09:00", "19:00", 0),  # Thursday
+            (5, "09:00", "14:00", 0),  # Friday
+            (6, None, None, 1),        # Saturday — closed
+        ]
+        conn.executemany(
+            "INSERT INTO business_hours (day_of_week, open_time, close_time, is_closed) VALUES (?, ?, ?, ?)",
+            defaults,
+        )
+
+
+# ─── Special Days (Holidays & Exceptions) ───────────────────────────────────
+
+def get_all_special_days() -> list[dict]:
+    """Get all special days, ordered by date."""
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT * FROM special_days ORDER BY date"
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def get_special_day_by_date(date_str: str) -> Optional[dict]:
+    """Get a special day entry for a given date (YYYY-MM-DD)."""
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM special_days WHERE date=?", (date_str,)
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def add_special_day(
+    date_str: str,
+    name: str,
+    is_closed: bool = True,
+    open_time: str = None,
+    close_time: str = None,
+    notes: str = "",
+) -> int:
+    """Add or replace a special day for the given date. Returns the entry ID.
+
+    Uses INSERT OR REPLACE so that admin overrides for an existing date
+    (e.g. overriding a seeded holiday) take effect instead of silently
+    creating a duplicate.
+    """
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """INSERT OR REPLACE INTO special_days (date, name, open_time, close_time, is_closed, notes)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (date_str, name, open_time, close_time, int(is_closed), notes),
+        )
+        return cursor.lastrowid
+
+
+def update_special_day(
+    special_day_id: int,
+    date_str: str,
+    name: str,
+    is_closed: bool = True,
+    open_time: str = None,
+    close_time: str = None,
+    notes: str = "",
+):
+    """Update an existing special day."""
+    with get_connection() as conn:
+        conn.execute(
+            """UPDATE special_days
+               SET date=?, name=?, open_time=?, close_time=?, is_closed=?, notes=?
+               WHERE id=?""",
+            (date_str, name, open_time, close_time, int(is_closed), notes, special_day_id),
+        )
+
+
+def delete_special_day(special_day_id: int):
+    """Delete a special day entry."""
+    with get_connection() as conn:
+        conn.execute("DELETE FROM special_days WHERE id=?", (special_day_id,))

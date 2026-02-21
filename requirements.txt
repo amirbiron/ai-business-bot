@@ -17,5 +17,8 @@ flask-wtf
 gunicorn
 requests
 
+# Business Hours & Holidays
+holidays
+
 # Configuration
 python-dotenv
