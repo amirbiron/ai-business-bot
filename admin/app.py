@@ -49,7 +49,8 @@ from ai_chatbot.config import (
     BUSINESS_WEBSITE,
 )
 from ai_chatbot.rag.engine import rebuild_index, mark_index_stale, is_index_stale
-from ai_chatbot.live_chat_service import LiveChatService
+from ai_chatbot.live_chat_service import LiveChatService, send_telegram_message
+from ai_chatbot.referral_service import try_send_referral_code
 from ai_chatbot.vacation_service import VacationService
 from ai_chatbot.business_hours import DAY_NAMES_HE
 
@@ -238,6 +239,7 @@ def create_admin_app() -> Flask:
     @app.route("/")
     @login_required
     def dashboard():
+        referral_stats = db.get_referral_stats()
         stats = {
             "kb_entries": db.count_kb_entries(active_only=True),
             "categories": db.count_kb_categories(active_only=True),
@@ -246,6 +248,7 @@ def create_admin_app() -> Flask:
             "pending_appointments": db.count_appointments(status="pending"),
             "active_live_chats": LiveChatService.count_active(),
             "open_knowledge_gaps": db.count_unanswered_questions(status="open"),
+            "completed_referrals": referral_stats["completed_referrals"],
         }
 
         pending_requests = db.get_agent_requests(status="pending", limit=5)
@@ -557,6 +560,28 @@ def create_admin_app() -> Flask:
             flash("סטטוס לא חוקי.", "danger")
             return redirect(url_for("appointments"))
         db.update_appointment_status(appt_id, status)
+
+        # הפעלת מערכת הפניות — כשתור מאושר, בודקים אם הלקוח הגיע דרך הפניה
+        if status == "confirmed":
+            appt = db.get_appointment(appt_id)
+            if appt:
+                user_id = appt["user_id"]
+                if db.has_pending_referral(user_id):
+                    activated = db.complete_referral(user_id)
+                    if activated:
+                        logger.info(
+                            "Referral completed for user %s (appointment #%d)",
+                            user_id, appt_id,
+                        )
+
+                # שליחת קוד הפניה ללקוח אחרי אישור תור
+                # try_send_referral_code — לוגיקה משותפת לבוט ולאדמין:
+                # generate → mark → send → unmark on failure
+                try_send_referral_code(
+                    user_id,
+                    send_fn=lambda text: send_telegram_message(user_id, text),
+                )
+
         if request.headers.get("HX-Request"):
             appt = db.get_appointment(appt_id)
             if appt:
@@ -703,6 +728,28 @@ def create_admin_app() -> Flask:
             vacation=vacation,
             preview_booking=preview_booking,
             preview_agent=preview_agent,
+        )
+
+    # ─── Referrals (מערכת הפניות) ────────────────────────────────────────
+
+    @app.route("/referrals")
+    @login_required
+    def referrals():
+        stats = db.get_referral_stats()
+        top_referrers = db.get_top_referrers(limit=10)
+        all_referrals = db.get_all_referrals(limit=50)
+
+        # הוספת שמות תצוגה למפנים מובילים
+        for ref in top_referrers:
+            name = db.get_username_for_user(ref["referrer_id"])
+            ref["display_name"] = name or ref["referrer_id"]
+
+        return render_template(
+            "referrals.html",
+            business_name=BUSINESS_NAME,
+            stats=stats,
+            top_referrers=top_referrers,
+            all_referrals=all_referrals,
         )
 
     # ─── QR Code ──────────────────────────────────────────────────────────

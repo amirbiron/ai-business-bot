@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 # ── Telegram & Username Helpers ──────────────────────────────────────────────
 
 
-def _send_telegram_message(chat_id: str, text: str) -> bool:
+def send_telegram_message(chat_id: str, text: str) -> bool:
     """Send a message to a Telegram user via the Bot HTTP API."""
     if not TELEGRAM_BOT_TOKEN:
         return False
@@ -104,7 +104,7 @@ class LiveChatService:
         db.start_live_chat(user_id, username)
 
         notify_msg = "👤 נציג אנושי הצטרף לשיחה. כעת תקבלו מענה ישיר."
-        sent = _send_telegram_message(user_id, notify_msg)
+        sent = send_telegram_message(user_id, notify_msg)
         if sent:
             db.save_message(user_id, username, "assistant", notify_msg)
 
@@ -130,7 +130,7 @@ class LiveChatService:
             "🤖 הבוט חזר לנהל את השיחה. "
             "אם תרצו לדבר עם נציג שוב, לחצו על 'דברו עם נציג'."
         )
-        sent = _send_telegram_message(user_id, end_msg)
+        sent = send_telegram_message(user_id, end_msg)
         if sent:
             db.save_message(user_id, username, "assistant", end_msg)
 
@@ -155,7 +155,7 @@ class LiveChatService:
         if not message_text or not message_text.strip():
             return False, "empty_message"
 
-        sent = _send_telegram_message(user_id, message_text)
+        sent = send_telegram_message(user_id, message_text)
         if not sent:
             return False, "telegram_failed"
 

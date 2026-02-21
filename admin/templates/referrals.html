@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header animate-fade-in">
+    <h1><i class="bi bi-people-fill"></i> מערכת הפניות</h1>
+</div>
+
+<!-- סטטיסטיקות -->
+<div class="stats-grid">
+    <div class="stat-card gradient-blue animate-slide-up stagger-1">
+        <div class="stat-icon"><i class="bi bi-share"></i></div>
+        <div class="stat-value">{{ stats.total_referrals }}</div>
+        <div class="stat-label">סה"כ הפניות</div>
+    </div>
+    <div class="stat-card gradient-success animate-slide-up stagger-2">
+        <div class="stat-icon"><i class="bi bi-check-circle"></i></div>
+        <div class="stat-value">{{ stats.completed_referrals }}</div>
+        <div class="stat-label">הפניות שהושלמו</div>
+    </div>
+    <div class="stat-card gradient-warning animate-slide-up stagger-3">
+        <div class="stat-icon"><i class="bi bi-hourglass-split"></i></div>
+        <div class="stat-value">{{ stats.pending_referrals }}</div>
+        <div class="stat-label">ממתינות להשלמה</div>
+    </div>
+    <div class="stat-card gradient-purple animate-slide-up stagger-4">
+        <div class="stat-icon"><i class="bi bi-gift"></i></div>
+        <div class="stat-value">{{ stats.active_credits }}</div>
+        <div class="stat-label">זיכויים פעילים</div>
+    </div>
+</div>
+
+<!-- מפנים מובילים -->
+<div class="card animate-slide-up stagger-3" style="margin-bottom: var(--space-sm);">
+    <div class="card-header">
+        <span><i class="bi bi-trophy"></i> מפנים מובילים</span>
+    </div>
+    <div class="card-body">
+        {% if top_referrers %}
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>לקוח</th>
+                        <th>הפניות שהושלמו</th>
+                        <th>סה"כ הפניות</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for ref in top_referrers %}
+                    <tr>
+                        <td>{{ loop.index }}</td>
+                        <td>{{ ref.display_name }}</td>
+                        <td><span class="badge badge-success">{{ ref.completed_referrals }}</span></td>
+                        <td>{{ ref.total_referrals }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <i class="bi bi-people"></i>
+            <p>אין מפנים עדיין. הפניות יופיעו כאן כשלקוחות ישתפו את הקוד שלהם.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- כל ההפניות -->
+<div class="card animate-slide-up stagger-4">
+    <div class="card-header">
+        <span><i class="bi bi-list-ul"></i> כל ההפניות</span>
+    </div>
+    <div class="card-body">
+        {% if all_referrals %}
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>קוד</th>
+                        <th>מפנה</th>
+                        <th>מופנה</th>
+                        <th>סטטוס</th>
+                        <th>נוצר</th>
+                        <th>הושלם</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for ref in all_referrals %}
+                    <tr>
+                        <td><code>{{ ref.code }}</code></td>
+                        <td>{{ ref.referrer_name or ref.referrer_id }}</td>
+                        <td>{{ ref.referred_name or ref.referred_id or '—' }}</td>
+                        <td>
+                            {% if ref.status == 'completed' %}
+                            <span class="badge badge-success">הושלם</span>
+                            {% else %}
+                            <span class="badge badge-warning">ממתין</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ ref.created_at|il_datetime }}</td>
+                        <td>{{ ref.completed_at|il_datetime if ref.completed_at else '—' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <i class="bi bi-share"></i>
+            <p>אין הפניות עדיין.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
