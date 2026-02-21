@@ -35,6 +35,11 @@ from ai_chatbot.config import (
 )
 from ai_chatbot.live_chat_service import live_chat_guard, live_chat_guard_booking
 from ai_chatbot.rate_limiter import rate_limit_guard, rate_limit_guard_booking
+from ai_chatbot.vacation_service import (
+    VacationService,
+    vacation_guard_booking,
+    vacation_guard_agent,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -297,6 +302,7 @@ async def location_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ─── Talk to Agent Button ────────────────────────────────────────────────────
 
+@vacation_guard_agent
 @rate_limit_guard
 @live_chat_guard
 async def talk_to_agent_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -329,6 +335,7 @@ async def talk_to_agent_handler(update: Update, context: ContextTypes.DEFAULT_TY
 
 # ─── Appointment Booking Flow ────────────────────────────────────────────────
 
+@vacation_guard_booking
 @rate_limit_guard_booking
 @live_chat_guard_booking
 async def booking_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -617,6 +624,12 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # entry points, breaking the multi-step booking flow.
     if intent == Intent.APPOINTMENT_BOOKING:
         db.save_message(user_id, display_name, "user", user_message)
+        # בזמן חופשה — הודעת חופשה במקום הפניה לכפתור תורים
+        if VacationService.is_active():
+            response = VacationService.get_booking_message()
+            db.save_message(user_id, display_name, "assistant", response)
+            await update.message.reply_text(response, reply_markup=_get_main_keyboard())
+            return
         response = (
             "אשמח לעזור לכם לבקש תור! 📅\n\n"
             "לחצו על הכפתור *📅 בקשת תור* למטה כדי להתחיל."

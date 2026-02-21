@@ -670,16 +670,67 @@ def create_admin_app() -> Flask:
         flash("יום מיוחד נמחק.", "success")
         return redirect(url_for("business_hours"))
 
+    # ─── Vacation Mode ─────────────────────────────────────────────────────
+
+    @app.route("/vacation-mode", methods=["GET", "POST"])
+    @login_required
+    def vacation_mode():
+        if request.method == "POST":
+            is_active = request.form.get("is_active") == "on"
+            vacation_end_date = request.form.get("vacation_end_date", "").strip()
+            vacation_message = request.form.get("vacation_message", "").strip()
+            db.update_vacation_mode(is_active, vacation_end_date, vacation_message)
+            if is_active:
+                flash("מצב חופשה הופעל!", "success")
+            else:
+                flash("מצב חופשה כובה.", "info")
+            return redirect(url_for("vacation_mode"))
+
+        vacation = db.get_vacation_mode()
+        # תצוגה מקדימה של הודעות החופשה
+        end_date = vacation.get("vacation_end_date", "").strip()
+        if end_date:
+            preview_booking = (
+                f"אנחנו בחופשה עד {end_date}.\n"
+                f"ניתן לקבוע תורים החל מ-{end_date}.\n"
+                "בינתיים, אתם מוזמנים לשאול אותי כל שאלה על השירותים שלנו!"
+            )
+            preview_agent = (
+                f"אנחנו בחופשה עד {end_date}.\n"
+                "ניצור קשר כשנחזור.\n"
+                "בינתיים, אני יכול לענות על שאלות לגבי השירותים שלנו!"
+            )
+        else:
+            preview_booking = (
+                "אנחנו כרגע בחופשה.\n"
+                "נחזור בקרוב — עקבו אחרי העדכונים שלנו.\n"
+                "בינתיים, אתם מוזמנים לשאול אותי כל שאלה על השירותים שלנו!"
+            )
+            preview_agent = (
+                "אנחנו כרגע בחופשה.\n"
+                "ניצור קשר כשנחזור.\n"
+                "בינתיים, אני יכול לענות על שאלות לגבי השירותים שלנו!"
+            )
+        return render_template(
+            "vacation_mode.html",
+            business_name=BUSINESS_NAME,
+            vacation=vacation,
+            preview_booking=preview_booking,
+            preview_agent=preview_agent,
+        )
+
     # ─── API Endpoints (for AJAX) ─────────────────────────────────────────
 
     @app.route("/api/stats")
     @login_required
     def api_stats():
+        vacation = db.get_vacation_mode()
         return jsonify({
             "pending_requests": db.count_agent_requests(status="pending"),
             "pending_appointments": db.count_appointments(status="pending"),
             "active_live_chats": LiveChatService.count_active(),
             "open_knowledge_gaps": db.count_unanswered_questions(status="open"),
+            "vacation_active": bool(vacation["is_active"]),
         })
 
     return app
