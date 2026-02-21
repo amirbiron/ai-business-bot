@@ -104,11 +104,12 @@ def init_db():
 
             -- Conversation summaries for long-term memory
             CREATE TABLE IF NOT EXISTS conversation_summaries (
-                id              INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id         TEXT NOT NULL,
-                summary_text    TEXT NOT NULL,
-                message_count   INTEGER NOT NULL DEFAULT 0,
-                created_at      TEXT DEFAULT (datetime('now'))
+                id                          INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id                     TEXT NOT NULL,
+                summary_text                TEXT NOT NULL,
+                message_count               INTEGER NOT NULL DEFAULT 0,
+                last_summarized_message_id  INTEGER NOT NULL DEFAULT 0,
+                created_at                  TEXT DEFAULT (datetime('now'))
             );
 
             -- Live chat sessions (business owner takes over a conversation)
@@ -151,6 +152,31 @@ def init_db():
 
         _ensure_column("agent_requests", "telegram_username", "TEXT DEFAULT ''")
         _ensure_column("appointments", "telegram_username", "TEXT DEFAULT ''")
+        _ensure_column(
+            "conversation_summaries",
+            "last_summarized_message_id",
+            "INTEGER NOT NULL DEFAULT 0",
+        )
+
+        # Back-fill last_summarized_message_id for rows migrated from the old
+        # COUNT-based offset scheme.  For each user whose summary still has
+        # last_summarized_message_id=0 *and* a positive message_count, look up
+        # the N-th conversation row (ordered by id ASC) and store its id.
+        rows = conn.execute(
+            "SELECT id, user_id, message_count FROM conversation_summaries "
+            "WHERE last_summarized_message_id = 0 AND message_count > 0"
+        ).fetchall()
+        for row in rows:
+            last_msg = conn.execute(
+                "SELECT id FROM conversations WHERE user_id = ? "
+                "ORDER BY id ASC LIMIT 1 OFFSET ?",
+                (row["user_id"], row["message_count"] - 1),
+            ).fetchone()
+            if last_msg:
+                conn.execute(
+                    "UPDATE conversation_summaries SET last_summarized_message_id = ? WHERE id = ?",
+                    (last_msg["id"], row["id"]),
+                )
 
 
 def cleanup_stale_live_chats():
@@ -287,6 +313,32 @@ def get_all_chunks() -> list[dict]:
         return [dict(r) for r in rows]
 
 
+def get_chunks_for_entries(entry_ids: list[int]) -> dict[int, list[dict]]:
+    """Get existing chunks (with embeddings) grouped by entry_id.
+
+    Only returns chunks whose embedding is not NULL, suitable for reuse
+    during incremental index rebuilds.
+    """
+    if not entry_ids:
+        return {}
+    with get_connection() as conn:
+        placeholders = ",".join("?" for _ in entry_ids)
+        rows = conn.execute(
+            f"""SELECT c.id, c.entry_id, c.chunk_index, c.chunk_text, c.embedding,
+                       e.category, e.title
+                FROM kb_chunks c
+                JOIN kb_entries e ON c.entry_id = e.id
+                WHERE c.entry_id IN ({placeholders}) AND c.embedding IS NOT NULL
+                ORDER BY c.entry_id, c.chunk_index""",
+            entry_ids,
+        ).fetchall()
+        result: dict[int, list[dict]] = {}
+        for r in rows:
+            d = dict(r)
+            result.setdefault(d["entry_id"], []).append(d)
+        return result
+
+
 # ─── Conversations ───────────────────────────────────────────────────────────
 
 def save_message(user_id: str, username: str, role: str, message: str, sources: str = ""):
@@ -346,51 +398,67 @@ def get_username_for_user(user_id: str) -> Optional[str]:
         return row["username"] if row else None
 
 
+def _last_summarized_message_id(conn, user_id: str) -> int:
+    """Return the highest conversation id already covered by a summary (0 if none)."""
+    row = conn.execute(
+        "SELECT COALESCE(MAX(last_summarized_message_id), 0) AS last_id "
+        "FROM conversation_summaries WHERE user_id = ?",
+        (user_id,),
+    ).fetchone()
+    return int(row["last_id"])
+
+
 def get_unsummarized_message_count(user_id: str) -> int:
-    """Count messages for a user that haven't been included in any summary yet."""
+    """Count messages for a user that haven't been included in any summary yet.
+
+    Uses `last_summarized_message_id` so the count stays correct even when
+    older messages are deleted.
+    """
     with get_connection() as conn:
-        # Get the total messages covered by summaries
-        summary_row = conn.execute(
-            "SELECT COALESCE(SUM(message_count), 0) AS total FROM conversation_summaries WHERE user_id=?",
-            (user_id,)
-        ).fetchone()
-        summarized_count = int(summary_row["total"])
+        last_id = _last_summarized_message_id(conn, user_id)
 
-        total_row = conn.execute(
-            "SELECT COUNT(*) AS count FROM conversations WHERE user_id=?",
-            (user_id,)
+        row = conn.execute(
+            "SELECT COUNT(*) AS count FROM conversations "
+            "WHERE user_id = ? AND id > ?",
+            (user_id, last_id),
         ).fetchone()
-        total_count = int(total_row["count"])
-
-        return max(0, total_count - summarized_count)
+        return int(row["count"])
 
 
 def get_messages_for_summarization(user_id: str, limit: int) -> list[dict]:
-    """Get the oldest unsummarized messages for a user (to create a summary from)."""
+    """Get the oldest unsummarized messages for a user (to create a summary from).
+
+    Returns up to *limit* messages whose ``id`` is greater than the
+    ``last_summarized_message_id`` stored in the latest summary.
+    Each returned dict includes the conversation row ``id`` so that
+    :func:`save_conversation_summary` can record the new high-water mark.
+    """
     with get_connection() as conn:
-        # Get total summarized count to know the offset
-        summary_row = conn.execute(
-            "SELECT COALESCE(SUM(message_count), 0) AS total FROM conversation_summaries WHERE user_id=?",
-            (user_id,)
-        ).fetchone()
-        offset = int(summary_row["total"])
+        last_id = _last_summarized_message_id(conn, user_id)
 
         rows = conn.execute(
-            """SELECT role, message, created_at
-               FROM conversations WHERE user_id=?
-               ORDER BY id ASC LIMIT ? OFFSET ?""",
-            (user_id, limit, offset)
+            """SELECT id, role, message, created_at
+               FROM conversations WHERE user_id = ? AND id > ?
+               ORDER BY id ASC LIMIT ?""",
+            (user_id, last_id, limit),
         ).fetchall()
         return [dict(r) for r in rows]
 
 
-def save_conversation_summary(user_id: str, summary_text: str, message_count: int):
+def save_conversation_summary(
+    user_id: str,
+    summary_text: str,
+    message_count: int,
+    last_summarized_message_id: int = 0,
+):
     """
     Save a conversation summary for a user.
 
     Replaces all previous summaries with a single merged summary.
-    The message_count is accumulated from prior summaries so that
-    offset tracking remains correct.
+    ``last_summarized_message_id`` is the ``conversations.id`` of the newest
+    message included in this summary — subsequent queries use it as a
+    high-water mark so that counting stays correct even when rows are deleted.
+    ``message_count`` is accumulated for informational / admin-display purposes.
     """
     with get_connection() as conn:
         # Accumulate total message count from existing summaries
@@ -400,11 +468,17 @@ def save_conversation_summary(user_id: str, summary_text: str, message_count: in
         ).fetchone()
         total_message_count = int(row["total"]) + message_count
 
+        # If no explicit high-water mark was given, keep the previous one
+        if not last_summarized_message_id:
+            last_summarized_message_id = _last_summarized_message_id(conn, user_id)
+
         # Replace all previous summaries with the new merged one
         conn.execute("DELETE FROM conversation_summaries WHERE user_id=?", (user_id,))
         conn.execute(
-            "INSERT INTO conversation_summaries (user_id, summary_text, message_count) VALUES (?, ?, ?)",
-            (user_id, summary_text, total_message_count)
+            "INSERT INTO conversation_summaries "
+            "(user_id, summary_text, message_count, last_summarized_message_id) "
+            "VALUES (?, ?, ?, ?)",
+            (user_id, summary_text, total_message_count, last_summarized_message_id),
         )
 
 
@@ -412,7 +486,7 @@ def get_latest_summary(user_id: str) -> dict | None:
     """Get the latest (single) conversation summary for a user."""
     with get_connection() as conn:
         row = conn.execute(
-            """SELECT summary_text, message_count, created_at
+            """SELECT summary_text, message_count, last_summarized_message_id, created_at
                FROM conversation_summaries WHERE user_id=?
                ORDER BY id DESC LIMIT 1""",
             (user_id,)
