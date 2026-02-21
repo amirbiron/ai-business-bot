@@ -689,6 +689,12 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id, display_name, telegram_username = _get_user_info(update)
     user_message = update.message.text
 
+    # בדיקת מעורבות גבוהה — רץ ברקע על כל סוגי ההודעות (כולל ברכות,
+    # כפתורים, תורים וכו'). הבדיקה עצמה זולה (early exit אם כבר נשלח).
+    context.application.create_task(
+        _check_high_engagement_referral(update, user_id)
+    )
+
     # ניתוב כפתורים — מדלגים על rate_limit (כבר נספר פעם אחת) אבל
     # שומרים על vacation_guard + live_chat_guard דרך _skip_ratelimit.
     if user_message == BUTTON_PRICE_LIST:
@@ -771,11 +777,6 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_message=user_message,
         query=query,
         handoff_reason=handoff_reason,
-    )
-
-    # בדיקת מעורבות גבוהה — שליחת קוד הפניה אם רלוונטי
-    context.application.create_task(
-        _check_high_engagement_referral(update, user_id)
     )
 
 
