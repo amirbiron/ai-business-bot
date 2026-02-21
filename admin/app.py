@@ -440,10 +440,13 @@ def create_admin_app() -> Flask:
     @app.route("/live-chat/<user_id>/end", methods=["POST"])
     @login_required
     def live_chat_end(user_id):
+        # Redirect back to wherever the user came from (dashboard,
+        # conversations, or the live-chat page itself).
+        back = _safe_redirect_back(url_for("conversations"))
         # Guard against duplicate "end" clicks (e.g. stale page in another tab).
         if not db.is_live_chat_active(user_id):
             flash("השיחה החיה כבר הסתיימה.", "info")
-            return redirect(url_for("conversations"))
+            return redirect(back)
         username = _get_customer_username(user_id)
         # Notify the customer that the bot is back
         end_msg = "🤖 הבוט חזר לנהל את השיחה. אם תרצו לדבר עם נציג שוב, לחצו על 'דברו עם נציג'."
@@ -455,7 +458,7 @@ def create_admin_app() -> Flask:
         db.end_live_chat(user_id)
         if not sent:
             flash("השיחה הוחזרה לבוט, אך ההודעה ללקוח בטלגרם נכשלה.", "warning")
-        return redirect(url_for("conversations"))
+        return redirect(back)
 
     @app.route("/live-chat/<user_id>/send", methods=["POST"])
     @login_required
