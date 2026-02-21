@@ -217,18 +217,21 @@ def is_currently_open() -> dict:
     open_time = time.fromisoformat(open_time_str)
     close_time = time.fromisoformat(close_time_str)
 
-    # Handle overnight hours (e.g. open_time="22:00", close_time="02:00")
+    # Handle overnight hours (e.g. open_time="22:00", close_time="02:00").
+    # The early-morning tail (e.g. 01:00 for a 22:00–02:00 shift) is covered
+    # by the yesterday overnight check above — here we only check whether
+    # today's shift has started.
     is_overnight = close_time <= open_time
 
     if is_overnight:
-        # Overnight: open if current_time >= open_time OR current_time < close_time
-        currently_within = current_time >= open_time or current_time < close_time
+        # Today's overnight shift: only open once we've passed open_time
+        currently_within = current_time >= open_time
     else:
         # Normal: open if open_time <= current_time < close_time
         currently_within = open_time <= current_time < close_time
 
     if not currently_within:
-        if current_time < open_time and (not is_overnight or current_time >= close_time):
+        if current_time < open_time:
             return {
                 "is_open": False,
                 "message": f"\U0001f534 עדיין לא פתחנו — נפתח היום בשעה {open_time_str}.",
