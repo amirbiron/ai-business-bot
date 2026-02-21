@@ -35,6 +35,15 @@
 ### Exceptions — תמיד לרשום ללוג
 - `except Exception: pass` אסור. תמיד `logger.error(...)` כדי שבאגים לא ייעלמו בשקט.
 
+### Handlers — צינור RAG אחד בלבד
+- כל נתיב שמפעיל את צינור ה-RAG (כולל callback queries) חייב לעבור דרך `_handle_rag_query` ולא לשכפל את הלוגיקה. לצורך callbacks בלי `update.message` — להעביר `chat_id`.
+
+### Handlers — rate limit על כל קריאת LLM
+- כל נתיב שמגיע ל-LLM (הודעות, callbacks, שאלות המשך) חייב לעבור בדיקת `check_rate_limit` + `record_message`. ללא זה משתמש יכול לעקוף את מגבלות הקצב.
+
+### Handlers — שימוש ב-helpers קיימים
+- לחילוץ פרטי משתמש — `_get_user_info(update)`. לא לשכפל את הלוגיקה ידנית.
+
 ### צ'ק ליסט הקלטת לקוח — לעדכן בכל שינוי רלוונטי
 - המסמך `docs/client_checklist.md` מתאר את תהליך ההקלטה ללקוח חדש.
 - בכל שינוי ב-`seed_data.py` (קטגוריות, שדות, מבנה), `config.py` (משתני סביבה, system prompt), `.env.example`, או פיצ'רים בבוט/אדמין — **יש לעדכן גם את הצ'ק ליסט** כדי שישקף את המצב הנוכחי של הקוד.

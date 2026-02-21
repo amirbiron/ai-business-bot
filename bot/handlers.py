@@ -1002,10 +1002,10 @@ async def follow_up_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     from ai_chatbot.live_chat_service import LiveChatService
     user = update.effective_user
-    user_id = str(user.id)
-
-    if LiveChatService.is_active(user_id):
+    if LiveChatService.is_active(str(user.id)):
         return
+
+    user_id, display_name, telegram_username = _get_user_info(update)
 
     # בדיקת rate limit — שאלות המשך צורכות קריאת LLM כמו הודעה רגילה
     limit_msg = check_rate_limit(user_id)
@@ -1017,17 +1017,19 @@ async def follow_up_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return
 
     cb_data = query.data
-    # שליפת טקסט השאלה מ-bot_data
+    # שליפת טקסט השאלה מ-bot_data (נתונים in-memory — נמחקים ברסטרט)
     question_text = context.bot_data.pop(cb_data, None)
     if not question_text:
         logger.warning("follow_up_callback: missing question for %s", cb_data)
+        try:
+            await query.edit_message_text("⏳ השאלה כבר לא זמינה. אפשר לשאול אותי ישירות!")
+        except Exception as e:
+            logger.error("Failed to edit expired follow-up message: %s", e)
         return
 
     # רישום rate limit רק אחרי שוידאנו שהשאלה קיימת
     record_message(user_id)
 
-    display_name = user.full_name or (f"@{user.username}" if user.username else f"User {user.id}")
-    telegram_username = user.username or ""
     chat_id = update.effective_chat.id
 
     # עדכון ההודעה המקורית — להראות איזו שאלה נבחרה
