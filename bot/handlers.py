@@ -506,6 +506,9 @@ async def booking_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 async def booking_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Cancel the booking flow."""
+    if await _check_live_chat_during_booking(update):
+        context.user_data.clear()
+        return ConversationHandler.END
     context.user_data.clear()
     await update.message.reply_text(
         "ההזמנה בוטלה. איך עוד אפשר לעזור לכם?",
