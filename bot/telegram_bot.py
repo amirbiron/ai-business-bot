@@ -26,6 +26,7 @@ from ai_chatbot.bot.handlers import (
     booking_cancel,
     booking_button_interrupt,
     cancel_appointment_callback,
+    follow_up_callback,
     error_handler,
     BOOKING_SERVICE,
     BOOKING_DATE,
@@ -33,6 +34,7 @@ from ai_chatbot.bot.handlers import (
     BOOKING_CONFIRM,
     ALL_BUTTON_TEXTS,
     BUTTON_BOOKING,
+    FOLLOW_UP_CB_PREFIX,
 )
 # save_contact_handler ו-BUTTON_SAVE_CONTACT מטופלים דרך message_handler
 # ו-booking_button_interrupt — אין צורך ברישום ישיר.
@@ -91,6 +93,9 @@ def create_bot_application():
     
     # Cancellation confirmation (inline keyboard callback)
     app.add_handler(CallbackQueryHandler(cancel_appointment_callback, pattern=r"^cancel_appt_"))
+
+    # שאלות המשך (inline keyboard callback)
+    app.add_handler(CallbackQueryHandler(follow_up_callback, pattern=rf"^{re.escape(FOLLOW_UP_CB_PREFIX)}"))
 
     # General text messages (catch-all)
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, message_handler))

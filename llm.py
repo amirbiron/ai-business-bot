@@ -19,6 +19,8 @@ from ai_chatbot.config import (
     FALLBACK_RESPONSE,
     CONTEXT_WINDOW_SIZE,
     SUMMARY_THRESHOLD,
+    FOLLOW_UP_ENABLED,
+    FOLLOW_UP_PROMPT,
 )
 from ai_chatbot.rag.engine import retrieve, format_context
 from ai_chatbot import database as db
@@ -50,10 +52,13 @@ def _build_messages(
     """
     messages = []
 
-    # Layer A — System prompt
+    # Layer A — System prompt (+ הוראות שאלות המשך אם הפיצ'ר פעיל)
+    system_content = SYSTEM_PROMPT
+    if FOLLOW_UP_ENABLED:
+        system_content += FOLLOW_UP_PROMPT
     messages.append({
         "role": "system",
-        "content": SYSTEM_PROMPT
+        "content": system_content
     })
 
     # Layer B — RAG context + business hours context
@@ -130,6 +135,33 @@ def _quality_check(response_text: str) -> str:
         response_text[:100],
     )
     return FALLBACK_RESPONSE
+
+
+# ביטוי רגולרי לזיהוי שאלות המשך מתשובת ה-LLM
+_FOLLOW_UP_PATTERN = re.compile(
+    r"\[שאלות_המשך:\s*(.+?)\]"
+)
+
+
+def extract_follow_up_questions(response_text: str) -> list[str]:
+    """
+    חילוץ שאלות המשך מתשובת ה-LLM.
+
+    מחפש את התבנית [שאלות_המשך: שאלה1 | שאלה2 | שאלה3] ומחזיר רשימת שאלות.
+    מחזיר רשימה ריקה אם לא נמצאו שאלות.
+    """
+    match = _FOLLOW_UP_PATTERN.search(response_text)
+    if not match:
+        return []
+    raw = match.group(1)
+    questions = [q.strip() for q in raw.split("|") if q.strip()]
+    # הגבלה ל-3 שאלות מקסימום
+    return questions[:3]
+
+
+def strip_follow_up_questions(response_text: str) -> str:
+    """הסרת בלוק שאלות ההמשך מהטקסט לפני שליחה ללקוח."""
+    return _FOLLOW_UP_PATTERN.sub("", response_text).strip()
 
 
 def strip_source_citation(response_text: str) -> str:
@@ -344,13 +376,21 @@ def generate_answer(
             "answer": FALLBACK_RESPONSE,
             "sources": [],
             "chunks_used": 0,
+            "follow_up_questions": [],
         }
+
+    # חילוץ שאלות המשך לפני בדיקת איכות (הן לא חלק מהתשובה עצמה)
+    follow_up_questions = []
+    if FOLLOW_UP_ENABLED:
+        follow_up_questions = extract_follow_up_questions(raw_answer)
+        raw_answer = strip_follow_up_questions(raw_answer)
 
     # Step 5: Quality check (Layer C)
     final_answer = _quality_check(raw_answer)
 
     # Log unanswered question if fallback was triggered
     if final_answer == FALLBACK_RESPONSE and user_id:
+        follow_up_questions = []  # לא מציגים שאלות המשך על fallback
         try:
             db.save_unanswered_question(user_id, username or "", user_query)
         except Exception as e:
@@ -360,4 +400,5 @@ def generate_answer(
         "answer": final_answer,
         "sources": sources,
         "chunks_used": len(chunks),
+        "follow_up_questions": follow_up_questions,
     }
