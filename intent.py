@@ -1,12 +1,12 @@
 """
 Intent Detection Module — classifies user messages to optimize routing.
 
-Supported intents:
+Supported intents (checked in priority order):
   GREETING              — "Hi", "Hello", "שלום"           → Direct response (no RAG)
   FAREWELL              — "Thanks", "Bye", "תודה"         → Direct response + feedback
+  PRICING               — "How much?", "כמה עולה?"       → Targeted RAG (pricing)
   APPOINTMENT_BOOKING   — "Want appointment", "רוצה תור"  → Trigger booking flow
   APPOINTMENT_CANCEL    — "Want to cancel", "לבטל תור"    → Trigger cancellation flow
-  PRICING               — "How much?", "כמה עולה?"       → Targeted RAG (pricing)
   GENERAL               — Everything else                 → Full RAG (current behavior)
 
 Uses keyword matching for speed — no LLM call needed for classification.
@@ -55,6 +55,19 @@ _INTENT_PATTERNS: list[tuple[Intent, re.Pattern]] = [
             re.IGNORECASE,
         ),
     ),
+    # Pricing question — checked before appointment intents so that compound
+    # queries like "כמה עולה לקבוע תור?" route to pricing, not booking.
+    (
+        Intent.PRICING,
+        re.compile(
+            r"("
+            r"how\s*much|what.*price\b|what.*cost\b|pricing|price\s*list"
+            r"|כמה\s*עולה|כמה\s*זה\s*עולה|מה\s*המחיר|מה\s*העלות|מחיר|מחירון|מחירים"
+            r"|כמה\s*יעלה|כמה\s*כסף|עלות|תעריף|תעריפים"
+            r")",
+            re.IGNORECASE,
+        ),
+    ),
     # Appointment booking — expressed desire to book
     (
         Intent.APPOINTMENT_BOOKING,
@@ -79,18 +92,6 @@ _INTENT_PATTERNS: list[tuple[Intent, re.Pattern]] = [
             r"|i\s*want\s*to\s*cancel\s*(my\s*)?(appointment|booking|the\s*appointment)"
             r"|לבטל\s*(את\s*)?ה?תור|ביטול\s*(ה)?תור|רוצה\s*לבטל\s*(את\s*)?ה?תור|אני\s*מבטל\s*(את\s*)?ה?תור"
             r"|אני\s*רוצה\s*לבטל\s*את\s*התור|אני\s*צריך\s*לבטל\s*(את\s*)?ה?תור"
-            r")",
-            re.IGNORECASE,
-        ),
-    ),
-    # Pricing question
-    (
-        Intent.PRICING,
-        re.compile(
-            r"("
-            r"how\s*much|what.*price\b|what.*cost\b|pricing|price\s*list"
-            r"|כמה\s*עולה|כמה\s*זה\s*עולה|מה\s*המחיר|מה\s*העלות|מחיר|מחירון|מחירים"
-            r"|כמה\s*יעלה|כמה\s*כסף|עלות|תעריף|תעריפים"
             r")",
             re.IGNORECASE,
         ),
