@@ -13,6 +13,7 @@ Features:
 
 import asyncio
 import logging
+from io import BytesIO
 from telegram import (
     Update,
     ReplyKeyboardMarkup,
@@ -29,6 +30,9 @@ from ai_chatbot.intent import Intent, detect_intent, get_direct_response
 from ai_chatbot.business_hours import is_currently_open, get_weekly_schedule_text
 from ai_chatbot.config import (
     BUSINESS_NAME,
+    BUSINESS_PHONE,
+    BUSINESS_ADDRESS,
+    BUSINESS_WEBSITE,
     TELEGRAM_OWNER_CHAT_ID,
     FALLBACK_RESPONSE,
     CONTEXT_WINDOW_SIZE,
@@ -50,8 +54,9 @@ BOOKING_SERVICE, BOOKING_DATE, BOOKING_TIME, BOOKING_CONFIRM = range(4)
 BUTTON_PRICE_LIST = "📋 מחירון"
 BUTTON_BOOKING = "📅 בקשת תור"
 BUTTON_LOCATION = "📍 שליחת מיקום"
+BUTTON_SAVE_CONTACT = "📇 שמור איש קשר"
 BUTTON_AGENT = "👤 דברו עם נציג"
-ALL_BUTTON_TEXTS = [BUTTON_PRICE_LIST, BUTTON_BOOKING, BUTTON_LOCATION, BUTTON_AGENT]
+ALL_BUTTON_TEXTS = [BUTTON_PRICE_LIST, BUTTON_BOOKING, BUTTON_LOCATION, BUTTON_SAVE_CONTACT, BUTTON_AGENT]
 
 
 async def _generate_answer_async(*args, **kwargs):
@@ -83,7 +88,8 @@ def _get_main_keyboard() -> ReplyKeyboardMarkup:
     """Create the main menu keyboard with action buttons."""
     keyboard = [
         [KeyboardButton(BUTTON_PRICE_LIST), KeyboardButton(BUTTON_BOOKING)],
-        [KeyboardButton(BUTTON_LOCATION), KeyboardButton(BUTTON_AGENT)],
+        [KeyboardButton(BUTTON_LOCATION), KeyboardButton(BUTTON_SAVE_CONTACT)],
+        [KeyboardButton(BUTTON_AGENT)],
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
@@ -217,6 +223,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• לחצו על *📋 מחירון* כדי לראות את השירותים והמחירים\n"
         "• לחצו על *📅 בקשת תור* כדי לבקש תור\n"
         "• לחצו על *📍 שליחת מיקום* כדי לקבל את הכתובת והמפה שלנו\n"
+        "• לחצו על *📇 שמור איש קשר* כדי לשמור אותנו באנשי הקשר\n"
         "• לחצו על *👤 דברו עם נציג* כדי לדבר עם נציג אמיתי\n\n"
         "אפשר גם לשאול שאלות כמו:\n"
         '  _"מה שעות הפתיחה שלכם?"_\n'
@@ -298,6 +305,59 @@ async def location_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         stripped,
         reply_markup=_get_main_keyboard(),
     )
+
+
+# ─── Save Contact (vCard) Button ─────────────────────────────────────────────
+
+def _generate_vcard_text() -> str:
+    """יצירת טקסט vCard מפרטי העסק שבקונפיגורציה."""
+    # בניית סיכום שעות מטבלת business_hours
+    hours_parts = []
+    all_hours = db.get_all_business_hours()
+    day_abbr = {0: "Su", 1: "Mo", 2: "Tu", 3: "We", 4: "Th", 5: "Fr", 6: "Sa"}
+    for h in all_hours:
+        if not h["is_closed"]:
+            d = day_abbr.get(h["day_of_week"], "?")
+            hours_parts.append(f"{d} {h['open_time']}-{h['close_time']}")
+    hours_summary = " | ".join(hours_parts) if hours_parts else ""
+
+    lines = [
+        "BEGIN:VCARD",
+        "VERSION:3.0",
+        f"FN:{BUSINESS_NAME}",
+        f"ORG:{BUSINESS_NAME}",
+    ]
+    if BUSINESS_PHONE:
+        lines.append(f"TEL;TYPE=WORK,VOICE:{BUSINESS_PHONE}")
+    if BUSINESS_ADDRESS:
+        lines.append(f"ADR;TYPE=WORK:;;{BUSINESS_ADDRESS};;;;")
+    if BUSINESS_WEBSITE:
+        lines.append(f"URL:{BUSINESS_WEBSITE}")
+    if hours_summary:
+        lines.append(f"NOTE:{hours_summary}")
+    lines.append("END:VCARD")
+    return "\n".join(lines)
+
+
+@rate_limit_guard
+@live_chat_guard
+async def save_contact_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """שליחת כרטיס ביקור דיגיטלי (vCard) כקובץ .vcf."""
+    user_id, display_name, _ = _get_user_info(update)
+
+    vcard_content = _generate_vcard_text()
+    vcard_file = BytesIO(vcard_content.encode("utf-8"))
+    vcard_file.name = f"{BUSINESS_NAME}.vcf"
+
+    db.save_message(user_id, display_name, "user", "📇 שמירת איש קשר")
+
+    await update.message.reply_document(
+        document=vcard_file,
+        caption="הנה כרטיס הביקור שלנו! לחצו עליו ושמרו באנשי הקשר. 👇",
+        reply_markup=_get_main_keyboard(),
+    )
+
+    db.save_message(user_id, display_name, "assistant", "[כרטיס ביקור נשלח]")
 
 
 # ─── Talk to Agent Button ────────────────────────────────────────────────────
@@ -528,6 +588,8 @@ async def booking_button_interrupt(update: Update, context: ContextTypes.DEFAULT
         await price_list_handler.__wrapped__(update, context)
     elif user_message == BUTTON_LOCATION:
         await location_handler.__wrapped__(update, context)
+    elif user_message == BUTTON_SAVE_CONTACT:
+        await save_contact_handler.__wrapped__(update, context)
     elif user_message == BUTTON_AGENT:
         await _talk_to_agent_skip_ratelimit(update, context)
     else:
@@ -604,6 +666,8 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return await price_list_handler.__wrapped__(update, context)
     elif user_message == BUTTON_LOCATION:
         return await location_handler.__wrapped__(update, context)
+    elif user_message == BUTTON_SAVE_CONTACT:
+        return await save_contact_handler.__wrapped__(update, context)
     elif user_message == BUTTON_AGENT:
         return await _talk_to_agent_skip_ratelimit(update, context)
 

@@ -82,6 +82,11 @@
                         <span id="vacation-badge" class="nav-badge" style="display:none;"></span>
                     </a>
                 </li>
+                <li>
+                    <a href="/qr-code" class="{% if request.endpoint in ['qr_code'] %}active{% endif %}">
+                        <i class="bi bi-qr-code"></i> QR Code
+                    </a>
+                </li>
             </ul>
 
             <div class="sidebar-footer">

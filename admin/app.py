@@ -11,6 +11,7 @@ Features:
 """
 
 import hmac
+import io
 import json
 import logging
 from datetime import datetime, timedelta, timezone
@@ -27,6 +28,7 @@ from flask import (
     flash,
     jsonify,
     session,
+    send_file,
 )
 
 from flask_wtf.csrf import CSRFProtect, CSRFError
@@ -41,6 +43,10 @@ from ai_chatbot.config import (
     ADMIN_HOST,
     ADMIN_PORT,
     BUSINESS_NAME,
+    TELEGRAM_BOT_USERNAME,
+    BUSINESS_PHONE,
+    BUSINESS_ADDRESS,
+    BUSINESS_WEBSITE,
 )
 from ai_chatbot.rag.engine import rebuild_index, mark_index_stale, is_index_stale
 from ai_chatbot.live_chat_service import LiveChatService
@@ -698,6 +704,61 @@ def create_admin_app() -> Flask:
             preview_booking=preview_booking,
             preview_agent=preview_agent,
         )
+
+    # ─── QR Code ──────────────────────────────────────────────────────────
+
+    @app.route("/qr-code")
+    @login_required
+    def qr_code():
+        return render_template(
+            "qr_code.html",
+            business_name=BUSINESS_NAME,
+            bot_username=TELEGRAM_BOT_USERNAME,
+        )
+
+    @app.route("/qr-code/download")
+    @login_required
+    def qr_code_download():
+        """יצירת QR Code כקובץ PNG להורדה."""
+        if not TELEGRAM_BOT_USERNAME:
+            flash("לא הוגדר TELEGRAM_BOT_USERNAME. יש להגדיר ב-.env.", "danger")
+            return redirect(url_for("qr_code"))
+
+        import segno
+
+        bot_url = f"https://t.me/{TELEGRAM_BOT_USERNAME}"
+        # קריאת פרמטרי עיצוב מה-query string
+        dark_color = request.args.get("color", "#000000")
+        scale = int(request.args.get("scale", "10"))
+        # הגבלת scale לטווח סביר
+        scale = max(1, min(scale, 50))
+
+        qr = segno.make(bot_url, error="H")
+        buf = io.BytesIO()
+        qr.save(buf, kind="png", scale=scale, dark=dark_color, light="#FFFFFF", border=2)
+        buf.seek(0)
+
+        filename = f"qr_{TELEGRAM_BOT_USERNAME}.png"
+        return send_file(buf, mimetype="image/png", as_attachment=True, download_name=filename)
+
+    @app.route("/qr-code/preview")
+    @login_required
+    def qr_code_preview():
+        """יצירת תמונת QR Code לתצוגה מקדימה (inline)."""
+        if not TELEGRAM_BOT_USERNAME:
+            return "", 404
+
+        import segno
+
+        bot_url = f"https://t.me/{TELEGRAM_BOT_USERNAME}"
+        dark_color = request.args.get("color", "#000000")
+
+        qr = segno.make(bot_url, error="H")
+        buf = io.BytesIO()
+        qr.save(buf, kind="png", scale=10, dark=dark_color, light="#FFFFFF", border=2)
+        buf.seek(0)
+
+        return send_file(buf, mimetype="image/png")
 
     # ─── API Endpoints (for AJAX) ─────────────────────────────────────────
 

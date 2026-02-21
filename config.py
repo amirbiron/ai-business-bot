@@ -61,6 +61,12 @@ ADMIN_PORT = int(os.getenv("ADMIN_PORT") or os.getenv("PORT") or "5000")
 
 # ─── Business Info (defaults for demo) ───────────────────────────────────────
 BUSINESS_NAME = os.getenv("BUSINESS_NAME", "Dana's Beauty Salon")
+BUSINESS_PHONE = os.getenv("BUSINESS_PHONE", "")
+BUSINESS_ADDRESS = os.getenv("BUSINESS_ADDRESS", "")
+BUSINESS_WEBSITE = os.getenv("BUSINESS_WEBSITE", "")
+
+# ─── Telegram Bot Username (for QR code generation) ─────────────────────────
+TELEGRAM_BOT_USERNAME = os.getenv("TELEGRAM_BOT_USERNAME", "")
 
 # ─── System Prompt (Layer A) ────────────────────────────────────────────────
 SYSTEM_PROMPT = f"""אתה נציג שירות לקוחות ידידותי ומקצועי של {BUSINESS_NAME}.

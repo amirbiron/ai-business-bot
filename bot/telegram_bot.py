@@ -34,6 +34,8 @@ from ai_chatbot.bot.handlers import (
     ALL_BUTTON_TEXTS,
     BUTTON_BOOKING,
 )
+# save_contact_handler ו-BUTTON_SAVE_CONTACT מטופלים דרך message_handler
+# ו-booking_button_interrupt — אין צורך ברישום ישיר.
 
 logger = logging.getLogger(__name__)
 
