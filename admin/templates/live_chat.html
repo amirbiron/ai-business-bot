@@ -71,17 +71,28 @@
 
 {% block scripts %}
 <script>
-    // Auto-scroll to bottom of messages on load and after each HTMX swap
+    var _wasNearBottom = true;
     function scrollToBottom() {
-        var container = document.getElementById('live-chat-messages');
-        if (container) {
-            container.scrollTop = container.scrollHeight;
-        }
+        var c = document.getElementById('live-chat-messages');
+        if (c) c.scrollTop = c.scrollHeight;
     }
+    function checkNearBottom() {
+        var c = document.getElementById('live-chat-messages');
+        if (!c) return true;
+        return c.scrollHeight - c.scrollTop - c.clientHeight < 80;
+    }
+    // Scroll on initial page load
     scrollToBottom();
+    // Capture scroll position *before* HTMX replaces the DOM
+    document.body.addEventListener('htmx:beforeSwap', function(e) {
+        if (e.detail.target && e.detail.target.id === 'live-chat-messages') {
+            _wasNearBottom = checkNearBottom();
+        }
+    });
+    // Only auto-scroll if the user was already near the bottom
     document.body.addEventListener('htmx:afterSwap', function(e) {
         if (e.detail.target && e.detail.target.id === 'live-chat-messages') {
-            scrollToBottom();
+            if (_wasNearBottom) scrollToBottom();
         }
     });
 </script>
