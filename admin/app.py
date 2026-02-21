@@ -410,15 +410,19 @@ def create_admin_app() -> Flask:
             live_session=live_session,
         )
 
-    def _do_start_live_chat(user_id: str) -> None:
-        """Shared logic: activate live chat, notify customer, save message."""
+    def _get_customer_username(user_id: str) -> str:
+        """Look up the customer's display name for a given user_id."""
         users = db.get_unique_users()
         user_info = next((u for u in users if u["user_id"] == user_id), None)
-        username = user_info["username"] if user_info else ""
+        return user_info["username"] if user_info else ""
+
+    def _do_start_live_chat(user_id: str) -> None:
+        """Shared logic: activate live chat, notify customer, save message."""
+        username = _get_customer_username(user_id)
         db.start_live_chat(user_id, username)
         notify_msg = "👤 נציג אנושי הצטרף לשיחה. כעת תקבלו מענה ישיר."
         _send_telegram_message(user_id, notify_msg)
-        db.save_message(user_id, BUSINESS_NAME, "assistant", notify_msg)
+        db.save_message(user_id, username, "assistant", notify_msg)
 
     @app.route("/live-chat/<user_id>/start", methods=["POST"])
     @login_required
@@ -429,11 +433,14 @@ def create_admin_app() -> Flask:
     @app.route("/live-chat/<user_id>/end", methods=["POST"])
     @login_required
     def live_chat_end(user_id):
-        db.end_live_chat(user_id)
+        username = _get_customer_username(user_id)
         # Notify the customer that the bot is back
         end_msg = "🤖 הבוט חזר לנהל את השיחה. אם תרצו לדבר עם נציג שוב, לחצו על 'דברו עם נציג'."
         _send_telegram_message(user_id, end_msg)
-        db.save_message(user_id, BUSINESS_NAME, "assistant", end_msg)
+        db.save_message(user_id, username, "assistant", end_msg)
+        # Deactivate *after* sending the notification so the bot stays
+        # suspended until the customer receives the transition message.
+        db.end_live_chat(user_id)
         return redirect(url_for("conversations"))
 
     @app.route("/live-chat/<user_id>/send", methods=["POST"])
@@ -458,8 +465,10 @@ def create_admin_app() -> Flask:
             flash("שליחת ההודעה בטלגרם נכשלה.", "danger")
             return redirect(url_for("live_chat", user_id=user_id))
 
-        # Save in conversation history as admin response
-        db.save_message(user_id, BUSINESS_NAME, "assistant", message_text)
+        # Save in conversation history using the customer's display name
+        # so get_unique_users() isn't corrupted by BUSINESS_NAME.
+        username = _get_customer_username(user_id)
+        db.save_message(user_id, username, "assistant", message_text)
 
         if request.headers.get("HX-Request"):
             # Return updated messages list
