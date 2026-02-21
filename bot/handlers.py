@@ -309,6 +309,11 @@ async def location_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ─── Save Contact (vCard) Button ─────────────────────────────────────────────
 
+def _vcard_escape(value: str) -> str:
+    """Escape לתווים מיוחדים ב-vCard לפי RFC 6350 — backslash, נקודה-פסיק ופסיק."""
+    return value.replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,")
+
+
 def _generate_vcard_text() -> str:
     """יצירת טקסט vCard מפרטי העסק שבקונפיגורציה."""
     # בניית סיכום שעות מטבלת business_hours
@@ -321,21 +326,23 @@ def _generate_vcard_text() -> str:
             hours_parts.append(f"{d} {h['open_time']}-{h['close_time']}")
     hours_summary = " | ".join(hours_parts) if hours_parts else ""
 
+    escaped_name = _vcard_escape(BUSINESS_NAME)
+
     lines = [
         "BEGIN:VCARD",
         "VERSION:3.0",
-        f"FN:{BUSINESS_NAME}",
-        f"N:{BUSINESS_NAME};;;;",
-        f"ORG:{BUSINESS_NAME}",
+        f"FN:{escaped_name}",
+        f"N:{escaped_name};;;;",
+        f"ORG:{escaped_name}",
     ]
     if BUSINESS_PHONE:
         lines.append(f"TEL;TYPE=WORK,VOICE:{BUSINESS_PHONE}")
     if BUSINESS_ADDRESS:
-        lines.append(f"ADR;TYPE=WORK:;;{BUSINESS_ADDRESS};;;;")
+        lines.append(f"ADR;TYPE=WORK:;;{_vcard_escape(BUSINESS_ADDRESS)};;;;")
     if BUSINESS_WEBSITE:
         lines.append(f"URL:{BUSINESS_WEBSITE}")
     if hours_summary:
-        lines.append(f"NOTE:{hours_summary}")
+        lines.append(f"NOTE:{_vcard_escape(hours_summary)}")
     lines.append("END:VCARD")
     return "\r\n".join(lines)
 
