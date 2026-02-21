@@ -119,8 +119,8 @@
                         <th>פעולות</th>
                     </tr>
                 </thead>
-                <tbody>
-                    {% for sd in special_days %}
+                {% for sd in special_days %}
+                    <tbody id="special-day-group-{{ sd.id }}">
                     <!-- Display row -->
                     <tr id="special-day-{{ sd.id }}">
                         <td>{{ sd.date }}</td>
@@ -149,7 +149,7 @@
                                 <form method="POST" action="/business-hours/special-days/{{ sd.id }}/delete"
                                       style="display: inline;"
                                       hx-post="/business-hours/special-days/{{ sd.id }}/delete"
-                                      hx-target="#special-day-{{ sd.id }}"
+                                      hx-target="#special-day-group-{{ sd.id }}"
                                       hx-swap="outerHTML"
                                       hx-confirm="למחוק את היום המיוחד '{{ sd.name }}'?">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -202,8 +202,8 @@
                             </form>
                         </td>
                     </tr>
+                    </tbody>
                     {% endfor %}
-                </tbody>
             </table>
         </div>
         {% else %}
