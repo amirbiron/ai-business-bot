@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header animate-fade-in">
+    <h1><i class="bi bi-chat-heart"></i> אישיות הבוט</h1>
+</div>
+
+<div class="card animate-slide-up stagger-1">
+    <div class="card-header">
+        <span><i class="bi bi-palette"></i> טון התקשורת</span>
+        <span class="badge badge-primary">{{ current_tone_label }}</span>
+    </div>
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('bot_personality') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <!-- בחירת טון -->
+            <div class="form-group" style="margin-bottom: var(--space-md);">
+                <label class="form-label">בחרו את סגנון התקשורת של הבוט:</label>
+                <div style="display: grid; gap: var(--space-sm); margin-top: var(--space-sm);">
+                    {% for key, (label, description) in tone_presets.items() %}
+                    <label style="display: flex; align-items: flex-start; gap: var(--space-sm);
+                                  padding: var(--space-sm) var(--space-md);
+                                  border: 2px solid {{ 'var(--primary-color)' if personality.tone == key else 'var(--border-color)' }};
+                                  border-radius: var(--radius-md);
+                                  cursor: pointer;
+                                  background: {{ 'var(--bg-hover)' if personality.tone == key else 'transparent' }};
+                                  transition: all 0.2s;">
+                        <input type="radio" name="tone" value="{{ key }}"
+                               {{ 'checked' if personality.tone == key }}
+                               style="margin-top: 3px; width: 18px; height: 18px; flex-shrink: 0;">
+                        <div>
+                            <span style="font-weight: 600;">{{ label }}</span>
+                            <div class="text-small text-muted" style="margin-top: 2px;">{{ description }}</div>
+                        </div>
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- הוראות חופשיות -->
+            <div class="form-group" style="margin-bottom: var(--space-md);">
+                <label class="form-label" for="custom_instructions">הוראות חופשיות (אופציונלי)</label>
+                <textarea class="form-control"
+                          id="custom_instructions"
+                          name="custom_instructions"
+                          rows="4"
+                          placeholder="לדוגמה: תמיד הזכר שאנחנו מציעים יום ניסיון חינם. קרא ללקוחות בשמם.">{{ personality.custom_instructions }}</textarea>
+                <div class="text-small text-muted" style="margin-top: var(--space-xs);">
+                    הוראות נוספות שיוזרקו ל-system prompt של הבוט. כתבו בשפה טבעית מה הבוט צריך לעשות אחרת.
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary">
+                <i class="bi bi-check-lg"></i> שמירת הגדרות
+            </button>
+        </form>
+    </div>
+</div>
+
+<!-- תצוגה מקדימה -->
+<div class="card animate-slide-up stagger-2" style="margin-top: var(--space-sm);">
+    <div class="card-header">
+        <span><i class="bi bi-eye"></i> תצוגה מקדימה — טון נוכחי</span>
+    </div>
+    <div class="card-body">
+        <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: var(--space-md);">
+            <p class="fw-semibold" style="margin-bottom: var(--space-xs);">כלל 4 ב-system prompt:</p>
+            <p style="color: var(--text-secondary);">{{ current_tone_instruction }}</p>
+
+            {% if personality.custom_instructions %}
+            <hr style="border-color: var(--border-color); margin: var(--space-sm) 0;">
+            <p class="fw-semibold" style="margin-bottom: var(--space-xs);">הוראות נוספות:</p>
+            <p style="white-space: pre-line; color: var(--text-secondary);">{{ personality.custom_instructions }}</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

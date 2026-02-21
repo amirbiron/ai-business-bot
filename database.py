@@ -197,6 +197,15 @@ def init_db():
             );
             INSERT OR IGNORE INTO vacation_mode (id) VALUES (1);
 
+            -- אישיות הבוט (שורה בודדת — תמיד id=1)
+            CREATE TABLE IF NOT EXISTS bot_personality (
+                id                   INTEGER PRIMARY KEY CHECK(id = 1),
+                tone                 TEXT DEFAULT 'friendly',
+                custom_instructions  TEXT DEFAULT '',
+                updated_at           TEXT DEFAULT (datetime('now'))
+            );
+            INSERT OR IGNORE INTO bot_personality (id) VALUES (1);
+
             -- Create indexes
             CREATE INDEX IF NOT EXISTS idx_kb_entries_category ON kb_entries(category);
             CREATE INDEX IF NOT EXISTS idx_kb_chunks_entry ON kb_chunks(entry_id);
@@ -1064,6 +1073,29 @@ def update_vacation_mode(is_active: bool, vacation_end_date: str = "", vacation_
                    updated_at = datetime('now')
                WHERE id = 1""",
             (int(is_active), vacation_end_date, vacation_message),
+        )
+
+
+# ─── Bot Personality (אישיות הבוט) ──────────────────────────────────────
+
+def get_bot_personality() -> dict:
+    """קבלת הגדרות אישיות הבוט. מחזיר dict עם tone, custom_instructions."""
+    with get_connection() as conn:
+        row = conn.execute("SELECT * FROM bot_personality WHERE id = 1").fetchone()
+        if row:
+            return dict(row)
+        return {"id": 1, "tone": "friendly", "custom_instructions": "", "updated_at": ""}
+
+
+def update_bot_personality(tone: str, custom_instructions: str = ""):
+    """עדכון הגדרות אישיות הבוט (טון + הוראות חופשיות)."""
+    with get_connection() as conn:
+        conn.execute(
+            """UPDATE bot_personality
+               SET tone = ?, custom_instructions = ?,
+                   updated_at = datetime('now')
+               WHERE id = 1""",
+            (tone, custom_instructions),
         )
 
 

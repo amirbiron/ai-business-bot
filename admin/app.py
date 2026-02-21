@@ -47,6 +47,7 @@ from ai_chatbot.config import (
     BUSINESS_PHONE,
     BUSINESS_ADDRESS,
     BUSINESS_WEBSITE,
+    BOT_TONE_PRESETS,
 )
 from ai_chatbot.rag.engine import rebuild_index, mark_index_stale, is_index_stale
 from ai_chatbot.live_chat_service import LiveChatService, send_telegram_message
@@ -728,6 +729,33 @@ def create_admin_app() -> Flask:
             vacation=vacation,
             preview_booking=preview_booking,
             preview_agent=preview_agent,
+        )
+
+    # ─── Bot Personality (אישיות הבוט) ──────────────────────────────────
+
+    @app.route("/bot-personality", methods=["GET", "POST"])
+    @login_required
+    def bot_personality():
+        if request.method == "POST":
+            tone = request.form.get("tone", "friendly").strip()
+            # וידוא שהטון קיים ברשימה
+            if tone not in BOT_TONE_PRESETS:
+                tone = "friendly"
+            custom_instructions = request.form.get("custom_instructions", "").strip()
+            db.update_bot_personality(tone, custom_instructions)
+            flash("אישיות הבוט עודכנה!", "success")
+            return redirect(url_for("bot_personality"))
+
+        personality = db.get_bot_personality()
+        tone_key = personality.get("tone", "friendly")
+        label, instruction = BOT_TONE_PRESETS.get(tone_key, BOT_TONE_PRESETS["friendly"])
+        return render_template(
+            "bot_personality.html",
+            business_name=BUSINESS_NAME,
+            personality=personality,
+            tone_presets=BOT_TONE_PRESETS,
+            current_tone_label=label,
+            current_tone_instruction=instruction,
         )
 
     # ─── Referrals (מערכת הפניות) ────────────────────────────────────────

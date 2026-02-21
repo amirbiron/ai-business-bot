@@ -21,6 +21,8 @@ from ai_chatbot.config import (
     SUMMARY_THRESHOLD,
     FOLLOW_UP_ENABLED,
     FOLLOW_UP_PROMPT,
+    BOT_TONE_PRESETS,
+    BOT_TONE_DEFAULT,
 )
 from ai_chatbot.rag.engine import retrieve, format_context
 from ai_chatbot import database as db
@@ -52,8 +54,19 @@ def _build_messages(
     """
     messages = []
 
-    # Layer A — System prompt (+ הוראות שאלות המשך אם הפיצ'ר פעיל)
-    system_content = SYSTEM_PROMPT
+    # Layer A — System prompt עם טון מותאם + הוראות חופשיות + שאלות המשך
+    personality = db.get_bot_personality()
+    tone_key = personality.get("tone", BOT_TONE_DEFAULT)
+    _, tone_instruction = BOT_TONE_PRESETS.get(
+        tone_key, BOT_TONE_PRESETS.get(BOT_TONE_DEFAULT, ("ידידותי", "היה חם, מועיל ותמציתי."))
+    )
+    system_content = SYSTEM_PROMPT.replace("{tone_instruction}", tone_instruction)
+
+    # הוראות חופשיות של בעל העסק — מוזרקות אחרי הכללים
+    custom_instructions = personality.get("custom_instructions", "").strip()
+    if custom_instructions:
+        system_content += f"\n\nהוראות נוספות מבעל העסק:\n{custom_instructions}"
+
     if FOLLOW_UP_ENABLED:
         system_content += FOLLOW_UP_PROMPT
     messages.append({
