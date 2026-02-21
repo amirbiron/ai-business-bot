@@ -160,6 +160,7 @@ def init_db():
                 id              INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id         TEXT NOT NULL UNIQUE,
                 code            TEXT NOT NULL UNIQUE,
+                sent            INTEGER DEFAULT 0,
                 created_at      TEXT DEFAULT (datetime('now'))
             );
 
@@ -305,6 +306,8 @@ def init_db():
             conn.execute("CREATE INDEX IF NOT EXISTS idx_referrals_referred ON referrals(referred_id)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_referrals_code ON referrals(code)")
             logger.info("Migrated referrals table to multi-referral schema")
+
+        _ensure_column("referral_codes", "sent", "INTEGER DEFAULT 0")
 
 
 def cleanup_stale_live_chats():
@@ -1164,6 +1167,30 @@ def get_user_referral_code(user_id: str) -> Optional[str]:
             (user_id,),
         ).fetchone()
         return row["code"] if row else None
+
+
+def is_referral_code_sent(user_id: str) -> bool:
+    """בדיקה האם קוד ההפניה כבר נשלח למשתמש."""
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT sent FROM referral_codes WHERE user_id = ?",
+            (user_id,),
+        ).fetchone()
+        return bool(row and row["sent"])
+
+
+def mark_referral_code_as_sent(user_id: str) -> bool:
+    """סימון אטומי שקוד ההפניה נשלח. מחזיר True רק אם הצליח לתפוס את הנעילה.
+
+    משמש למניעת race condition — רק תהליך אחד (בוט או אדמין) מצליח לסמן
+    sent=1 כש-sent=0, ורק הוא שולח את ההודעה.
+    """
+    with get_connection() as conn:
+        cursor = conn.execute(
+            "UPDATE referral_codes SET sent = 1 WHERE user_id = ? AND sent = 0",
+            (user_id,),
+        )
+        return cursor.rowcount > 0
 
 
 def get_active_credits(user_id: str) -> list[dict]:

@@ -828,15 +828,16 @@ async def cancel_appointment_callback(update: Update, context: ContextTypes.DEFA
 async def _maybe_send_referral_code(update: Update, user_id: str):
     """שליחת קוד הפניה אם המשתמש עדיין לא קיבל אחד.
 
-    נקרא אחרי בקשת תור ראשונה או לאחר מעורבות גבוהה.
+    נקרא אחרי אישור תור או לאחר מעורבות גבוהה.
+    משתמש ב-mark_referral_code_as_sent כנעילה אטומית — רק תהליך אחד
+    (בוט או אדמין) מצליח לשלוח, גם אם שניהם רצים במקביל.
     """
-    # אם כבר קיים קוד — לא שולחים שוב (שליחה ראשונה בלבד)
-    existing_code = db.get_user_referral_code(user_id)
-    if existing_code:
-        return
-
     code = db.generate_referral_code(user_id)
     if not code:
+        return
+
+    # נעילה אטומית — רק מי שמצליח לסמן sent=1 שולח בפועל
+    if not db.mark_referral_code_as_sent(user_id):
         return
 
     if TELEGRAM_BOT_USERNAME:
@@ -860,8 +861,8 @@ async def _check_high_engagement_referral(update: Update, user_id: str):
     - 10+ הודעות ב-30 הדקות האחרונות
     - 20+ הודעות ביום האחרון
     """
-    # אם כבר יש קוד — לא צריך לבדוק
-    if db.get_user_referral_code(user_id):
+    # אם כבר נשלח קוד — לא צריך לבדוק
+    if db.is_referral_code_sent(user_id):
         return
 
     from datetime import datetime, timedelta, timezone

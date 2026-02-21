@@ -573,25 +573,26 @@ def create_admin_app() -> Flask:
                             user_id, appt_id,
                         )
 
-                # שליחת קוד הפניה ללקוח אחרי אישור תור (אם עדיין אין לו קוד)
-                if not db.get_user_referral_code(user_id):
-                    code = db.generate_referral_code(user_id)
-                    if code:
-                        if TELEGRAM_BOT_USERNAME:
-                            link = f"https://t.me/{TELEGRAM_BOT_USERNAME}?start={code}"
-                        else:
-                            link = code
-                        referral_text = (
-                            "🎁 רוצים לשתף עם חבר/ה?\n\n"
-                            f"שלחו להם את הלינק הזה:\n{link}\n\n"
-                            "כשהם יקבעו וישלימו תור — "
-                            "גם אתם וגם הם תקבלו 10% הנחה לחודשיים!"
+                # שליחת קוד הפניה ללקוח אחרי אישור תור
+                # generate_referral_code אידמפוטנטי, mark_referral_code_as_sent
+                # אטומי — רק תהליך אחד (בוט/אדמין) מצליח לשלוח
+                code = db.generate_referral_code(user_id)
+                if code and db.mark_referral_code_as_sent(user_id):
+                    if TELEGRAM_BOT_USERNAME:
+                        link = f"https://t.me/{TELEGRAM_BOT_USERNAME}?start={code}"
+                    else:
+                        link = code
+                    referral_text = (
+                        "🎁 רוצים לשתף עם חבר/ה?\n\n"
+                        f"שלחו להם את הלינק הזה:\n{link}\n\n"
+                        "כשהם יקבעו וישלימו תור — "
+                        "גם אתם וגם הם תקבלו 10% הנחה לחודשיים!"
+                    )
+                    if not send_telegram_message(user_id, referral_text):
+                        logger.error(
+                            "Failed to send referral code to user %s",
+                            user_id,
                         )
-                        if not send_telegram_message(user_id, referral_text):
-                            logger.error(
-                                "Failed to send referral code to user %s",
-                                user_id,
-                            )
 
         if request.headers.get("HX-Request"):
             appt = db.get_appointment(appt_id)
