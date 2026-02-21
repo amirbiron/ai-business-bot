@@ -365,10 +365,22 @@ async def booking_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     return BOOKING_SERVICE
 
 
+async def _check_live_chat_during_booking(update: Update) -> bool:
+    """If live chat started mid-booking, save message and signal exit."""
+    user_id, display_name, _ = _get_user_info(update)
+    if db.is_live_chat_active(user_id):
+        db.save_message(user_id, display_name, "user", update.message.text)
+        return True
+    return False
+
+
 async def booking_service(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Receive the service selection."""
+    if await _check_live_chat_during_booking(update):
+        context.user_data.clear()
+        return ConversationHandler.END
     context.user_data["booking_service"] = update.message.text
-    
+
     await update.message.reply_text(
         "📆 מעולה! באיזה *תאריך* תעדיפו?\n"
         "(לדוגמה, 'יום שני', '15 במרץ', 'מחר')\n\n"
@@ -380,8 +392,11 @@ async def booking_service(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 async def booking_date(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Receive the preferred date."""
+    if await _check_live_chat_during_booking(update):
+        context.user_data.clear()
+        return ConversationHandler.END
     context.user_data["booking_date"] = update.message.text
-    
+
     await update.message.reply_text(
         "🕐 איזו *שעה* מתאימה לכם?\n"
         "(לדוגמה, '10:00', 'אחר הצהריים', '14:00')\n\n"
@@ -393,8 +408,11 @@ async def booking_date(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 
 async def booking_time(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Receive the preferred time and show confirmation."""
+    if await _check_live_chat_during_booking(update):
+        context.user_data.clear()
+        return ConversationHandler.END
     context.user_data["booking_time"] = update.message.text
-    
+
     service = context.user_data.get("booking_service", "")
     date = context.user_data.get("booking_date", "")
     time = context.user_data.get("booking_time", "")
@@ -413,6 +431,9 @@ async def booking_time(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 
 async def booking_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Handle booking confirmation."""
+    if await _check_live_chat_during_booking(update):
+        context.user_data.clear()
+        return ConversationHandler.END
     user_id, display_name, telegram_username = _get_user_info(update)
     answer = update.message.text.lower().strip()
     

@@ -410,20 +410,20 @@ def create_admin_app() -> Flask:
             live_session=live_session,
         )
 
-    @app.route("/live-chat/<user_id>/start", methods=["POST"])
-    @login_required
-    def live_chat_start(user_id):
+    def _do_start_live_chat(user_id: str) -> None:
+        """Shared logic: activate live chat, notify customer, save message."""
         users = db.get_unique_users()
         user_info = next((u for u in users if u["user_id"] == user_id), None)
         username = user_info["username"] if user_info else ""
         db.start_live_chat(user_id, username)
-        # Notify the customer that a human agent has joined
-        _send_telegram_message(
-            user_id,
-            "👤 נציג אנושי הצטרף לשיחה. כעת תקבלו מענה ישיר."
-        )
-        db.save_message(user_id, BUSINESS_NAME, "assistant",
-                        "👤 נציג אנושי הצטרף לשיחה. כעת תקבלו מענה ישיר.")
+        notify_msg = "👤 נציג אנושי הצטרף לשיחה. כעת תקבלו מענה ישיר."
+        _send_telegram_message(user_id, notify_msg)
+        db.save_message(user_id, BUSINESS_NAME, "assistant", notify_msg)
+
+    @app.route("/live-chat/<user_id>/start", methods=["POST"])
+    @login_required
+    def live_chat_start(user_id):
+        _do_start_live_chat(user_id)
         if request.headers.get("HX-Request"):
             return redirect(url_for("live_chat", user_id=user_id))
         return redirect(url_for("live_chat", user_id=user_id))
@@ -506,21 +506,14 @@ def create_admin_app() -> Flask:
             return redirect(url_for("agent_requests"))
         db.update_agent_request_status(request_id, status)
 
-        # If marking as handled and the user requested to start a live chat,
-        # perform the start logic inline instead of redirecting to the
-        # POST-only live_chat_start endpoint (which would cause a 405).
+        # Only start a live chat when the request is being marked as handled
+        # (not dismissed or other statuses) to avoid contradictory state.
         start_chat = request.form.get("start_live_chat")
-        if start_chat:
+        if start_chat and status == "handled":
             req = db.get_agent_request(request_id)
             if req:
                 uid = req["user_id"]
-                users = db.get_unique_users()
-                user_info = next((u for u in users if u["user_id"] == uid), None)
-                uname = user_info["username"] if user_info else ""
-                db.start_live_chat(uid, uname)
-                notify_msg = "👤 נציג אנושי הצטרף לשיחה. כעת תקבלו מענה ישיר."
-                _send_telegram_message(uid, notify_msg)
-                db.save_message(uid, BUSINESS_NAME, "assistant", notify_msg)
+                _do_start_live_chat(uid)
                 return redirect(url_for("live_chat", user_id=uid))
 
         if request.headers.get("HX-Request"):
