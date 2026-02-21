@@ -393,14 +393,18 @@ def create_admin_app() -> Flask:
             logger.error("Failed to send Telegram message to %s: %s", chat_id, e)
             return False
 
+    def _get_customer_username(user_id: str) -> str:
+        """Look up the customer's display name for a given user_id."""
+        users = db.get_unique_users()
+        user_info = next((u for u in users if u["user_id"] == user_id), None)
+        return user_info["username"] if user_info else user_id
+
     @app.route("/live-chat/<user_id>")
     @login_required
     def live_chat(user_id):
         live_session = db.get_active_live_chat(user_id)
         messages = db.get_conversation_history(user_id, limit=100)
-        users = db.get_unique_users()
-        user_info = next((u for u in users if u["user_id"] == user_id), None)
-        username = user_info["username"] if user_info else user_id
+        username = _get_customer_username(user_id)
         return render_template(
             "live_chat.html",
             business_name=BUSINESS_NAME,
@@ -409,12 +413,6 @@ def create_admin_app() -> Flask:
             messages=messages,
             live_session=live_session,
         )
-
-    def _get_customer_username(user_id: str) -> str:
-        """Look up the customer's display name for a given user_id."""
-        users = db.get_unique_users()
-        user_info = next((u for u in users if u["user_id"] == user_id), None)
-        return user_info["username"] if user_info else user_id
 
     def _do_start_live_chat(user_id: str) -> bool:
         """Shared logic: activate live chat, notify customer, save message.
@@ -454,6 +452,18 @@ def create_admin_app() -> Flask:
     @app.route("/live-chat/<user_id>/send", methods=["POST"])
     @login_required
     def live_chat_send(user_id):
+        # Reject if the session was ended (e.g. from another tab) while
+        # the form was still visible due to stale HTMX state.
+        if not db.is_live_chat_active(user_id):
+            if request.headers.get("HX-Request"):
+                resp = app.make_response(("", 409))
+                resp.headers["HX-Trigger"] = json.dumps(
+                    {"showToast": {"message": "השיחה החיה הסתיימה. רעננו את הדף.", "type": "warning"}}
+                )
+                return resp
+            flash("השיחה החיה הסתיימה.", "warning")
+            return redirect(url_for("live_chat", user_id=user_id))
+
         message_text = request.form.get("message", "").strip()
         if not message_text:
             if request.headers.get("HX-Request"):

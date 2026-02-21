@@ -2,12 +2,15 @@
 Database module — SQLite storage for knowledge base, conversations, and notifications.
 """
 
+import logging
 import sqlite3
 import json
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 from ai_chatbot.config import DB_PATH
 
@@ -136,6 +139,18 @@ def init_db():
 
         _ensure_column("agent_requests", "telegram_username", "TEXT DEFAULT ''")
         _ensure_column("appointments", "telegram_username", "TEXT DEFAULT ''")
+
+        # Deactivate any live chat sessions left over from a previous run.
+        # Without this, users whose sessions were active at shutdown would be
+        # permanently silenced (bot checks is_live_chat_active on every message).
+        stale = conn.execute(
+            "SELECT COUNT(*) AS cnt FROM live_chats WHERE is_active = 1"
+        ).fetchone()["cnt"]
+        if stale:
+            conn.execute(
+                "UPDATE live_chats SET is_active = 0, ended_at = datetime('now') WHERE is_active = 1"
+            )
+            logger.info("Cleaned up %d stale live chat session(s) from previous run.", stale)
 
 
 # ─── Knowledge Base CRUD ─────────────────────────────────────────────────────
