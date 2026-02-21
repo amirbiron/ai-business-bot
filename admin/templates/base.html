@@ -65,6 +65,12 @@
                         <i class="bi bi-calendar-check"></i> תורים
                     </a>
                 </li>
+                <li>
+                    <a href="/knowledge-gaps" class="{% if request.endpoint == 'knowledge_gaps' %}active{% endif %}">
+                        <i class="bi bi-question-circle"></i> פערי ידע
+                        <span id="gaps-badge" class="nav-badge" style="display:none;"></span>
+                    </a>
+                </li>
             </ul>
 
             <div class="sidebar-footer">
@@ -143,6 +149,15 @@
                         liveBadge.style.display = 'flex';
                     } else {
                         liveBadge.style.display = 'none';
+                    }
+                }
+                var gapsBadge = document.getElementById('gaps-badge');
+                if (gapsBadge) {
+                    if (data.open_knowledge_gaps > 0) {
+                        gapsBadge.textContent = data.open_knowledge_gaps;
+                        gapsBadge.style.display = 'flex';
+                    } else {
+                        gapsBadge.style.display = 'none';
                     }
                 }
             } catch (e) {}

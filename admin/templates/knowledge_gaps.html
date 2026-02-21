@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header animate-fade-in">
+    <h1><i class="bi bi-question-circle"></i> פערי ידע</h1>
+</div>
+
+<!-- Status Filters -->
+<div class="d-flex gap-sm" style="margin-bottom: var(--space-sm);">
+    <a href="/knowledge-gaps" class="btn {% if not current_status %}btn-primary{% else %}btn-secondary{% endif %} btn-sm">
+        הכל
+    </a>
+    <a href="/knowledge-gaps?status=open" class="btn {% if current_status == 'open' %}btn-primary{% else %}btn-secondary{% endif %} btn-sm">
+        פתוחים ({{ open_count }})
+    </a>
+    <a href="/knowledge-gaps?status=resolved" class="btn {% if current_status == 'resolved' %}btn-primary{% else %}btn-secondary{% endif %} btn-sm">
+        טופלו
+    </a>
+</div>
+
+<div class="card animate-slide-up">
+    <div class="card-body" style="padding: 0;">
+        {% if questions %}
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>מזהה</th>
+                        <th>לקוח</th>
+                        <th>שאלה</th>
+                        <th>סטטוס</th>
+                        <th>נוצר</th>
+                        <th>פעולות</th>
+                    </tr>
+                </thead>
+                <tbody id="gaps-table-body">
+                    {% for q in questions %}
+                    {% include "partials/knowledge_gap_row.html" %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <i class="bi bi-check-circle"></i>
+            <p>{% if current_status == 'open' %}אין שאלות פתוחות. הבוט עונה על הכל!{% elif current_status == 'resolved' %}אין שאלות שטופלו עדיין.{% else %}אין עדיין שאלות ללא מענה.{% endif %}</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

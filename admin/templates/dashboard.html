@@ -37,6 +37,11 @@
         <div class="stat-value">{{ stats.active_live_chats }}</div>
         <div class="stat-label">שיחות חיות</div>
     </div>
+    <div class="stat-card gradient-dark animate-slide-up stagger-5">
+        <div class="stat-icon"><i class="bi bi-question-circle"></i></div>
+        <div class="stat-value">{{ stats.open_knowledge_gaps }}</div>
+        <div class="stat-label">פערי ידע</div>
+    </div>
 </div>
 
 <!-- Active Live Chats -->
@@ -149,6 +154,40 @@
             </div>
             {% endif %}
         </div>
+    </div>
+</div>
+
+<!-- Knowledge Gaps -->
+<div class="card animate-slide-up stagger-5" style="margin-top: var(--space-sm);">
+    <div class="card-header">
+        <span><i class="bi bi-question-circle"></i> פערי ידע — שאלות ללא מענה</span>
+        <a href="/knowledge-gaps" class="btn btn-secondary btn-sm">הצג הכל</a>
+    </div>
+    <div class="card-body">
+        {% if recent_gaps %}
+        <div class="list-group">
+            {% for gap in recent_gaps %}
+            <div class="list-group-item">
+                <div class="d-flex justify-between align-center">
+                    <div>
+                        <span class="fw-semibold">{{ gap.username or gap.user_id }}</span>
+                        <br><span style="color: var(--text-secondary);">{{ gap.question }}</span>
+                        <br><span class="text-small text-muted">{{ gap.created_at|il_datetime }}</span>
+                    </div>
+                    <a href="/kb/add?question={{ gap.question|urlencode }}&gap_id={{ gap.id }}"
+                       class="btn btn-primary btn-sm">
+                        <i class="bi bi-plus-circle"></i> הוסף תשובה
+                    </a>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <i class="bi bi-check-circle"></i>
+            <p>אין שאלות ללא מענה. הבוט עונה על הכל!</p>
+        </div>
+        {% endif %}
     </div>
 </div>
 {% endblock %}

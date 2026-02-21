@@ -121,6 +121,17 @@ def init_db():
                 ended_at    TEXT
             );
 
+            -- Unanswered questions (knowledge gaps)
+            CREATE TABLE IF NOT EXISTS unanswered_questions (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id     TEXT NOT NULL,
+                username    TEXT DEFAULT '',
+                question    TEXT NOT NULL,
+                status      TEXT DEFAULT 'open' CHECK(status IN ('open', 'resolved')),
+                created_at  TEXT DEFAULT (datetime('now')),
+                resolved_at TEXT
+            );
+
             -- Create indexes
             CREATE INDEX IF NOT EXISTS idx_kb_entries_category ON kb_entries(category);
             CREATE INDEX IF NOT EXISTS idx_kb_chunks_entry ON kb_chunks(entry_id);
@@ -128,6 +139,7 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_agent_requests_status ON agent_requests(status);
             CREATE INDEX IF NOT EXISTS idx_conversation_summaries_user ON conversation_summaries(user_id);
             CREATE INDEX IF NOT EXISTS idx_live_chats_user_active ON live_chats(user_id, is_active);
+            CREATE INDEX IF NOT EXISTS idx_unanswered_questions_status ON unanswered_questions(status);
         """)
 
         # Lightweight migrations for existing databases (SQLite can only ADD COLUMN).
@@ -609,3 +621,63 @@ def count_active_live_chats() -> int:
             "SELECT COUNT(*) AS count FROM live_chats WHERE is_active=1"
         ).fetchone()
         return int(row["count"]) if row else 0
+
+
+# ─── Unanswered Questions (Knowledge Gaps) ──────────────────────────────────
+
+def save_unanswered_question(user_id: str, username: str, question: str):
+    """Log a question that the bot could not answer (fallback triggered)."""
+    with get_connection() as conn:
+        conn.execute(
+            "INSERT INTO unanswered_questions (user_id, username, question) VALUES (?, ?, ?)",
+            (user_id, username, question),
+        )
+
+
+def get_unanswered_questions(status: str | None = None, limit: int | None = None) -> list[dict]:
+    """Get unanswered questions, optionally filtered by status."""
+    with get_connection() as conn:
+        params: list[object] = []
+        if status:
+            query = "SELECT * FROM unanswered_questions WHERE status=? ORDER BY created_at DESC"
+            params.append(status)
+        else:
+            query = "SELECT * FROM unanswered_questions ORDER BY created_at DESC"
+        if limit is not None:
+            query += " LIMIT ?"
+            params.append(limit)
+        rows = conn.execute(query, params).fetchall()
+        return [dict(r) for r in rows]
+
+
+def count_unanswered_questions(status: str | None = None) -> int:
+    """Count unanswered questions, optionally filtered by status."""
+    with get_connection() as conn:
+        if status:
+            row = conn.execute(
+                "SELECT COUNT(*) AS count FROM unanswered_questions WHERE status=?",
+                (status,),
+            ).fetchone()
+        else:
+            row = conn.execute(
+                "SELECT COUNT(*) AS count FROM unanswered_questions"
+            ).fetchone()
+        return int(row["count"]) if row else 0
+
+
+def update_unanswered_question_status(question_id: int, status: str):
+    """Update the status of an unanswered question."""
+    with get_connection() as conn:
+        conn.execute(
+            "UPDATE unanswered_questions SET status=?, resolved_at=datetime('now') WHERE id=?",
+            (status, question_id),
+        )
+
+
+def get_unanswered_question(question_id: int) -> Optional[dict]:
+    """Get a single unanswered question by ID."""
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM unanswered_questions WHERE id=?", (question_id,)
+        ).fetchone()
+        return dict(row) if row else None

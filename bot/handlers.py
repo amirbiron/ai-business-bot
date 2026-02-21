@@ -544,6 +544,7 @@ async def _handle_rag_query(
         user_query=query,
         conversation_history=history,
         user_id=user_id,
+        username=display_name,
     )
 
     stripped = strip_source_citation(result["answer"])
