@@ -1467,6 +1467,27 @@ def is_user_subscribed(user_id: str) -> bool:
         return bool(row["is_subscribed"]) if row else True
 
 
+def _broadcast_audience_sql(audience: str) -> tuple[str, str]:
+    """בניית חלקי ה-SQL המשותפים לפי סוג קהל.
+
+    מחזיר (join_clause, where_clause) — משותפים ל-get ול-count.
+    """
+    base_join = "LEFT JOIN user_subscriptions us ON c.user_id = us.user_id"
+    base_where = "COALESCE(us.is_subscribed, 1) = 1"
+
+    if audience == "booked":
+        join = f"JOIN appointments a ON c.user_id = a.user_id\n                {base_join}"
+        where = base_where
+    elif audience == "recent":
+        join = base_join
+        where = f"c.created_at >= datetime('now', '-30 days')\n                  AND {base_where}"
+    else:  # all
+        join = base_join
+        where = base_where
+
+    return join, where
+
+
 def get_broadcast_recipients(audience: str) -> list[str]:
     """קבלת רשימת user_ids לשידור לפי סוג קהל.
 
@@ -1474,30 +1495,14 @@ def get_broadcast_recipients(audience: str) -> list[str]:
     - booked: רק מי שקבע תור (אי פעם)
     - recent: רק מי שהיה פעיל ב-30 הימים האחרונים
     """
+    join, where = _broadcast_audience_sql(audience)
     with get_connection() as conn:
-        if audience == "booked":
-            rows = conn.execute("""
-                SELECT DISTINCT c.user_id
-                FROM conversations c
-                JOIN appointments a ON c.user_id = a.user_id
-                LEFT JOIN user_subscriptions us ON c.user_id = us.user_id
-                WHERE COALESCE(us.is_subscribed, 1) = 1
-            """).fetchall()
-        elif audience == "recent":
-            rows = conn.execute("""
-                SELECT DISTINCT c.user_id
-                FROM conversations c
-                LEFT JOIN user_subscriptions us ON c.user_id = us.user_id
-                WHERE c.created_at >= datetime('now', '-30 days')
-                  AND COALESCE(us.is_subscribed, 1) = 1
-            """).fetchall()
-        else:  # all
-            rows = conn.execute("""
-                SELECT DISTINCT c.user_id
-                FROM conversations c
-                LEFT JOIN user_subscriptions us ON c.user_id = us.user_id
-                WHERE COALESCE(us.is_subscribed, 1) = 1
-            """).fetchall()
+        rows = conn.execute(f"""
+            SELECT DISTINCT c.user_id
+            FROM conversations c
+            {join}
+            WHERE {where}
+        """).fetchall()
         return [r["user_id"] for r in rows]
 
 
@@ -1506,28 +1511,12 @@ def count_broadcast_recipients(audience: str) -> int:
 
     משתמש ב-COUNT ברמת ה-SQL במקום לטעון את כל הרשומות לזיכרון.
     """
+    join, where = _broadcast_audience_sql(audience)
     with get_connection() as conn:
-        if audience == "booked":
-            row = conn.execute("""
-                SELECT COUNT(DISTINCT c.user_id) AS cnt
-                FROM conversations c
-                JOIN appointments a ON c.user_id = a.user_id
-                LEFT JOIN user_subscriptions us ON c.user_id = us.user_id
-                WHERE COALESCE(us.is_subscribed, 1) = 1
-            """).fetchone()
-        elif audience == "recent":
-            row = conn.execute("""
-                SELECT COUNT(DISTINCT c.user_id) AS cnt
-                FROM conversations c
-                LEFT JOIN user_subscriptions us ON c.user_id = us.user_id
-                WHERE c.created_at >= datetime('now', '-30 days')
-                  AND COALESCE(us.is_subscribed, 1) = 1
-            """).fetchone()
-        else:  # all
-            row = conn.execute("""
-                SELECT COUNT(DISTINCT c.user_id) AS cnt
-                FROM conversations c
-                LEFT JOIN user_subscriptions us ON c.user_id = us.user_id
-                WHERE COALESCE(us.is_subscribed, 1) = 1
-            """).fetchone()
+        row = conn.execute(f"""
+            SELECT COUNT(DISTINCT c.user_id) AS cnt
+            FROM conversations c
+            {join}
+            WHERE {where}
+        """).fetchone()
         return int(row["cnt"]) if row else 0

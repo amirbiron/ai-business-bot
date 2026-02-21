@@ -877,16 +877,18 @@ def create_admin_app() -> Flask:
         bot = get_bot()
         loop = get_loop()
 
+        # admin-only mode — יוצרים Bot חדש שיאותחל ע"י ה-worker
+        needs_init = False
         if bot is None:
-            # admin-only mode — יוצרים Bot חדש
             if TELEGRAM_BOT_TOKEN:
                 bot = TelegramBot(token=TELEGRAM_BOT_TOKEN)
+                needs_init = True
             else:
                 db.fail_broadcast(broadcast_id, 0, len(recipients))
                 flash("לא ניתן לשלוח — אין טוקן בוט מוגדר.", "danger")
                 return redirect(url_for("broadcast"))
 
-        start_broadcast_task(bot, broadcast_id, message_text, recipients, loop)
+        start_broadcast_task(bot, broadcast_id, message_text, recipients, loop, needs_init=needs_init)
         flash(
             f"ההודעה נכנסה לתור שליחה — {len(recipients)} נמענים. "
             "ניתן לעקוב אחר ההתקדמות בטבלה למטה.",

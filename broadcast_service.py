@@ -33,57 +33,69 @@ async def send_broadcast(
     broadcast_id: int,
     message_text: str,
     recipients: list[str],
+    *,
+    needs_init: bool = False,
 ) -> None:
     """שליחת הודעת שידור לרשימת נמענים ברקע.
 
     מעדכן את ה-DB בהתקדמות ובסיום. מטפל ב-RetryAfter (429) ו-Forbidden (חסום).
+    אם needs_init=True (admin-only mode), מאתחל את ה-Bot לפני השליחה וסוגר בסוף.
     """
+    # אתחול Bot שנוצר מחוץ ל-Application (admin-only mode)
+    if needs_init:
+        await bot.initialize()
+
     sent = 0
     failed = 0
 
-    for i, user_id in enumerate(recipients):
-        try:
-            await bot.send_message(chat_id=int(user_id), text=message_text)
-            sent += 1
-        except Forbidden:
-            # המשתמש חסם את הבוט — מסמנים כלא-מנוי
-            logger.info("Broadcast %d: user %s blocked the bot, unsubscribing", broadcast_id, user_id)
-            db.unsubscribe_user(user_id)
-            failed += 1
-        except RetryAfter as e:
-            # טלגרם מבקש להמתין — מכבדים ומנסים שוב
-            logger.warning("Broadcast %d: rate limited, waiting %s seconds", broadcast_id, e.retry_after)
-            await asyncio.sleep(e.retry_after)
+    try:
+        for i, user_id in enumerate(recipients):
             try:
                 await bot.send_message(chat_id=int(user_id), text=message_text)
                 sent += 1
             except Forbidden:
-                # המשתמש חסם את הבוט גם בניסיון החוזר — מסמנים כלא-מנוי
-                logger.info("Broadcast %d: user %s blocked the bot on retry, unsubscribing", broadcast_id, user_id)
+                # המשתמש חסם את הבוט — מסמנים כלא-מנוי
+                logger.info("Broadcast %d: user %s blocked the bot, unsubscribing", broadcast_id, user_id)
                 db.unsubscribe_user(user_id)
                 failed += 1
-            except Exception as retry_err:
-                logger.error("Broadcast %d: retry failed for user %s: %s", broadcast_id, user_id, retry_err)
+            except RetryAfter as e:
+                # טלגרם מבקש להמתין — מכבדים ומנסים שוב
+                logger.warning("Broadcast %d: rate limited, waiting %s seconds", broadcast_id, e.retry_after)
+                await asyncio.sleep(e.retry_after)
+                try:
+                    await bot.send_message(chat_id=int(user_id), text=message_text)
+                    sent += 1
+                except Forbidden:
+                    # המשתמש חסם את הבוט גם בניסיון החוזר — מסמנים כלא-מנוי
+                    logger.info("Broadcast %d: user %s blocked the bot on retry, unsubscribing", broadcast_id, user_id)
+                    db.unsubscribe_user(user_id)
+                    failed += 1
+                except Exception as retry_err:
+                    logger.error("Broadcast %d: retry failed for user %s: %s", broadcast_id, user_id, retry_err)
+                    failed += 1
+            except (TimedOut, BadRequest) as e:
+                logger.error("Broadcast %d: failed for user %s: %s", broadcast_id, user_id, e)
                 failed += 1
-        except (TimedOut, BadRequest) as e:
-            logger.error("Broadcast %d: failed for user %s: %s", broadcast_id, user_id, e)
-            failed += 1
-        except Exception as e:
-            logger.error("Broadcast %d: unexpected error for user %s: %s", broadcast_id, user_id, e)
-            failed += 1
+            except Exception as e:
+                logger.error("Broadcast %d: unexpected error for user %s: %s", broadcast_id, user_id, e)
+                failed += 1
 
-        # עדכון התקדמות ב-DB מדי פעם
-        if (i + 1) % _PROGRESS_UPDATE_INTERVAL == 0:
-            db.update_broadcast_progress(broadcast_id, sent, failed)
+            # עדכון התקדמות ב-DB מדי פעם
+            if (i + 1) % _PROGRESS_UPDATE_INTERVAL == 0:
+                db.update_broadcast_progress(broadcast_id, sent, failed)
 
-        await asyncio.sleep(_SEND_DELAY)
+            await asyncio.sleep(_SEND_DELAY)
 
-    # סיום — עדכון סופי
-    db.complete_broadcast(broadcast_id, sent, failed)
-    logger.info(
-        "Broadcast %d completed: %d sent, %d failed out of %d recipients",
-        broadcast_id, sent, failed, len(recipients),
-    )
+        # סיום — עדכון סופי
+        db.complete_broadcast(broadcast_id, sent, failed)
+        logger.info(
+            "Broadcast %d completed: %d sent, %d failed out of %d recipients",
+            broadcast_id, sent, failed, len(recipients),
+        )
+    finally:
+        # סגירת ה-Bot אם אותחל כאן (admin-only mode)
+        if needs_init:
+            await bot.shutdown()
 
 
 def start_broadcast_task(
@@ -92,6 +104,8 @@ def start_broadcast_task(
     message_text: str,
     recipients: list[str],
     loop: Optional[asyncio.AbstractEventLoop] = None,
+    *,
+    needs_init: bool = False,
 ) -> None:
     """הפעלת שליחת שידור כ-task ברקע ב-event loop קיים.
 
@@ -99,9 +113,13 @@ def start_broadcast_task(
     אם אין event loop (למשל admin-only mode) — שולח סינכרוני ב-thread חדש.
     """
     if loop is not None and loop.is_running():
-        asyncio.run_coroutine_threadsafe(
-            send_broadcast(bot, broadcast_id, message_text, recipients),
+        future = asyncio.run_coroutine_threadsafe(
+            send_broadcast(bot, broadcast_id, message_text, recipients, needs_init=needs_init),
             loop,
+        )
+        # טיפול בשגיאות שנופלות מחוץ ללולאת ה-per-message (למשל DB errors)
+        future.add_done_callback(
+            lambda f: _handle_future_error(f, broadcast_id, len(recipients))
         )
     else:
         # fallback — הרצה בלולאה חדשה (admin-only mode ללא בוט פעיל)
@@ -109,10 +127,21 @@ def start_broadcast_task(
 
         def _run():
             try:
-                asyncio.run(send_broadcast(bot, broadcast_id, message_text, recipients))
+                asyncio.run(send_broadcast(bot, broadcast_id, message_text, recipients, needs_init=needs_init))
             except Exception as e:
                 logger.error("Broadcast thread failed: %s", e)
                 db.fail_broadcast(broadcast_id, 0, len(recipients))
 
         thread = threading.Thread(target=_run, daemon=True, name=f"broadcast-{broadcast_id}")
         thread.start()
+
+
+def _handle_future_error(future: asyncio.Future, broadcast_id: int, total: int) -> None:
+    """callback לטיפול בשגיאות של broadcast task שרץ ב-event loop."""
+    exc = future.exception()
+    if exc is not None:
+        logger.error("Broadcast %d task failed: %s", broadcast_id, exc)
+        try:
+            db.fail_broadcast(broadcast_id, 0, total)
+        except Exception as db_err:
+            logger.error("Broadcast %d: failed to mark as failed in DB: %s", broadcast_id, db_err)
