@@ -45,19 +45,19 @@
                 <tbody>
                     {% for entry in entries %}
                     <tr id="kb-row-{{ entry.id }}">
-                        <td>{{ entry.id }}</td>
-                        <td><span class="badge badge-category">{{ entry.category|translate_category }}</span></td>
-                        <td class="fw-semibold" style="color: var(--text-primary);">{{ entry.title }}</td>
-                        <td>{{ entry.content[:100] }}{% if entry.content|length > 100 %}...{% endif %}</td>
-                        <td>
+                        <td data-label="מזהה">{{ entry.id }}</td>
+                        <td data-label="קטגוריה"><span class="badge badge-category">{{ entry.category|translate_category }}</span></td>
+                        <td data-label="כותרת" class="fw-semibold" style="color: var(--text-primary);">{{ entry.title }}</td>
+                        <td data-label="תצוגה מקדימה">{{ entry.content[:100] }}{% if entry.content|length > 100 %}...{% endif %}</td>
+                        <td data-label="סטטוס">
                             {% if entry.is_active %}
                             <span class="badge badge-success">פעיל</span>
                             {% else %}
                             <span class="badge badge-danger">לא פעיל</span>
                             {% endif %}
                         </td>
-                        <td class="text-small text-muted">{{ entry.updated_at|il_datetime }}</td>
-                        <td>
+                        <td data-label="עודכן" class="text-small text-muted">{{ entry.updated_at|il_datetime }}</td>
+                        <td data-label="פעולות">
                             <div class="actions-cell">
                                 <a href="/kb/edit/{{ entry.id }}" class="btn btn-secondary btn-icon btn-sm" title="ערוך">
                                     <i class="bi bi-pencil"></i>

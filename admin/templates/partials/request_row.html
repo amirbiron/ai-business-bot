@@ -1,6 +1,6 @@
 <tr id="request-row-{{ req.id }}">
-    <td>{{ req.id }}</td>
-    <td>
+    <td data-label="מזהה">{{ req.id }}</td>
+    <td data-label="לקוח">
         <span class="fw-semibold" style="color: var(--text-primary);">{{ req.username }}</span>
         {% if req.telegram_username %}
         <br>
@@ -11,8 +11,8 @@
         <br><span class="text-small text-muted">ללא שם משתמש בטלגרם</span>
         {% endif %}
     </td>
-    <td>{{ req.message }}</td>
-    <td>
+    <td data-label="הודעה">{{ req.message }}</td>
+    <td data-label="סטטוס">
         {% if req.status == 'pending' %}
         <span class="badge badge-warning">ממתין</span>
         {% elif req.status == 'handled' %}
@@ -23,8 +23,8 @@
         <span class="badge badge-muted">{{ req.status }}</span>
         {% endif %}
     </td>
-    <td class="text-small text-muted">{{ req.created_at|il_datetime }}</td>
-    <td>
+    <td data-label="נוצר" class="text-small text-muted">{{ req.created_at|il_datetime }}</td>
+    <td data-label="פעולות">
         {% if req.status == 'pending' %}
         <div class="actions-cell">
             <button class="btn btn-success btn-sm"

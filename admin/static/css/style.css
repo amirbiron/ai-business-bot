@@ -1114,9 +1114,81 @@ textarea:focus-visible,
         max-width: 95%;
     }
 
-    table th, table td {
-        padding: 0.625rem 0.5rem;
-        font-size: 0.825rem;
+    /* --- Mobile Card Table Layout --- */
+    table {
+        border: none;
+    }
+
+    table thead {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        margin: -1px;
+        padding: 0;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        border: 0;
+    }
+
+    table tbody,
+    table tr,
+    table td {
+        display: block;
+        width: 100%;
+    }
+
+    table tr {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        margin-bottom: 0.75rem;
+        padding: 0.75rem;
+        box-shadow: var(--shadow-sm);
+    }
+
+    table tbody tr:hover {
+        background-color: var(--bg-card);
+    }
+
+    table tbody tr:last-child td {
+        border-bottom: 1px solid rgba(51, 65, 85, 0.3);
+    }
+
+    table tbody tr:last-child td:last-child {
+        border-bottom: none;
+    }
+
+    table td {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.5rem 0.25rem;
+        font-size: 0.9375rem;
+        border-bottom: 1px solid rgba(51, 65, 85, 0.3);
+        text-align: left;
+    }
+
+    table td:last-child {
+        border-bottom: none;
+    }
+
+    table td::before {
+        content: attr(data-label);
+        font-weight: 600;
+        color: var(--text-muted);
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        flex-shrink: 0;
+        margin-left: 1rem;
+    }
+
+    table td .actions-cell {
+        justify-content: flex-end;
+    }
+
+    .table-wrapper {
+        overflow-x: visible;
     }
 }
 
