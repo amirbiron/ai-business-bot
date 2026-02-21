@@ -829,7 +829,7 @@ async def _maybe_send_referral_code(update: Update, user_id: str):
 
     נקרא אחרי אישור תור או לאחר מעורבות גבוהה.
     הטקסט מגיע מ-referral_service (מקור אמת יחיד לבוט ולאדמין).
-    נעילה אטומית ו-rollback בכישלון.
+    נעילה אטומית ו-rollback בכישלון — כולל כשלון שקט (message=None).
     """
     from ai_chatbot.referral_service import get_referral_message_text
 
@@ -841,9 +841,14 @@ async def _maybe_send_referral_code(update: Update, user_id: str):
         return
 
     text = get_referral_message_text(code)
+    success = False
     try:
-        await _reply_markdown_safe(update.message, text)
+        result = await _reply_markdown_safe(update.message, text)
+        success = result is not None
     except Exception:
+        logger.error("Exception sending referral code to user %s", user_id, exc_info=True)
+
+    if not success:
         db.unmark_referral_code_sent(user_id)
         logger.error("Failed to send referral code to user %s, flag reset", user_id)
 
