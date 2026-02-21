@@ -25,6 +25,7 @@ from telegram.ext import ContextTypes, ConversationHandler
 
 from ai_chatbot import database as db
 from ai_chatbot.llm import generate_answer, strip_source_citation, maybe_summarize
+from ai_chatbot.intent import Intent, detect_intent, get_direct_response
 from ai_chatbot.config import (
     BUSINESS_NAME,
     TELEGRAM_OWNER_CHAT_ID,
@@ -495,11 +496,14 @@ async def booking_button_interrupt(update: Update, context: ContextTypes.DEFAULT
 async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Handle any free-text message from the user.
-    Routes through the RAG + LLM pipeline.
+
+    Intent detection is applied first so that simple messages (greetings,
+    farewells, booking requests) are routed without an expensive RAG + LLM
+    round-trip.  Only GENERAL and PRICING intents go through the RAG pipeline.
     """
     user_id, display_name, telegram_username = _get_user_info(update)
     user_message = update.message.text
-    
+
     # Check for button texts and route accordingly
     if user_message == BUTTON_PRICE_LIST:
         return await price_list_handler(update, context)
@@ -507,7 +511,77 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return await location_handler(update, context)
     elif user_message == BUTTON_AGENT:
         return await talk_to_agent_handler(update, context)
-    
+
+    # ── Intent Detection ──────────────────────────────────────────────────
+    intent = detect_intent(user_message)
+
+    # Greeting — respond directly, no RAG needed
+    if intent == Intent.GREETING:
+        db.save_message(user_id, display_name, "user", user_message)
+        response = get_direct_response(intent)
+        db.save_message(user_id, display_name, "assistant", response)
+        await update.message.reply_text(response, reply_markup=_get_main_keyboard())
+        return
+
+    # Farewell — respond directly with feedback prompt
+    if intent == Intent.FAREWELL:
+        db.save_message(user_id, display_name, "user", user_message)
+        response = get_direct_response(intent)
+        db.save_message(user_id, display_name, "assistant", response)
+        await update.message.reply_text(response, reply_markup=_get_main_keyboard())
+        return
+
+    # Appointment booking — redirect to the booking flow
+    if intent == Intent.APPOINTMENT_BOOKING:
+        return await booking_start(update, context)
+
+    # Appointment cancellation — notify the owner
+    if intent == Intent.APPOINTMENT_CANCEL:
+        db.save_message(user_id, display_name, "user", user_message)
+        await _create_request_and_notify_owner(
+            context,
+            user_id=user_id,
+            display_name=display_name,
+            telegram_username=telegram_username,
+            message=f"הלקוח מבקש לבטל תור. הודעת הלקוח: {user_message}",
+        )
+        response = (
+            "קיבלתי את בקשתכם לביטול התור. ✅\n\n"
+            "העברתי את הבקשה לצוות שלנו — נציג יחזור אליכם בקרוב לאשר את הביטול."
+        )
+        db.save_message(user_id, display_name, "assistant", response)
+        await update.message.reply_text(response, reply_markup=_get_main_keyboard())
+        return
+
+    # Pricing — use targeted RAG query focused on pricing
+    if intent == Intent.PRICING:
+        await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
+        db.save_message(user_id, display_name, "user", user_message)
+
+        history = db.get_conversation_history(user_id, limit=CONTEXT_WINDOW_SIZE)
+        result = await _generate_answer_async(
+            user_query="מחירון: " + user_message,
+            conversation_history=history,
+            user_id=user_id,
+        )
+
+        stripped = strip_source_citation(result["answer"])
+        if _should_handoff_to_human(stripped):
+            await _handoff_to_human(
+                update, context,
+                user_id=user_id,
+                display_name=display_name,
+                telegram_username=telegram_username,
+                reason=f"הלקוח שאל על מחירים: {user_message}",
+            )
+        else:
+            db.save_message(user_id, display_name, "assistant", result["answer"], ", ".join(result["sources"]))
+            await _reply_markdown_safe(update.message, stripped, reply_markup=_get_main_keyboard())
+
+        context.application.create_task(_summarize_safe(user_id))
+        return
+
+    # ── General (default) — full RAG pipeline ─────────────────────────────
     # Show typing indicator
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
 
