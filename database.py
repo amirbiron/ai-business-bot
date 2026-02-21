@@ -140,9 +140,15 @@ def init_db():
         _ensure_column("agent_requests", "telegram_username", "TEXT DEFAULT ''")
         _ensure_column("appointments", "telegram_username", "TEXT DEFAULT ''")
 
-        # Deactivate any live chat sessions left over from a previous run.
-        # Without this, users whose sessions were active at shutdown would be
-        # permanently silenced (bot checks is_live_chat_active on every message).
+
+def cleanup_stale_live_chats():
+    """Deactivate live chat sessions left over from a previous bot run.
+
+    Called from the bot startup path only — not from init_db() — so that
+    a bot-only restart doesn't silently end sessions still managed by
+    the admin panel running in a separate process.
+    """
+    with get_connection() as conn:
         stale = conn.execute(
             "SELECT COUNT(*) AS cnt FROM live_chats WHERE is_active = 1"
         ).fetchone()["cnt"]
@@ -284,8 +290,8 @@ def get_conversation_history(user_id: str, limit: int = 20) -> list[dict]:
     """Get recent conversation history for a user."""
     with get_connection() as conn:
         rows = conn.execute(
-            """SELECT role, message, sources, created_at 
-               FROM conversations WHERE user_id=? 
+            """SELECT role, username, message, sources, created_at
+               FROM conversations WHERE user_id=?
                ORDER BY id DESC LIMIT ?""",
             (user_id, limit)
         ).fetchall()
