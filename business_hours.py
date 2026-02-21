@@ -162,6 +162,9 @@ def get_status_for_date(target_date: date = None) -> dict:
 def is_currently_open() -> dict:
     """Check if the business is currently open right now.
 
+    Checks yesterday's overnight shift first (e.g. Mon 22:00–Tue 02:00
+    when it's 01:00 Tue), then today's schedule.
+
     Returns a dict with:
         - is_open (bool)
         - message (str): Hebrew message suitable for the bot
@@ -171,6 +174,21 @@ def is_currently_open() -> dict:
     now = _now_israel()
     today = now.date()
     current_time = now.time()
+
+    # Check if we're still in yesterday's overnight shift
+    yesterday = today - timedelta(days=1)
+    yesterday_status = get_status_for_date(yesterday)
+    if yesterday_status["is_open"] and yesterday_status.get("open_time") and yesterday_status.get("close_time"):
+        y_open = time.fromisoformat(yesterday_status["open_time"])
+        y_close = time.fromisoformat(yesterday_status["close_time"])
+        if y_close <= y_open and current_time < y_close:
+            # Still within yesterday's overnight shift
+            return {
+                "is_open": True,
+                "message": f"\u2705 כן! אנחנו פתוחים עד {yesterday_status['close_time']}.",
+                "status_emoji": "\u2705",
+                "next_opening": None,
+            }
 
     day_status = get_status_for_date(today)
 

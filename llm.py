@@ -65,8 +65,8 @@ def _build_messages(
             "\n\nמידע שעות פעילות (מעודכן בזמן אמת):\n\n"
             f"{hours_context}"
         )
-    except Exception:
-        pass  # Don't break the pipeline if hours context fails
+    except Exception as e:
+        logger.error("Failed to build business hours context: %s", e)
 
     context_message = (
         "מידע הקשר:\n\n"
