@@ -1091,8 +1091,7 @@ textarea:focus-visible,
         margin-right: 0;
         padding: 1rem;
         padding-top: calc(var(--topbar-height) + 1rem);
-        max-width: 100vw;
-        overflow-x: hidden;
+        min-width: 0;
     }
 
     .page-header h1 {
