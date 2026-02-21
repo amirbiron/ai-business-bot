@@ -858,15 +858,6 @@ def get_special_day_by_date(date_str: str) -> Optional[dict]:
         return dict(row) if row else None
 
 
-def get_special_day(special_day_id: int) -> Optional[dict]:
-    """Get a single special day by ID."""
-    with get_connection() as conn:
-        row = conn.execute(
-            "SELECT * FROM special_days WHERE id=?", (special_day_id,)
-        ).fetchone()
-        return dict(row) if row else None
-
-
 def add_special_day(
     date_str: str,
     name: str,

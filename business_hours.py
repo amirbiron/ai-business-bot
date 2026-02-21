@@ -48,12 +48,12 @@ def _today_israel() -> date:
     return _now_israel().date()
 
 
-def _get_israeli_holidays(year: int) -> dict[date, str]:
-    """Get Israeli holidays for a given year.
+def _get_israeli_holidays(*years: int) -> dict[date, str]:
+    """Get Israeli holidays for one or more years.
 
     Returns a dict mapping date -> holiday name (in Hebrew where available).
     """
-    il_holidays = holidays_lib.Israel(years=year, language="he")
+    il_holidays = holidays_lib.Israel(years=list(years), language="he")
     return dict(il_holidays)
 
 
@@ -101,7 +101,12 @@ def get_status_for_date(target_date: date = None) -> dict:
         }
 
     # 2. Check Israeli holiday calendar
-    il_holidays = _get_israeli_holidays(target_date.year)
+    # Include next year to handle year-boundary erev chag (e.g. Dec 31 → Jan 1)
+    holiday_years = {target_date.year}
+    tomorrow = target_date + timedelta(days=1)
+    holiday_years.add(tomorrow.year)
+    il_holidays = _get_israeli_holidays(*holiday_years)
+
     if target_date in il_holidays:
         holiday_name = il_holidays[target_date]
         return {
@@ -114,16 +119,17 @@ def get_status_for_date(target_date: date = None) -> dict:
             "day_name": day_name,
         }
 
-    # Also check erev-chag (day before major holidays) — commonly closed in the afternoon
-    tomorrow = target_date + timedelta(days=1)
-    if tomorrow in il_holidays:
+    # Check regular hours first — needed for both erev chag and step 3
+    hours = db.get_business_hours_for_day(il_day)
+    is_regularly_closed = not hours or hours["is_closed"]
+
+    # Erev chag: only flag if the business is normally open on this day
+    if tomorrow in il_holidays and not is_regularly_closed:
         tomorrow_name = il_holidays[tomorrow]
-        # Check if we have a special day override for erev chag
-        # If not, keep regular hours but flag it
         return {
             "is_open": True,
-            "open_time": None,
-            "close_time": None,
+            "open_time": hours["open_time"],
+            "close_time": hours["close_time"],
             "reason": f"ערב {tomorrow_name}",
             "notes": "ייתכן שעות מקוצרות — מומלץ לבדוק מראש",
             "source": "erev_chag",
@@ -131,8 +137,7 @@ def get_status_for_date(target_date: date = None) -> dict:
         }
 
     # 3. Regular business hours
-    hours = db.get_business_hours_for_day(il_day)
-    if not hours or hours["is_closed"]:
+    if is_regularly_closed:
         return {
             "is_open": False,
             "open_time": None,
@@ -182,16 +187,8 @@ def is_currently_open() -> dict:
     open_time_str = day_status.get("open_time")
     close_time_str = day_status.get("close_time")
 
-    # If erev_chag without specific hours, fall back to regular hours
-    if day_status["source"] == "erev_chag" and not open_time_str:
-        il_day = _python_weekday_to_israeli(today.weekday())
-        hours = db.get_business_hours_for_day(il_day)
-        if hours and not hours["is_closed"]:
-            open_time_str = hours["open_time"]
-            close_time_str = hours["close_time"]
-
     if not open_time_str or not close_time_str:
-        # No specific hours found — treat as open with unknown hours
+        # Open today but no specific hours (e.g. special day without times)
         return {
             "is_open": True,
             "message": "אנחנו פתוחים היום!",
