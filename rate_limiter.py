@@ -24,6 +24,7 @@ from ai_chatbot.config import (
     RATE_LIMIT_PER_HOUR,
     RATE_LIMIT_PER_DAY,
 )
+from ai_chatbot.live_chat_service import LiveChatService
 
 logger = logging.getLogger(__name__)
 
@@ -100,6 +101,9 @@ def rate_limit_guard(handler):
     returns without calling the wrapped handler.  Must be applied
     **before** (i.e. above) ``@live_chat_guard`` so that rate limiting
     is evaluated first.
+
+    During an active live chat session rate limiting is bypassed so
+    that the user's messages are still saved for the human agent.
     """
 
     @wraps(handler)
@@ -109,6 +113,11 @@ def rate_limit_guard(handler):
             return await handler(update, context)
 
         user_id = str(user.id)
+
+        # Don't rate-limit during live chat — let live_chat_guard handle it.
+        if LiveChatService.is_active(user_id):
+            return await handler(update, context)
+
         limit_msg = check_rate_limit(user_id)
         if limit_msg is not None:
             if update.message:
@@ -129,6 +138,8 @@ def rate_limit_guard_booking(handler):
 
     Like :func:`rate_limit_guard` but returns ``ConversationHandler.END``
     so the conversation handler exits cleanly when rate-limited.
+
+    During an active live chat session rate limiting is bypassed.
     """
 
     @wraps(handler)
@@ -138,6 +149,11 @@ def rate_limit_guard_booking(handler):
             return await handler(update, context)
 
         user_id = str(user.id)
+
+        # Don't rate-limit during live chat — let live_chat_guard_booking handle it.
+        if LiveChatService.is_active(user_id):
+            return await handler(update, context)
+
         limit_msg = check_rate_limit(user_id)
         if limit_msg is not None:
             if update.message:

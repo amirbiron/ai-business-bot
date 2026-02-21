@@ -498,16 +498,18 @@ async def booking_button_interrupt(update: Update, context: ContextTypes.DEFAULT
     context.user_data.clear()
     user_message = update.message.text
 
+    # Use __wrapped__ to skip the rate_limit_guard layer — the current
+    # handler already recorded the message.
     if user_message == BUTTON_BOOKING:
         # Restart the booking flow from scratch
-        return await booking_start(update, context)
+        return await booking_start.__wrapped__(update, context)
 
     if user_message == BUTTON_PRICE_LIST:
-        await price_list_handler(update, context)
+        await price_list_handler.__wrapped__(update, context)
     elif user_message == BUTTON_LOCATION:
-        await location_handler(update, context)
+        await location_handler.__wrapped__(update, context)
     elif user_message == BUTTON_AGENT:
-        await talk_to_agent_handler(update, context)
+        await talk_to_agent_handler.__wrapped__(update, context)
     else:
         # Safety fallback — should not happen, but avoid a silent dead-end
         logger.warning("booking_button_interrupt: unexpected text %r", user_message)
@@ -575,13 +577,16 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id, display_name, telegram_username = _get_user_info(update)
     user_message = update.message.text
 
-    # Check for button texts and route accordingly
+    # Check for button texts and route accordingly.
+    # Use __wrapped__ to skip the rate_limit_guard layer — the current
+    # handler already recorded the message so re-entering the decorated
+    # version would count it twice.
     if user_message == BUTTON_PRICE_LIST:
-        return await price_list_handler(update, context)
+        return await price_list_handler.__wrapped__(update, context)
     elif user_message == BUTTON_LOCATION:
-        return await location_handler(update, context)
+        return await location_handler.__wrapped__(update, context)
     elif user_message == BUTTON_AGENT:
-        return await talk_to_agent_handler(update, context)
+        return await talk_to_agent_handler.__wrapped__(update, context)
 
     # ── Intent Detection ──────────────────────────────────────────────────
     intent = detect_intent(user_message)
