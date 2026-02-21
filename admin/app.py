@@ -433,12 +433,9 @@ def create_admin_app() -> Flask:
     def live_chat_end(user_id):
         db.end_live_chat(user_id)
         # Notify the customer that the bot is back
-        _send_telegram_message(
-            user_id,
-            "🤖 הבוט חזר לנהל את השיחה. אם תרצו לדבר עם נציג שוב, לחצו על 'דברו עם נציג'."
-        )
-        db.save_message(user_id, BUSINESS_NAME, "assistant",
-                        "🤖 הבוט חזר לנהל את השיחה.")
+        end_msg = "🤖 הבוט חזר לנהל את השיחה. אם תרצו לדבר עם נציג שוב, לחצו על 'דברו עם נציג'."
+        _send_telegram_message(user_id, end_msg)
+        db.save_message(user_id, BUSINESS_NAME, "assistant", end_msg)
         if request.headers.get("HX-Request"):
             return redirect(url_for("conversations"))
         return redirect(url_for("conversations"))
@@ -509,12 +506,22 @@ def create_admin_app() -> Flask:
             return redirect(url_for("agent_requests"))
         db.update_agent_request_status(request_id, status)
 
-        # If marking as handled and the user requested to start a live chat
+        # If marking as handled and the user requested to start a live chat,
+        # perform the start logic inline instead of redirecting to the
+        # POST-only live_chat_start endpoint (which would cause a 405).
         start_chat = request.form.get("start_live_chat")
         if start_chat:
             req = db.get_agent_request(request_id)
             if req:
-                return redirect(url_for("live_chat_start", user_id=req["user_id"]))
+                uid = req["user_id"]
+                users = db.get_unique_users()
+                user_info = next((u for u in users if u["user_id"] == uid), None)
+                uname = user_info["username"] if user_info else ""
+                db.start_live_chat(uid, uname)
+                notify_msg = "👤 נציג אנושי הצטרף לשיחה. כעת תקבלו מענה ישיר."
+                _send_telegram_message(uid, notify_msg)
+                db.save_message(uid, BUSINESS_NAME, "assistant", notify_msg)
+                return redirect(url_for("live_chat", user_id=uid))
 
         if request.headers.get("HX-Request"):
             req = db.get_agent_request(request_id)

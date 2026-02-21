@@ -330,6 +330,12 @@ async def booking_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     """Start the appointment booking conversation."""
     user_id, display_name, telegram_username = _get_user_info(update)
 
+    # If live chat is active, the bot should stay silent — save the message
+    # for the human agent but don't enter the booking flow.
+    if db.is_live_chat_active(user_id):
+        db.save_message(user_id, display_name, "user", "📅 קביעת תור")
+        return ConversationHandler.END
+
     # Log the user's booking attempt even if we handoff to human.
     db.save_message(user_id, display_name, "user", "📅 קביעת תור")
     
