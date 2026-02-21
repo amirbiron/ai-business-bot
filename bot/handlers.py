@@ -831,6 +831,7 @@ async def _maybe_send_referral_code(update: Update, user_id: str):
     נקרא אחרי אישור תור או לאחר מעורבות גבוהה.
     משתמש ב-mark_referral_code_as_sent כנעילה אטומית — רק תהליך אחד
     (בוט או אדמין) מצליח לשלוח, גם אם שניהם רצים במקביל.
+    אם השליחה נכשלת — הדגל מתאפס כדי לאפשר ניסיון חוזר.
     """
     code = db.generate_referral_code(user_id)
     if not code:
@@ -851,7 +852,12 @@ async def _maybe_send_referral_code(update: Update, user_id: str):
         "כשהם יקבעו וישלימו תור — *גם אתם וגם הם תקבלו 10% הנחה לחודשיים!*"
     )
 
-    await _reply_markdown_safe(update.message, referral_text)
+    try:
+        await _reply_markdown_safe(update.message, referral_text)
+    except Exception:
+        # השליחה נכשלה — מאפסים את הדגל כדי לאפשר ניסיון חוזר
+        db.unmark_referral_code_sent(user_id)
+        logger.error("Failed to send referral code to user %s, flag reset", user_id)
 
 
 async def _check_high_engagement_referral(update: Update, user_id: str):

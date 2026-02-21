@@ -1138,11 +1138,14 @@ def complete_referral(referred_id: str) -> bool:
         # תוקף הזיכוי — חודשיים מרגע ההפעלה (UTC כמו datetime('now') של SQLite)
         expires_at = (now + timedelta(days=60)).strftime("%Y-%m-%d %H:%M:%S")
 
-        # סימון ההפניה כהושלמה
-        conn.execute(
-            "UPDATE referrals SET status = 'completed', completed_at = datetime('now') WHERE id = ?",
+        # סימון אטומי — AND status = 'pending' מונע כפילות בקריאות מקבילות
+        cursor = conn.execute(
+            "UPDATE referrals SET status = 'completed', completed_at = datetime('now') "
+            "WHERE id = ? AND status = 'pending'",
             (row["id"],),
         )
+        if cursor.rowcount == 0:
+            return False
 
         # זיכוי למפנה — 10% הנחה
         conn.execute(
@@ -1184,6 +1187,7 @@ def mark_referral_code_as_sent(user_id: str) -> bool:
 
     משמש למניעת race condition — רק תהליך אחד (בוט או אדמין) מצליח לסמן
     sent=1 כש-sent=0, ורק הוא שולח את ההודעה.
+    אם השליחה נכשלת — יש לקרוא ל-unmark_referral_code_sent כדי לאפשר ניסיון חוזר.
     """
     with get_connection() as conn:
         cursor = conn.execute(
@@ -1191,6 +1195,15 @@ def mark_referral_code_as_sent(user_id: str) -> bool:
             (user_id,),
         )
         return cursor.rowcount > 0
+
+
+def unmark_referral_code_sent(user_id: str):
+    """ביטול דגל השליחה — נקרא כשמשלוח ההודעה נכשל, כדי לאפשר ניסיון חוזר."""
+    with get_connection() as conn:
+        conn.execute(
+            "UPDATE referral_codes SET sent = 0 WHERE user_id = ?",
+            (user_id,),
+        )
 
 
 def get_active_credits(user_id: str) -> list[dict]:

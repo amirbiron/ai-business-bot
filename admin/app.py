@@ -575,7 +575,8 @@ def create_admin_app() -> Flask:
 
                 # שליחת קוד הפניה ללקוח אחרי אישור תור
                 # generate_referral_code אידמפוטנטי, mark_referral_code_as_sent
-                # אטומי — רק תהליך אחד (בוט/אדמין) מצליח לשלוח
+                # אטומי — רק תהליך אחד (בוט/אדמין) מצליח לשלוח.
+                # אם השליחה נכשלת — הדגל מתאפס כדי לאפשר ניסיון חוזר.
                 code = db.generate_referral_code(user_id)
                 if code and db.mark_referral_code_as_sent(user_id):
                     if TELEGRAM_BOT_USERNAME:
@@ -589,8 +590,9 @@ def create_admin_app() -> Flask:
                         "גם אתם וגם הם תקבלו 10% הנחה לחודשיים!"
                     )
                     if not send_telegram_message(user_id, referral_text):
+                        db.unmark_referral_code_sent(user_id)
                         logger.error(
-                            "Failed to send referral code to user %s",
+                            "Failed to send referral code to user %s, flag reset",
                             user_id,
                         )
 
