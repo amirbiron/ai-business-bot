@@ -13,7 +13,7 @@ Features:
 import hmac
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from functools import wraps
 from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
@@ -73,13 +73,13 @@ STATUS_TRANSLATION = {
 
 
 def _format_il_datetime(value: str) -> str:
-    """Format a UTC datetime string to Israel time as DD-MM-YYYY HH:MM."""
+    """Format a UTC datetime string to Israel time as DD-MM-YYYY  HH:MM."""
     if not value:
         return ""
     try:
         dt = datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
         dt = dt.replace(tzinfo=timezone.utc).astimezone(ISRAEL_TZ)
-        return dt.strftime("%d-%m-%Y %H:%M")
+        return dt.strftime("%d-%m-%Y  %H:%M")
     except (ValueError, TypeError):
         return value
 
@@ -156,6 +156,7 @@ def create_admin_app() -> Flask:
         static_folder="static",
     )
     app.secret_key = ADMIN_SECRET_KEY
+    app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=30)
 
     csrf = CSRFProtect()
     csrf.init_app(app)
@@ -206,6 +207,8 @@ def create_admin_app() -> Flask:
             username = request.form.get("username", "")
             password = request.form.get("password", "")
             if _verify_admin_credentials(username, password):
+                if request.form.get("remember_me"):
+                    session.permanent = True
                 session["logged_in"] = True
                 flash("ברוכים השבים!", "success")
                 return redirect(url_for("dashboard"))
