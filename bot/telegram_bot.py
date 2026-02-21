@@ -2,9 +2,11 @@
 Telegram Bot Runner — sets up and starts the Telegram bot with all handlers.
 """
 
+import asyncio
 import logging
 import re
 from telegram.ext import (
+    Application,
     ApplicationBuilder,
     CallbackQueryHandler,
     CommandHandler,
@@ -14,9 +16,12 @@ from telegram.ext import (
 )
 
 from ai_chatbot.config import TELEGRAM_BOT_TOKEN
+from ai_chatbot.bot_state import set_bot
 from ai_chatbot.bot.handlers import (
     start_command,
     help_command,
+    stop_command,
+    subscribe_command,
     message_handler,
     booking_start,
     booking_service,
@@ -55,8 +60,13 @@ def create_bot_application():
             "Please set it in your .env file or environment variables."
         )
     
+    # שמירת רפרנס לבוט ול-event loop — משמש את broadcast_service לשליחת הודעות
+    async def _post_init(application: Application) -> None:
+        loop = asyncio.get_running_loop()
+        set_bot(application.bot, loop)
+
     # Build the application
-    app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
+    app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).post_init(_post_init).build()
     
     # ─── Conversation handler for appointment booking ─────────────────────
     # Filter that matches any main-menu button text — used to let button
@@ -87,6 +97,8 @@ def create_bot_application():
     # Commands
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CommandHandler("help", help_command))
+    app.add_handler(CommandHandler("stop", stop_command))
+    app.add_handler(CommandHandler("subscribe", subscribe_command))
     
     # Booking conversation (must be before the general message handler)
     app.add_handler(booking_handler)

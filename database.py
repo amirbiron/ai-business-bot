@@ -187,6 +187,26 @@ def init_db():
                 created_at      TEXT DEFAULT (datetime('now'))
             );
 
+            -- Broadcast messages (הודעות יזומות)
+            CREATE TABLE IF NOT EXISTS broadcast_messages (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                message_text    TEXT NOT NULL,
+                audience        TEXT NOT NULL DEFAULT 'all' CHECK(audience IN ('all', 'booked', 'recent')),
+                total_recipients INTEGER DEFAULT 0,
+                sent_count      INTEGER DEFAULT 0,
+                failed_count    INTEGER DEFAULT 0,
+                status          TEXT DEFAULT 'queued' CHECK(status IN ('queued', 'sending', 'completed', 'failed')),
+                created_at      TEXT DEFAULT (datetime('now')),
+                completed_at    TEXT
+            );
+
+            -- User subscription status (הרשמה/ביטול הרשמה לשידורים)
+            CREATE TABLE IF NOT EXISTS user_subscriptions (
+                user_id         TEXT NOT NULL PRIMARY KEY,
+                is_subscribed   INTEGER DEFAULT 1,
+                updated_at      TEXT DEFAULT (datetime('now'))
+            );
+
             -- Vacation mode (שורה בודדת — תמיד id=1)
             CREATE TABLE IF NOT EXISTS vacation_mode (
                 id                  INTEGER PRIMARY KEY CHECK(id = 1),
@@ -211,6 +231,7 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_referrals_referred ON referrals(referred_id);
             CREATE INDEX IF NOT EXISTS idx_referrals_code ON referrals(code);
             CREATE INDEX IF NOT EXISTS idx_credits_user ON credits(user_id);
+            CREATE INDEX IF NOT EXISTS idx_broadcast_status ON broadcast_messages(status);
         """)
 
         # Lightweight migrations for existing databases (SQLite can only ADD COLUMN).
@@ -1343,3 +1364,167 @@ def has_completed_appointment(user_id: str) -> bool:
             (user_id,),
         ).fetchone()
         return row is not None
+
+
+# ─── Broadcast (הודעות יזומות) ─────────────────────────────────────────────
+
+def create_broadcast(message_text: str, audience: str, total_recipients: int) -> int:
+    """יצירת הודעת שידור חדשה. מחזיר את ה-ID."""
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO broadcast_messages (message_text, audience, total_recipients) "
+            "VALUES (?, ?, ?)",
+            (message_text, audience, total_recipients),
+        )
+        return cursor.lastrowid
+
+
+def get_broadcast(broadcast_id: int) -> Optional[dict]:
+    """קבלת הודעת שידור לפי ID."""
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM broadcast_messages WHERE id = ?", (broadcast_id,)
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def get_all_broadcasts(limit: int = 50) -> list[dict]:
+    """קבלת כל הודעות השידור, מהחדשה לישנה."""
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT * FROM broadcast_messages ORDER BY created_at DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def update_broadcast_progress(broadcast_id: int, sent_count: int, failed_count: int):
+    """עדכון התקדמות שליחת שידור."""
+    with get_connection() as conn:
+        conn.execute(
+            "UPDATE broadcast_messages SET sent_count = ?, failed_count = ?, "
+            "status = 'sending' WHERE id = ?",
+            (sent_count, failed_count, broadcast_id),
+        )
+
+
+def complete_broadcast(broadcast_id: int, sent_count: int, failed_count: int):
+    """סיום שידור — סימון כהושלם עם הסטטיסטיקות הסופיות."""
+    with get_connection() as conn:
+        conn.execute(
+            "UPDATE broadcast_messages SET sent_count = ?, failed_count = ?, "
+            "status = 'completed', completed_at = datetime('now') WHERE id = ?",
+            (sent_count, failed_count, broadcast_id),
+        )
+
+
+def fail_broadcast(broadcast_id: int, sent_count: int, failed_count: int):
+    """סימון שידור ככישלון."""
+    with get_connection() as conn:
+        conn.execute(
+            "UPDATE broadcast_messages SET sent_count = ?, failed_count = ?, "
+            "status = 'failed', completed_at = datetime('now') WHERE id = ?",
+            (sent_count, failed_count, broadcast_id),
+        )
+
+
+def count_broadcasts(status: str | None = None) -> int:
+    """ספירת הודעות שידור."""
+    with get_connection() as conn:
+        if status:
+            row = conn.execute(
+                "SELECT COUNT(*) AS count FROM broadcast_messages WHERE status = ?",
+                (status,),
+            ).fetchone()
+        else:
+            row = conn.execute(
+                "SELECT COUNT(*) AS count FROM broadcast_messages"
+            ).fetchone()
+        return int(row["count"]) if row else 0
+
+
+# ─── User Subscriptions (הרשמה/ביטול הרשמה) ───────────────────────────────
+
+def ensure_user_subscribed(user_id: str):
+    """רישום משתמש כמנוי (נקרא בכל אינטראקציה ראשונה).
+
+    אם המשתמש כבר קיים — לא משנה את הסטטוס שלו (אולי ביטל הרשמה).
+    """
+    with get_connection() as conn:
+        conn.execute(
+            "INSERT OR IGNORE INTO user_subscriptions (user_id) VALUES (?)",
+            (user_id,),
+        )
+
+
+def unsubscribe_user(user_id: str):
+    """ביטול הרשמת משתמש לשידורים."""
+    with get_connection() as conn:
+        conn.execute(
+            "INSERT INTO user_subscriptions (user_id, is_subscribed, updated_at) "
+            "VALUES (?, 0, datetime('now')) "
+            "ON CONFLICT(user_id) DO UPDATE SET is_subscribed = 0, updated_at = datetime('now')",
+            (user_id,),
+        )
+
+
+def resubscribe_user(user_id: str):
+    """החזרת הרשמת משתמש לשידורים."""
+    with get_connection() as conn:
+        conn.execute(
+            "INSERT INTO user_subscriptions (user_id, is_subscribed, updated_at) "
+            "VALUES (?, 1, datetime('now')) "
+            "ON CONFLICT(user_id) DO UPDATE SET is_subscribed = 1, updated_at = datetime('now')",
+            (user_id,),
+        )
+
+
+def is_user_subscribed(user_id: str) -> bool:
+    """בדיקה האם משתמש רשום לקבלת שידורים (ברירת מחדל: כן)."""
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT is_subscribed FROM user_subscriptions WHERE user_id = ?",
+            (user_id,),
+        ).fetchone()
+        # אם לא קיים — ברירת מחדל רשום
+        return bool(row["is_subscribed"]) if row else True
+
+
+def get_broadcast_recipients(audience: str) -> list[str]:
+    """קבלת רשימת user_ids לשידור לפי סוג קהל.
+
+    - all: כל המשתמשים שדיברו עם הבוט (פרט למי שביטל הרשמה)
+    - booked: רק מי שקבע תור (אי פעם)
+    - recent: רק מי שהיה פעיל ב-30 הימים האחרונים
+    """
+    with get_connection() as conn:
+        if audience == "booked":
+            rows = conn.execute("""
+                SELECT DISTINCT c.user_id
+                FROM conversations c
+                JOIN appointments a ON c.user_id = a.user_id
+                LEFT JOIN user_subscriptions us ON c.user_id = us.user_id
+                WHERE COALESCE(us.is_subscribed, 1) = 1
+            """).fetchall()
+        elif audience == "recent":
+            rows = conn.execute("""
+                SELECT DISTINCT c.user_id
+                FROM conversations c
+                LEFT JOIN user_subscriptions us ON c.user_id = us.user_id
+                WHERE c.created_at >= datetime('now', '-30 days')
+                  AND COALESCE(us.is_subscribed, 1) = 1
+            """).fetchall()
+        else:  # all
+            rows = conn.execute("""
+                SELECT DISTINCT c.user_id
+                FROM conversations c
+                LEFT JOIN user_subscriptions us ON c.user_id = us.user_id
+                WHERE COALESCE(us.is_subscribed, 1) = 1
+            """).fetchall()
+        return [r["user_id"] for r in rows]
+
+
+def count_broadcast_recipients(audience: str) -> int:
+    """ספירת נמענים פוטנציאליים לשידור (ללא שליחה בפועל)."""
+    return len(get_broadcast_recipients(audience))

@@ -262,6 +262,9 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     user_id, display_name, _telegram_username = _get_user_info(update)
 
+    # רישום המשתמש כמנוי שידורים (אם עוד לא קיים)
+    db.ensure_user_subscribed(user_id)
+
     # זיהוי קוד הפניה מה-deep link: /start REF_XXXXXXXX
     referral_registered = False
     if context.args:
@@ -297,6 +300,56 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Log the interaction
     db.save_message(user_id, display_name, "user", "/start")
     db.save_message(user_id, display_name, "assistant", "[Welcome message sent]")
+
+
+# ─── /stop Command (ביטול הרשמה לשידורים) ────────────────────────────────────
+
+async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """טיפול בפקודת /stop — ביטול הרשמה לקבלת הודעות שידור."""
+    user_id, display_name, _ = _get_user_info(update)
+
+    if not db.is_user_subscribed(user_id):
+        await update.message.reply_text(
+            "ההרשמה שלכם כבר בוטלה. לא תקבלו הודעות שידור.\n"
+            "כדי להירשם מחדש, שלחו /subscribe",
+            reply_markup=_get_main_keyboard(),
+        )
+        return
+
+    db.unsubscribe_user(user_id)
+    db.save_message(user_id, display_name, "user", "/stop")
+    db.save_message(user_id, display_name, "assistant", "[ביטול הרשמה לשידורים]")
+
+    await update.message.reply_text(
+        "✅ ההרשמה שלכם לקבלת הודעות שידור בוטלה.\n"
+        "תמשיכו לקבל תשובות רגילות מהבוט.\n\n"
+        "כדי להירשם מחדש, שלחו /subscribe",
+        reply_markup=_get_main_keyboard(),
+    )
+
+
+# ─── /subscribe Command (הרשמה מחדש לשידורים) ────────────────────────────────
+
+async def subscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """טיפול בפקודת /subscribe — הרשמה מחדש לקבלת שידורים."""
+    user_id, display_name, _ = _get_user_info(update)
+
+    if db.is_user_subscribed(user_id):
+        await update.message.reply_text(
+            "אתם כבר רשומים לקבלת הודעות שידור.",
+            reply_markup=_get_main_keyboard(),
+        )
+        return
+
+    db.resubscribe_user(user_id)
+    db.save_message(user_id, display_name, "user", "/subscribe")
+    db.save_message(user_id, display_name, "assistant", "[הרשמה מחדש לשידורים]")
+
+    await update.message.reply_text(
+        "✅ נרשמתם מחדש לקבלת הודעות שידור!\n"
+        "כדי לבטל בכל עת, שלחו /stop",
+        reply_markup=_get_main_keyboard(),
+    )
 
 
 # ─── /help Command ───────────────────────────────────────────────────────────
@@ -760,6 +813,9 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     user_id, display_name, telegram_username = _get_user_info(update)
     user_message = update.message.text
+
+    # רישום המשתמש כמנוי שידורים (אם עוד לא קיים)
+    db.ensure_user_subscribed(user_id)
 
     # בדיקת מעורבות גבוהה — רץ ברקע על כל סוגי ההודעות (כולל ברכות,
     # כפתורים, תורים וכו'). הבדיקה עצמה זולה (early exit אם כבר נשלח).
