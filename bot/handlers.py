@@ -577,8 +577,7 @@ async def booking_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             reply_markup=_get_main_keyboard()
         )
 
-        # הצעת קוד הפניה לאחר בקשת תור ראשונה
-        await _maybe_send_referral_code(update, user_id)
+        # קוד הפניה נשלח רק כשהתור מאושר ע"י בעל העסק (ב-admin)
     else:
         await update.message.reply_text(
             "❌ בקשת התור בוטלה. אין בעיה!\n"
@@ -857,20 +856,35 @@ async def _maybe_send_referral_code(update: Update, user_id: str):
 async def _check_high_engagement_referral(update: Update, user_id: str):
     """בדיקת מעורבות גבוהה — שליחת קוד הפניה אם המשתמש מאוד פעיל.
 
-    תנאי: 10+ הודעות ב-30 הדקות האחרונות, ועדיין לא קיבל קוד הפניה.
+    תנאים (אחד מהם מספיק):
+    - 10+ הודעות ב-30 הדקות האחרונות
+    - 20+ הודעות ביום האחרון
     """
     # אם כבר יש קוד — לא צריך לבדוק
     if db.get_user_referral_code(user_id):
         return
 
     from datetime import datetime, timedelta, timezone
+    now = datetime.now(timezone.utc)
     with db.get_connection() as conn:
-        thirty_min_ago = (datetime.now(timezone.utc) - timedelta(minutes=30)).strftime("%Y-%m-%d %H:%M:%S")
-        row = conn.execute(
+        thirty_min_ago = (now - timedelta(minutes=30)).strftime("%Y-%m-%d %H:%M:%S")
+        one_day_ago = (now - timedelta(days=1)).strftime("%Y-%m-%d %H:%M:%S")
+
+        # תנאי 1: 10+ הודעות ב-30 דקות
+        row_30m = conn.execute(
             "SELECT COUNT(*) AS cnt FROM conversations WHERE user_id = ? AND role = 'user' AND created_at >= ?",
             (user_id, thirty_min_ago),
         ).fetchone()
-        if row and int(row["cnt"]) >= 10:
+        engaged_30m = row_30m and int(row_30m["cnt"]) >= 10
+
+        # תנאי 2: 20+ הודעות ביום אחד
+        row_1d = conn.execute(
+            "SELECT COUNT(*) AS cnt FROM conversations WHERE user_id = ? AND role = 'user' AND created_at >= ?",
+            (user_id, one_day_ago),
+        ).fetchone()
+        engaged_1d = row_1d and int(row_1d["cnt"]) >= 20
+
+        if engaged_30m or engaged_1d:
             await _maybe_send_referral_code(update, user_id)
 
 

@@ -49,7 +49,7 @@ from ai_chatbot.config import (
     BUSINESS_WEBSITE,
 )
 from ai_chatbot.rag.engine import rebuild_index, mark_index_stale, is_index_stale
-from ai_chatbot.live_chat_service import LiveChatService
+from ai_chatbot.live_chat_service import LiveChatService, send_telegram_message
 from ai_chatbot.vacation_service import VacationService
 from ai_chatbot.business_hours import DAY_NAMES_HE
 
@@ -563,13 +563,35 @@ def create_admin_app() -> Flask:
         # הפעלת מערכת הפניות — כשתור מאושר, בודקים אם הלקוח הגיע דרך הפניה
         if status == "confirmed":
             appt = db.get_appointment(appt_id)
-            if appt and db.has_pending_referral(appt["user_id"]):
-                activated = db.complete_referral(appt["user_id"])
-                if activated:
-                    logger.info(
-                        "Referral completed for user %s (appointment #%d)",
-                        appt["user_id"], appt_id,
-                    )
+            if appt:
+                user_id = appt["user_id"]
+                if db.has_pending_referral(user_id):
+                    activated = db.complete_referral(user_id)
+                    if activated:
+                        logger.info(
+                            "Referral completed for user %s (appointment #%d)",
+                            user_id, appt_id,
+                        )
+
+                # שליחת קוד הפניה ללקוח אחרי אישור תור (אם עדיין אין לו קוד)
+                if not db.get_user_referral_code(user_id):
+                    code = db.generate_referral_code(user_id)
+                    if code:
+                        if TELEGRAM_BOT_USERNAME:
+                            link = f"https://t.me/{TELEGRAM_BOT_USERNAME}?start={code}"
+                        else:
+                            link = code
+                        referral_text = (
+                            "🎁 רוצים לשתף עם חבר/ה?\n\n"
+                            f"שלחו להם את הלינק הזה:\n{link}\n\n"
+                            "כשהם יקבעו וישלימו תור — "
+                            "גם אתם וגם הם תקבלו 10% הנחה לחודשיים!"
+                        )
+                        if not send_telegram_message(user_id, referral_text):
+                            logger.error(
+                                "Failed to send referral code to user %s",
+                                user_id,
+                            )
 
         if request.headers.get("HX-Request"):
             appt = db.get_appointment(appt_id)
