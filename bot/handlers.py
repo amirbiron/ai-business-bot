@@ -629,11 +629,18 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ─── Cancellation Confirmation Callback ──────────────────────────────────────
 
-@live_chat_guard
 async def cancel_appointment_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle the inline-button response to the cancellation confirmation prompt."""
     query = update.callback_query
+    # Always answer the callback query first to dismiss Telegram's loading
+    # indicator — the live chat guard cannot do this because it returns
+    # before the handler body runs.
     await query.answer()
+
+    from ai_chatbot.live_chat_service import LiveChatService
+    user = update.effective_user
+    if LiveChatService.is_active(str(user.id)):
+        return
 
     user_id, display_name, telegram_username = _get_user_info(update)
 

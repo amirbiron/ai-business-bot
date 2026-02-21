@@ -2,15 +2,13 @@
 LiveChatService — centralized service for managing live chat sessions.
 
 Consolidates all live chat logic (start, end, send, is_active) that was
-previously scattered across bot handlers and admin endpoints.  Implements
-an explicit state machine (BOT_ACTIVE ↔ LIVE_CHAT) with enforced
-transitions and idempotent guards.
+previously scattered across bot handlers and admin endpoints.  Enforces
+the BOT_ACTIVE ↔ LIVE_CHAT state transitions with idempotent guards.
 
 See: https://github.com/amirbiron/ai-business-bot/issues/49
 """
 
 import logging
-from enum import Enum
 from functools import wraps
 from typing import Optional
 
@@ -22,16 +20,6 @@ from ai_chatbot import database as db
 from ai_chatbot.config import TELEGRAM_BOT_TOKEN
 
 logger = logging.getLogger(__name__)
-
-
-# ── State Machine ────────────────────────────────────────────────────────────
-
-
-class LiveChatState(Enum):
-    """Explicit states for the live chat lifecycle."""
-
-    BOT_ACTIVE = "bot_active"
-    LIVE_CHAT = "live_chat"
 
 
 # ── Telegram & Username Helpers ──────────────────────────────────────────────
@@ -70,13 +58,6 @@ class LiveChatService:
     """
 
     # ── State Queries ────────────────────────────────────────────────
-
-    @staticmethod
-    def get_state(user_id: str) -> LiveChatState:
-        """Return the current live chat state for a user."""
-        if db.is_live_chat_active(user_id):
-            return LiveChatState.LIVE_CHAT
-        return LiveChatState.BOT_ACTIVE
 
     @staticmethod
     def is_active(user_id: str) -> bool:
