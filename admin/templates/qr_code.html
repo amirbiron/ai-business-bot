@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header animate-fade-in">
+    <h1><i class="bi bi-qr-code"></i> QR Code לבוט</h1>
+</div>
+
+{% if not bot_username %}
+<div class="card animate-slide-up stagger-1">
+    <div class="card-body">
+        <div class="empty-state">
+            <i class="bi bi-exclamation-triangle" style="color: var(--warning);"></i>
+            <p>לא הוגדר <code>TELEGRAM_BOT_USERNAME</code> בקובץ <code>.env</code>.</p>
+            <p class="text-small text-muted">
+                יש להגדיר את שם המשתמש של הבוט (ללא @) כדי ליצור QR Code.<br>
+                לדוגמה: <code>TELEGRAM_BOT_USERNAME=MyBusinessBot</code>
+            </p>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="content-two-col">
+    <!-- תצוגה מקדימה של ה-QR Code -->
+    <div class="card animate-slide-up stagger-1">
+        <div class="card-header">
+            <span><i class="bi bi-eye"></i> תצוגה מקדימה</span>
+        </div>
+        <div class="card-body" style="text-align: center;">
+            <p class="text-muted text-small" style="margin-bottom: var(--space-sm);">
+                סרקו את הקוד כדי להתחיל שיחה עם הבוט
+            </p>
+            <div style="margin-bottom: var(--space-sm);">
+                <img id="qr-preview" src="/qr-code/preview" alt="QR Code"
+                     style="max-width: 280px; width: 100%; image-rendering: pixelated; border-radius: var(--radius-md);">
+            </div>
+            <p class="text-small text-muted">
+                <a href="https://t.me/{{ bot_username }}" target="_blank" rel="noopener">
+                    t.me/{{ bot_username }}
+                </a>
+            </p>
+        </div>
+    </div>
+
+    <!-- הגדרות הורדה -->
+    <div class="card animate-slide-up stagger-2">
+        <div class="card-header">
+            <span><i class="bi bi-download"></i> הורדה</span>
+        </div>
+        <div class="card-body">
+            <form id="qr-download-form" method="GET" action="/qr-code/download">
+                <div class="form-group">
+                    <label for="color">צבע ה-QR Code</label>
+                    <div class="d-flex align-center gap-sm">
+                        <input type="color" id="color" name="color" value="#000000"
+                               style="width: 50px; height: 36px; border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer;">
+                        <span id="color-label" class="text-small text-muted">#000000</span>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="scale">גודל (scale)</label>
+                    <select id="scale" name="scale" class="form-control">
+                        <option value="5">קטן (5x)</option>
+                        <option value="10" selected>בינוני (10x)</option>
+                        <option value="20">גדול (20x)</option>
+                        <option value="30">גדול מאוד (30x)</option>
+                    </select>
+                </div>
+
+                <button type="submit" class="btn btn-primary" style="width: 100%;">
+                    <i class="bi bi-download"></i> הורד PNG
+                </button>
+            </form>
+
+            <hr style="margin: var(--space-sm) 0; border-color: var(--border);">
+
+            <div>
+                <h4 style="font-size: 0.9rem; margin-bottom: var(--space-xs);">שימושים מוצעים</h4>
+                <ul class="text-small text-muted" style="padding-right: 1.2rem; margin: 0;">
+                    <li>מדבקה ליד הקופה או בכניסה</li>
+                    <li>כרטיס ביקור</li>
+                    <li>חתימת מייל</li>
+                    <li>סטוריז באינסטגרם / פוסטים בפייסבוק</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // עדכון תצוגה מקדימה בשינוי צבע
+    var colorInput = document.getElementById('color');
+    var colorLabel = document.getElementById('color-label');
+    var qrPreview = document.getElementById('qr-preview');
+
+    if (colorInput) {
+        colorInput.addEventListener('input', function() {
+            var color = this.value;
+            colorLabel.textContent = color;
+            // עדכון תצוגה מקדימה
+            qrPreview.src = '/qr-code/preview?color=' + encodeURIComponent(color);
+        });
+    }
+</script>
+{% endblock %}

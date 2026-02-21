@@ -20,5 +20,8 @@ requests
 # Business Hours & Holidays
 holidays
 
+# QR Code Generation
+segno
+
 # Configuration
 python-dotenv
