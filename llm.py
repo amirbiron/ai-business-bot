@@ -22,6 +22,7 @@ from ai_chatbot.config import (
 )
 from ai_chatbot.rag.engine import retrieve, format_context
 from ai_chatbot import database as db
+from ai_chatbot.business_hours import get_hours_context_for_llm
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +67,21 @@ def _build_messages(
         "role": "system",
         "content": context_message
     })
+
+    # Business hours context (real-time status)
+    try:
+        hours_context = get_hours_context_for_llm()
+        messages.append({
+            "role": "system",
+            "content": (
+                "מידע שעות פעילות (מעודכן בזמן אמת):\n\n"
+                f"{hours_context}\n\n"
+                "השתמש במידע זה כדי לענות על שאלות לגבי שעות פתיחה, "
+                "האם העסק פתוח/סגור, ומידע על חגים וימים מיוחדים."
+            ),
+        })
+    except Exception:
+        pass  # Don't break the pipeline if hours context fails
 
     # Conversation summary (condensed older messages)
     if conversation_summary:

@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header animate-fade-in">
+    <h1><i class="bi bi-clock"></i> שעות פעילות</h1>
+</div>
+
+<!-- Weekly Schedule -->
+<div class="card animate-slide-up stagger-1">
+    <div class="card-header">
+        <span><i class="bi bi-calendar-week"></i> לוח שעות שבועי</span>
+    </div>
+    <div class="card-body">
+        <form method="POST" action="/business-hours/update">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>יום</th>
+                            <th>שעת פתיחה</th>
+                            <th>שעת סגירה</th>
+                            <th>סגור</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for day_num in range(7) %}
+                        {% set day_hours = hours | selectattr("day_of_week", "equalto", day_num) | first %}
+                        <tr>
+                            <td class="fw-semibold">{{ day_names[day_num] }}</td>
+                            <td>
+                                <input type="time" name="open_{{ day_num }}"
+                                       value="{{ day_hours.open_time if day_hours and day_hours.open_time else '' }}"
+                                       class="form-control form-control-sm"
+                                       style="max-width: 140px;">
+                            </td>
+                            <td>
+                                <input type="time" name="close_{{ day_num }}"
+                                       value="{{ day_hours.close_time if day_hours and day_hours.close_time else '' }}"
+                                       class="form-control form-control-sm"
+                                       style="max-width: 140px;">
+                            </td>
+                            <td>
+                                <input type="checkbox" name="closed_{{ day_num }}"
+                                       {{ 'checked' if day_hours and day_hours.is_closed else '' }}>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <div style="padding: var(--space-sm); text-align: start;">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-circle"></i> שמור שעות
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Special Days / Holidays -->
+<div class="card animate-slide-up stagger-2" style="margin-top: var(--space-sm);">
+    <div class="card-header">
+        <span><i class="bi bi-calendar-event"></i> ימים מיוחדים וחגים</span>
+        <button class="btn btn-primary btn-sm" onclick="document.getElementById('add-special-day-form').style.display = document.getElementById('add-special-day-form').style.display === 'none' ? '' : 'none'">
+            <i class="bi bi-plus-circle"></i> הוסף יום מיוחד
+        </button>
+    </div>
+    <div class="card-body">
+        <!-- Add Special Day Form (hidden by default) -->
+        <div id="add-special-day-form" style="display: none; margin-bottom: var(--space-md); padding: var(--space-sm); background: var(--bg-secondary); border-radius: var(--radius-md);">
+            <h3 style="margin-bottom: var(--space-sm); font-size: 1rem;">הוספת יום מיוחד</h3>
+            <form method="POST" action="/business-hours/special-days/add">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--space-xs);">
+                    <div class="form-group">
+                        <label class="form-label">תאריך</label>
+                        <input type="date" name="date" required class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">שם</label>
+                        <input type="text" name="name" required class="form-control" placeholder="למשל: ערב פסח">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">שעת פתיחה</label>
+                        <input type="time" name="open_time" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">שעת סגירה</label>
+                        <input type="time" name="close_time" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">הערות</label>
+                        <input type="text" name="notes" class="form-control" placeholder="הערות נוספות">
+                    </div>
+                </div>
+                <div style="display: flex; align-items: center; gap: var(--space-sm); margin-top: var(--space-xs);">
+                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                        <input type="checkbox" name="is_closed" checked>
+                        סגור ביום זה
+                    </label>
+                    <button type="submit" class="btn btn-primary btn-sm">
+                        <i class="bi bi-plus-circle"></i> הוסף
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        {% if special_days %}
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>תאריך</th>
+                        <th>שם</th>
+                        <th>סטטוס</th>
+                        <th>שעות</th>
+                        <th>הערות</th>
+                        <th>פעולות</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for sd in special_days %}
+                    <tr id="special-day-{{ sd.id }}">
+                        <td>{{ sd.date }}</td>
+                        <td class="fw-semibold">{{ sd.name }}</td>
+                        <td>
+                            {% if sd.is_closed %}
+                            <span class="badge badge-danger">סגור</span>
+                            {% else %}
+                            <span class="badge badge-success">פתוח (שעות מיוחדות)</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if not sd.is_closed and sd.open_time and sd.close_time %}
+                            {{ sd.open_time }} - {{ sd.close_time }}
+                            {% else %}
+                            —
+                            {% endif %}
+                        </td>
+                        <td>{{ sd.notes or '—' }}</td>
+                        <td>
+                            <form method="POST" action="/business-hours/special-days/{{ sd.id }}/delete"
+                                  style="display: inline;"
+                                  hx-post="/business-hours/special-days/{{ sd.id }}/delete"
+                                  hx-target="#special-day-{{ sd.id }}"
+                                  hx-swap="outerHTML"
+                                  hx-confirm="למחוק את היום המיוחד '{{ sd.name }}'?">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="btn btn-danger btn-sm">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <i class="bi bi-calendar-event"></i>
+            <p>אין ימים מיוחדים מוגדרים.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

@@ -44,6 +44,7 @@ from ai_chatbot.config import (
 )
 from ai_chatbot.rag.engine import rebuild_index, mark_index_stale, is_index_stale
 from ai_chatbot.live_chat_service import LiveChatService
+from ai_chatbot.business_hours import DAY_NAMES_HE
 
 logger = logging.getLogger(__name__)
 
@@ -593,6 +594,77 @@ def create_admin_app() -> Flask:
             return ""
         flash(f"שאלה #{question_id} עודכנה.", "success")
         return redirect(url_for("knowledge_gaps"))
+
+    # ─── Business Hours ──────────────────────────────────────────────────
+
+    @app.route("/business-hours")
+    @login_required
+    def business_hours():
+        hours = db.get_all_business_hours()
+        special_days = db.get_all_special_days()
+        return render_template(
+            "business_hours.html",
+            business_name=BUSINESS_NAME,
+            hours=hours,
+            special_days=special_days,
+            day_names=DAY_NAMES_HE,
+        )
+
+    @app.route("/business-hours/update", methods=["POST"])
+    @login_required
+    def business_hours_update():
+        for day in range(7):
+            is_closed = request.form.get(f"closed_{day}") == "on"
+            open_time = request.form.get(f"open_{day}", "").strip()
+            close_time = request.form.get(f"close_{day}", "").strip()
+            db.upsert_business_hours(day, open_time, close_time, is_closed)
+        flash("שעות הפעילות עודכנו בהצלחה!", "success")
+        return redirect(url_for("business_hours"))
+
+    @app.route("/business-hours/special-days/add", methods=["POST"])
+    @login_required
+    def special_day_add():
+        date_str = request.form.get("date", "").strip()
+        name = request.form.get("name", "").strip()
+        is_closed = request.form.get("is_closed") == "on"
+        open_time = request.form.get("open_time", "").strip() or None
+        close_time = request.form.get("close_time", "").strip() or None
+        notes = request.form.get("notes", "").strip()
+
+        if not date_str or not name:
+            flash("תאריך ושם הם שדות חובה.", "danger")
+            return redirect(url_for("business_hours"))
+
+        db.add_special_day(date_str, name, is_closed, open_time, close_time, notes)
+        flash(f"יום מיוחד '{name}' נוסף בהצלחה!", "success")
+        return redirect(url_for("business_hours"))
+
+    @app.route("/business-hours/special-days/<int:sd_id>/edit", methods=["POST"])
+    @login_required
+    def special_day_edit(sd_id):
+        date_str = request.form.get("date", "").strip()
+        name = request.form.get("name", "").strip()
+        is_closed = request.form.get("is_closed") == "on"
+        open_time = request.form.get("open_time", "").strip() or None
+        close_time = request.form.get("close_time", "").strip() or None
+        notes = request.form.get("notes", "").strip()
+
+        if not date_str or not name:
+            flash("תאריך ושם הם שדות חובה.", "danger")
+            return redirect(url_for("business_hours"))
+
+        db.update_special_day(sd_id, date_str, name, is_closed, open_time, close_time, notes)
+        flash(f"יום מיוחד '{name}' עודכן בהצלחה!", "success")
+        return redirect(url_for("business_hours"))
+
+    @app.route("/business-hours/special-days/<int:sd_id>/delete", methods=["POST"])
+    @login_required
+    def special_day_delete(sd_id):
+        db.delete_special_day(sd_id)
+        if request.headers.get("HX-Request"):
+            return ""
+        flash("יום מיוחד נמחק.", "success")
+        return redirect(url_for("business_hours"))
 
     # ─── API Endpoints (for AJAX) ─────────────────────────────────────────
 

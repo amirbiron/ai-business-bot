@@ -7,6 +7,9 @@ Seed Data — מאכלס את מאגר הידע (Knowledge Base) בנתוני ה
 """
 
 import logging
+from datetime import date
+
+import holidays as holidays_lib
 
 from ai_chatbot import database as db
 from ai_chatbot.rag.engine import rebuild_index
@@ -331,10 +334,43 @@ DEMO_ENTRIES = [
 ]
 
 
+def _seed_business_hours():
+    """Seed default business hours and upcoming Israeli holidays as special days."""
+    db.seed_default_business_hours()
+    logger.info("Seeded default business hours.")
+
+    # Seed Israeli holidays for the current and next year as special days
+    current_year = date.today().year
+    years = [current_year, current_year + 1]
+    existing = {sd["date"] for sd in db.get_all_special_days()}
+
+    count = 0
+    for year in years:
+        il_holidays = holidays_lib.Israel(years=year, language="he")
+        for hol_date, hol_name in sorted(il_holidays.items()):
+            date_str = hol_date.strftime("%Y-%m-%d")
+            if date_str not in existing:
+                db.add_special_day(
+                    date_str=date_str,
+                    name=hol_name,
+                    is_closed=True,
+                )
+                existing.add(date_str)
+                count += 1
+
+    if count:
+        logger.info("Seeded %d Israeli holidays as special days.", count)
+    else:
+        logger.info("Israeli holidays already seeded.")
+
+
 def seed_database():
     """Populate the database with demo data."""
     logger.info("Initializing database...")
     db.init_db()
+
+    # Always seed business hours & holidays (idempotent)
+    _seed_business_hours()
 
     # Check if data already exists (include inactive entries to avoid duplicates)
     existing = db.get_all_kb_entries(active_only=False)

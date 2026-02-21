@@ -26,6 +26,7 @@ from telegram.ext import ContextTypes, ConversationHandler
 from ai_chatbot import database as db
 from ai_chatbot.llm import generate_answer, strip_source_citation, maybe_summarize
 from ai_chatbot.intent import Intent, detect_intent, get_direct_response
+from ai_chatbot.business_hours import is_currently_open, get_weekly_schedule_text
 from ai_chatbot.config import (
     BUSINESS_NAME,
     TELEGRAM_OWNER_CHAT_ID,
@@ -596,6 +597,16 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if intent in (Intent.GREETING, Intent.FAREWELL):
         db.save_message(user_id, display_name, "user", user_message)
         response = get_direct_response(intent)
+        db.save_message(user_id, display_name, "assistant", response)
+        await update.message.reply_text(response, reply_markup=_get_main_keyboard())
+        return
+
+    # Business hours — respond with live status, no RAG needed
+    if intent == Intent.BUSINESS_HOURS:
+        db.save_message(user_id, display_name, "user", user_message)
+        status = is_currently_open()
+        schedule = get_weekly_schedule_text()
+        response = f"{status['message']}\n\n{schedule}"
         db.save_message(user_id, display_name, "assistant", response)
         await update.message.reply_text(response, reply_markup=_get_main_keyboard())
         return
