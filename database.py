@@ -1380,15 +1380,6 @@ def create_broadcast(message_text: str, audience: str, total_recipients: int) ->
         return cursor.lastrowid
 
 
-def get_broadcast(broadcast_id: int) -> Optional[dict]:
-    """קבלת הודעת שידור לפי ID."""
-    with get_connection() as conn:
-        row = conn.execute(
-            "SELECT * FROM broadcast_messages WHERE id = ?", (broadcast_id,)
-        ).fetchone()
-        return dict(row) if row else None
-
-
 def get_all_broadcasts(limit: int = 50) -> list[dict]:
     """קבלת כל הודעות השידור, מהחדשה לישנה."""
     with get_connection() as conn:
@@ -1427,21 +1418,6 @@ def fail_broadcast(broadcast_id: int, sent_count: int, failed_count: int):
             "status = 'failed', completed_at = datetime('now') WHERE id = ?",
             (sent_count, failed_count, broadcast_id),
         )
-
-
-def count_broadcasts(status: str | None = None) -> int:
-    """ספירת הודעות שידור."""
-    with get_connection() as conn:
-        if status:
-            row = conn.execute(
-                "SELECT COUNT(*) AS count FROM broadcast_messages WHERE status = ?",
-                (status,),
-            ).fetchone()
-        else:
-            row = conn.execute(
-                "SELECT COUNT(*) AS count FROM broadcast_messages"
-            ).fetchone()
-        return int(row["count"]) if row else 0
 
 
 # ─── User Subscriptions (הרשמה/ביטול הרשמה) ───────────────────────────────
@@ -1526,5 +1502,32 @@ def get_broadcast_recipients(audience: str) -> list[str]:
 
 
 def count_broadcast_recipients(audience: str) -> int:
-    """ספירת נמענים פוטנציאליים לשידור (ללא שליחה בפועל)."""
-    return len(get_broadcast_recipients(audience))
+    """ספירת נמענים פוטנציאליים לשידור (ללא שליחה בפועל).
+
+    משתמש ב-COUNT ברמת ה-SQL במקום לטעון את כל הרשומות לזיכרון.
+    """
+    with get_connection() as conn:
+        if audience == "booked":
+            row = conn.execute("""
+                SELECT COUNT(DISTINCT c.user_id) AS cnt
+                FROM conversations c
+                JOIN appointments a ON c.user_id = a.user_id
+                LEFT JOIN user_subscriptions us ON c.user_id = us.user_id
+                WHERE COALESCE(us.is_subscribed, 1) = 1
+            """).fetchone()
+        elif audience == "recent":
+            row = conn.execute("""
+                SELECT COUNT(DISTINCT c.user_id) AS cnt
+                FROM conversations c
+                LEFT JOIN user_subscriptions us ON c.user_id = us.user_id
+                WHERE c.created_at >= datetime('now', '-30 days')
+                  AND COALESCE(us.is_subscribed, 1) = 1
+            """).fetchone()
+        else:  # all
+            row = conn.execute("""
+                SELECT COUNT(DISTINCT c.user_id) AS cnt
+                FROM conversations c
+                LEFT JOIN user_subscriptions us ON c.user_id = us.user_id
+                WHERE COALESCE(us.is_subscribed, 1) = 1
+            """).fetchone()
+        return int(row["cnt"]) if row else 0

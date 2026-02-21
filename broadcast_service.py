@@ -57,6 +57,11 @@ async def send_broadcast(
             try:
                 await bot.send_message(chat_id=int(user_id), text=message_text)
                 sent += 1
+            except Forbidden:
+                # המשתמש חסם את הבוט גם בניסיון החוזר — מסמנים כלא-מנוי
+                logger.info("Broadcast %d: user %s blocked the bot on retry, unsubscribing", broadcast_id, user_id)
+                db.unsubscribe_user(user_id)
+                failed += 1
             except Exception as retry_err:
                 logger.error("Broadcast %d: retry failed for user %s: %s", broadcast_id, user_id, retry_err)
                 failed += 1
