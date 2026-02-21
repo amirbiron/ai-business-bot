@@ -129,19 +129,47 @@ def _should_handoff_to_human(text: str) -> bool:
 # קידומת callback_data לשאלות המשך — הטקסט מאוחסן ב-context.bot_data
 FOLLOW_UP_CB_PREFIX = "followup_"
 
+# זמן תפוגה (בשניות) לכפתורי שאלות המשך שלא נלחצו — מנקים כדי למנוע דליפת זיכרון
+_FOLLOW_UP_TTL_SECONDS = 3600  # שעה
 
-def _build_follow_up_keyboard(questions: list[str], bot_data: dict) -> InlineKeyboardMarkup | None:
+
+def _cleanup_stale_follow_ups(bot_data: dict) -> None:
+    """ניקוי רשומות שאלות המשך ישנות מ-bot_data כדי למנוע צמיחה בלתי מוגבלת."""
+    now = int(time.time())
+    stale_keys = []
+    for key in bot_data:
+        if not key.startswith(FOLLOW_UP_CB_PREFIX):
+            continue
+        # חילוץ ה-timestamp מהמפתח: followup_{user_id}_{timestamp}_{index}
+        parts = key.split("_")
+        try:
+            ts = int(parts[-2])
+            if now - ts > _FOLLOW_UP_TTL_SECONDS:
+                stale_keys.append(key)
+        except (ValueError, IndexError):
+            continue
+    for key in stale_keys:
+        bot_data.pop(key, None)
+
+
+def _build_follow_up_keyboard(questions: list[str], bot_data: dict, user_id: str) -> InlineKeyboardMarkup | None:
     """בניית מקלדת inline עם שאלות המשך.
 
     שומר את טקסט השאלה ב-bot_data כדי לאפשר שליפה ב-callback
     (callback_data מוגבל ל-64 בתים בטלגרם).
+    המפתח כולל user_id למניעת התנגשויות בין משתמשים בו-זמניים.
     """
     if not questions:
         return None
+
+    # ניקוי רשומות ישנות שלא נלחצו
+    _cleanup_stale_follow_ups(bot_data)
+
     buttons = []
+    now = int(time.time())
     for i, q in enumerate(questions):
-        # מזהה ייחודי לכל שאלה — timestamp + index
-        cb_id = f"{FOLLOW_UP_CB_PREFIX}{int(time.time())}_{i}"
+        # מזהה ייחודי לכל שאלה — כולל user_id למניעת התנגשויות
+        cb_id = f"{FOLLOW_UP_CB_PREFIX}{user_id}_{now}_{i}"
         bot_data[cb_id] = q
         buttons.append([InlineKeyboardButton(f"💡 {q}", callback_data=cb_id)])
     return InlineKeyboardMarkup(buttons)
@@ -699,7 +727,7 @@ async def _handle_rag_query(
         # שאלות המשך — שליחה כהודעה נפרדת עם כפתורי inline
         follow_up_qs = result.get("follow_up_questions", [])
         if FOLLOW_UP_ENABLED and follow_up_qs:
-            follow_up_kb = _build_follow_up_keyboard(follow_up_qs, context.bot_data)
+            follow_up_kb = _build_follow_up_keyboard(follow_up_qs, context.bot_data, user_id)
             if follow_up_kb:
                 await update.message.reply_text(
                     "💡 *אולי תרצו גם לשאול:*",
@@ -1006,7 +1034,7 @@ async def follow_up_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         # שאלות המשך נוספות
         follow_up_qs = result.get("follow_up_questions", [])
         if FOLLOW_UP_ENABLED and follow_up_qs:
-            follow_up_kb = _build_follow_up_keyboard(follow_up_qs, context.bot_data)
+            follow_up_kb = _build_follow_up_keyboard(follow_up_qs, context.bot_data, user_id)
             if follow_up_kb:
                 await context.bot.send_message(
                     chat_id=chat_id,
