@@ -43,7 +43,7 @@ BOOKING_SERVICE, BOOKING_DATE, BOOKING_TIME, BOOKING_CONFIRM = range(4)
 
 # Button label constants — used for routing and filtering
 BUTTON_PRICE_LIST = "📋 מחירון"
-BUTTON_BOOKING = "📅 קביעת תור"
+BUTTON_BOOKING = "📅 בקשת תור"
 BUTTON_LOCATION = "📍 שליחת מיקום"
 BUTTON_AGENT = "👤 דברו עם נציג"
 ALL_BUTTON_TEXTS = [BUTTON_PRICE_LIST, BUTTON_BOOKING, BUTTON_LOCATION, BUTTON_AGENT]
@@ -181,7 +181,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"👋 ברוכים הבאים ל-*{BUSINESS_NAME}*!\n\n"
         f"אני העוזר הווירטואלי שלכם. אני יכול לעזור לכם עם:\n"
         f"• מידע על השירותים והמחירים שלנו\n"
-        f"• קביעת תורים\n"
+        f"• בקשת תורים\n"
         f"• מענה על שאלות\n"
         f"• חיבור לנציג אנושי\n\n"
         f"פשוט כתבו את השאלה שלכם או השתמשו בכפתורים למטה! 👇"
@@ -210,7 +210,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🤖 *איך להשתמש בבוט:*\n\n"
         "• פשוט כתבו כל שאלה ואעשה כמיטב יכולתי לענות!\n"
         "• לחצו על *📋 מחירון* כדי לראות את השירותים והמחירים\n"
-        "• לחצו על *📅 קביעת תור* כדי לקבוע ביקור\n"
+        "• לחצו על *📅 בקשת תור* כדי לבקש תור\n"
         "• לחצו על *📍 שליחת מיקום* כדי לקבל את הכתובת והמפה שלנו\n"
         "• לחצו על *👤 דברו עם נציג* כדי לדבר עם נציג אמיתי\n\n"
         "אפשר גם לשאול שאלות כמו:\n"
@@ -336,7 +336,7 @@ async def booking_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     user_id, display_name, telegram_username = _get_user_info(update)
 
     # Log the user's booking attempt even if we handoff to human.
-    db.save_message(user_id, display_name, "user", "📅 קביעת תור")
+    db.save_message(user_id, display_name, "user", "📅 בקשת תור")
     
     # Get available services from KB
     result = await _generate_answer_async("אילו שירותים אתם מציעים? פרטו בקצרה.")
@@ -354,7 +354,7 @@ async def booking_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         return ConversationHandler.END
     
     text = (
-        "📅 *קביעת תור*\n\n"
+        "📅 *בקשת תור*\n\n"
         f"{stripped}\n\n"
         "אנא כתבו את *השירות* שתרצו להזמין "
         "(או הקלידו /cancel כדי לחזור):"
@@ -405,7 +405,7 @@ async def booking_time(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     time = context.user_data.get("booking_time", "")
     
     confirmation_text = (
-        "📋 *סיכום התור:*\n\n"
+        "📋 *סיכום בקשת התור:*\n\n"
         f"• שירות: {service}\n"
         f"• תאריך: {date}\n"
         f"• שעה: {time}\n\n"
@@ -443,7 +443,7 @@ async def booking_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             try:
                 handle = _tg_handle(telegram_username) or "(ללא שם משתמש)"
                 notification = (
-                    f"📅 בקשת תור חדשה #{appt_id}\n\n"
+                    f"📅 בקשת תור חדשה לאישור #{appt_id}\n\n"
                     f"לקוח: {display_name}\n"
                     f"יוזר: {handle}\n"
                     f"שירות: {service}\n"
@@ -458,21 +458,21 @@ async def booking_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 logger.error("Failed to send appointment notification: %s", e)
         
         db.save_message(user_id, display_name, "assistant",
-                        f"תור נקבע: {service} בתאריך {date} בשעה {time}")
+                        f"בקשת תור: {service} בתאריך {date} בשעה {time}")
         
         await update.message.reply_text(
-            f"✅ התור שלכם נקבע!\n\n"
+            f"📋 בקשת התור התקבלה!\n\n"
             f"• שירות: {service}\n"
             f"• תאריך: {date}\n"
             f"• שעה: {time}\n\n"
-            f"נאשר את התור שלכם בקרוב. "
-            f"תקבלו הודעה ברגע שהתור יאושר.",
+            f"העברנו את הפרטים לבית העסק. "
+            f"ניצור איתכם קשר בהקדם לאישור סופי של השעה.",
             reply_markup=_get_main_keyboard()
         )
     else:
         await update.message.reply_text(
-            "❌ התור בוטל. אין בעיה!\n"
-            "אתם מוזמנים לקבוע תור חדש בכל עת.",
+            "❌ בקשת התור בוטלה. אין בעיה!\n"
+            "אתם מוזמנים לבקש תור חדש בכל עת.",
             reply_markup=_get_main_keyboard()
         )
     
@@ -486,7 +486,7 @@ async def booking_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     """Cancel the booking flow."""
     context.user_data.clear()
     await update.message.reply_text(
-        "ההזמנה בוטלה. איך עוד אפשר לעזור לכם?",
+        "תהליך בקשת התור בוטל. איך עוד אפשר לעזור לכם?",
         reply_markup=_get_main_keyboard()
     )
     return ConversationHandler.END
@@ -515,7 +515,7 @@ async def booking_button_interrupt(update: Update, context: ContextTypes.DEFAULT
         # Safety fallback — should not happen, but avoid a silent dead-end
         logger.warning("booking_button_interrupt: unexpected text %r", user_message)
         await update.message.reply_text(
-            "ההזמנה בוטלה. איך עוד אפשר לעזור לכם?",
+            "תהליך בקשת התור בוטל. איך עוד אפשר לעזור לכם?",
             reply_markup=_get_main_keyboard(),
         )
 
@@ -618,8 +618,8 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if intent == Intent.APPOINTMENT_BOOKING:
         db.save_message(user_id, display_name, "user", user_message)
         response = (
-            "אשמח לעזור לכם לקבוע תור! 📅\n\n"
-            "לחצו על הכפתור *📅 קביעת תור* למטה כדי להתחיל."
+            "אשמח לעזור לכם לבקש תור! 📅\n\n"
+            "לחצו על הכפתור *📅 בקשת תור* למטה כדי להתחיל."
         )
         db.save_message(user_id, display_name, "assistant", response)
         await _reply_markdown_safe(
