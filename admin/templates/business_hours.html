@@ -121,6 +121,7 @@
                 </thead>
                 <tbody>
                     {% for sd in special_days %}
+                    <!-- Display row -->
                     <tr id="special-day-{{ sd.id }}">
                         <td>{{ sd.date }}</td>
                         <td class="fw-semibold">{{ sd.name }}</td>
@@ -140,16 +141,64 @@
                         </td>
                         <td>{{ sd.notes or '—' }}</td>
                         <td>
-                            <form method="POST" action="/business-hours/special-days/{{ sd.id }}/delete"
-                                  style="display: inline;"
-                                  hx-post="/business-hours/special-days/{{ sd.id }}/delete"
-                                  hx-target="#special-day-{{ sd.id }}"
-                                  hx-swap="outerHTML"
-                                  hx-confirm="למחוק את היום המיוחד '{{ sd.name }}'?">
-                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                <button type="submit" class="btn btn-danger btn-sm">
-                                    <i class="bi bi-trash"></i>
+                            <div class="d-flex gap-sm">
+                                <button type="button" class="btn btn-secondary btn-sm"
+                                        onclick="toggleEditRow({{ sd.id }})">
+                                    <i class="bi bi-pencil"></i>
                                 </button>
+                                <form method="POST" action="/business-hours/special-days/{{ sd.id }}/delete"
+                                      style="display: inline;"
+                                      hx-post="/business-hours/special-days/{{ sd.id }}/delete"
+                                      hx-target="#special-day-{{ sd.id }}"
+                                      hx-swap="outerHTML"
+                                      hx-confirm="למחוק את היום המיוחד '{{ sd.name }}'?">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-danger btn-sm">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    <!-- Inline edit row (hidden by default) -->
+                    <tr id="edit-row-{{ sd.id }}" style="display: none; background: var(--bg-secondary);">
+                        <td colspan="6">
+                            <form method="POST" action="/business-hours/special-days/{{ sd.id }}/edit"
+                                  style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--space-xs); align-items: end;">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <div class="form-group" style="margin: 0;">
+                                    <label class="form-label">תאריך</label>
+                                    <input type="date" name="date" value="{{ sd.date }}" required class="form-control form-control-sm">
+                                </div>
+                                <div class="form-group" style="margin: 0;">
+                                    <label class="form-label">שם</label>
+                                    <input type="text" name="name" value="{{ sd.name }}" required class="form-control form-control-sm">
+                                </div>
+                                <div class="form-group" style="margin: 0;">
+                                    <label class="form-label">שעת פתיחה</label>
+                                    <input type="time" name="open_time" value="{{ sd.open_time or '' }}" class="form-control form-control-sm">
+                                </div>
+                                <div class="form-group" style="margin: 0;">
+                                    <label class="form-label">שעת סגירה</label>
+                                    <input type="time" name="close_time" value="{{ sd.close_time or '' }}" class="form-control form-control-sm">
+                                </div>
+                                <div class="form-group" style="margin: 0;">
+                                    <label class="form-label">הערות</label>
+                                    <input type="text" name="notes" value="{{ sd.notes or '' }}" class="form-control form-control-sm">
+                                </div>
+                                <div style="display: flex; align-items: center; gap: var(--space-sm);">
+                                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; white-space: nowrap;">
+                                        <input type="checkbox" name="is_closed" {{ 'checked' if sd.is_closed else '' }}>
+                                        סגור
+                                    </label>
+                                    <button type="submit" class="btn btn-primary btn-sm">
+                                        <i class="bi bi-check-circle"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-secondary btn-sm"
+                                            onclick="toggleEditRow({{ sd.id }})">
+                                        <i class="bi bi-x"></i>
+                                    </button>
+                                </div>
                             </form>
                         </td>
                     </tr>
@@ -165,4 +214,13 @@
         {% endif %}
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleEditRow(id) {
+    var editRow = document.getElementById('edit-row-' + id);
+    editRow.style.display = editRow.style.display === 'none' ? '' : 'none';
+}
+</script>
 {% endblock %}

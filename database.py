@@ -146,7 +146,7 @@ def init_db():
             -- Special days (holidays, one-time closures, custom hours)
             CREATE TABLE IF NOT EXISTS special_days (
                 id          INTEGER PRIMARY KEY AUTOINCREMENT,
-                date        TEXT NOT NULL,
+                date        TEXT NOT NULL UNIQUE,
                 name        TEXT NOT NULL,
                 open_time   TEXT,
                 close_time  TEXT,
@@ -163,7 +163,7 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_conversation_summaries_user ON conversation_summaries(user_id);
             CREATE INDEX IF NOT EXISTS idx_live_chats_user_active ON live_chats(user_id, is_active);
             CREATE INDEX IF NOT EXISTS idx_unanswered_questions_status ON unanswered_questions(status);
-            CREATE INDEX IF NOT EXISTS idx_special_days_date ON special_days(date);
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_special_days_date_unique ON special_days(date);
         """)
 
         # Lightweight migrations for existing databases (SQLite can only ADD COLUMN).
@@ -200,6 +200,25 @@ def init_db():
                     "UPDATE conversation_summaries SET last_summarized_message_id = ? WHERE id = ?",
                     (last_msg["id"], row["id"]),
                 )
+
+        # Migrate special_days: deduplicate and add UNIQUE index on date.
+        # Check if the unique index already exists.
+        existing_indexes = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='special_days' AND name='idx_special_days_date_unique'"
+        ).fetchone()
+        if not existing_indexes:
+            # Remove duplicates, keeping the most recent entry per date
+            conn.execute("""
+                DELETE FROM special_days WHERE id NOT IN (
+                    SELECT MAX(id) FROM special_days GROUP BY date
+                )
+            """)
+            # The idx_special_days_date index (non-unique) was created above;
+            # drop it and create a unique one instead.
+            conn.execute("DROP INDEX IF EXISTS idx_special_days_date")
+            conn.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_special_days_date_unique ON special_days(date)"
+            )
 
 
 def cleanup_stale_live_chats():
@@ -866,11 +885,16 @@ def add_special_day(
     close_time: str = None,
     notes: str = "",
 ) -> int:
-    """Add a new special day. Returns the entry ID."""
+    """Add or replace a special day for the given date. Returns the entry ID.
+
+    Uses INSERT OR REPLACE so that admin overrides for an existing date
+    (e.g. overriding a seeded holiday) take effect instead of silently
+    creating a duplicate.
+    """
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(
-            """INSERT INTO special_days (date, name, open_time, close_time, is_closed, notes)
+            """INSERT OR REPLACE INTO special_days (date, name, open_time, close_time, is_closed, notes)
                VALUES (?, ?, ?, ?, ?, ?)""",
             (date_str, name, open_time, close_time, int(is_closed), notes),
         )

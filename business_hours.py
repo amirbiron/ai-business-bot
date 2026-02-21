@@ -199,15 +199,24 @@ def is_currently_open() -> dict:
     open_time = time.fromisoformat(open_time_str)
     close_time = time.fromisoformat(close_time_str)
 
-    if current_time < open_time:
-        return {
-            "is_open": False,
-            "message": f"\U0001f534 עדיין לא פתחנו — נפתח היום בשעה {open_time_str}.",
-            "status_emoji": "\U0001f534",
-            "next_opening": f"היום בשעה {open_time_str}",
-        }
+    # Handle overnight hours (e.g. open_time="22:00", close_time="02:00")
+    is_overnight = close_time <= open_time
 
-    if current_time >= close_time:
+    if is_overnight:
+        # Overnight: open if current_time >= open_time OR current_time < close_time
+        currently_within = current_time >= open_time or current_time < close_time
+    else:
+        # Normal: open if open_time <= current_time < close_time
+        currently_within = open_time <= current_time < close_time
+
+    if not currently_within:
+        if current_time < open_time and (not is_overnight or current_time >= close_time):
+            return {
+                "is_open": False,
+                "message": f"\U0001f534 עדיין לא פתחנו — נפתח היום בשעה {open_time_str}.",
+                "status_emoji": "\U0001f534",
+                "next_opening": f"היום בשעה {open_time_str}",
+            }
         next_open = _find_next_opening(today)
         return {
             "is_open": False,
