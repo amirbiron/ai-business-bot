@@ -146,6 +146,15 @@ def start_broadcast_task(
 
 def _handle_future_error(future: asyncio.Future, broadcast_id: int) -> None:
     """callback לטיפול בשגיאות של broadcast task שרץ ב-event loop."""
+    if future.cancelled():
+        # ה-task בוטל (למשל כיבוי הבוט) — מסמנים ככישלון כדי שלא יישאר תקוע ב-sending
+        logger.warning("Broadcast %d task was cancelled", broadcast_id)
+        try:
+            db.fail_broadcast(broadcast_id)
+        except Exception as db_err:
+            logger.error("Broadcast %d: failed to mark cancelled broadcast in DB: %s", broadcast_id, db_err)
+        return
+
     exc = future.exception()
     if exc is not None:
         logger.error("Broadcast %d task failed: %s", broadcast_id, exc)
