@@ -397,7 +397,8 @@ def create_admin_app() -> Flask:
         """Look up the customer's display name for a given user_id."""
         users = db.get_unique_users()
         user_info = next((u for u in users if u["user_id"] == user_id), None)
-        return user_info["username"] if user_info else user_id
+        return (user_info["username"] if user_info and user_info["username"]
+                else user_id)
 
     @app.route("/live-chat/<user_id>")
     @login_required
@@ -437,6 +438,10 @@ def create_admin_app() -> Flask:
     @app.route("/live-chat/<user_id>/end", methods=["POST"])
     @login_required
     def live_chat_end(user_id):
+        # Guard against duplicate "end" clicks (e.g. stale page in another tab).
+        if not db.is_live_chat_active(user_id):
+            flash("השיחה החיה כבר הסתיימה.", "info")
+            return redirect(url_for("conversations"))
         username = _get_customer_username(user_id)
         # Notify the customer that the bot is back
         end_msg = "🤖 הבוט חזר לנהל את השיחה. אם תרצו לדבר עם נציג שוב, לחצו על 'דברו עם נציג'."
