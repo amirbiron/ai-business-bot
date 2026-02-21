@@ -243,7 +243,13 @@ def maybe_summarize(user_id: str):
             )
             return
 
-        db.save_conversation_summary(user_id, summary_text, len(messages_to_summarize))
+        # Record the id of the newest message we just summarized as the
+        # high-water mark so future queries start from the right place.
+        last_msg_id = max(m["id"] for m in messages_to_summarize)
+        db.save_conversation_summary(
+            user_id, summary_text, len(messages_to_summarize),
+            last_summarized_message_id=last_msg_id,
+        )
         logger.info(
             "Created conversation summary for user %s (%d messages summarized)",
             user_id, len(messages_to_summarize),

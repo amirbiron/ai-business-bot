@@ -4,6 +4,10 @@ RAG Engine — orchestrates the full retrieval-augmented generation pipeline.
 This module:
 1. Indexes all KB entries (chunk → embed → store in FAISS)
 2. On query: embed query → search FAISS → return relevant chunks
+
+Supports **incremental rebuilds**: when a rebuild is triggered, only entries
+whose chunk texts have changed since the last index build are re-embedded.
+Unchanged entries reuse their stored embeddings from the database.
 """
 
 import logging
@@ -96,14 +100,21 @@ def is_index_stale() -> bool:
 
 def rebuild_index():
     """
-    Rebuild the entire FAISS index from all active KB entries.
-    
+    Rebuild the FAISS index from all active KB entries.
+
+    Uses **incremental embedding**: for each entry the new chunk texts are
+    compared against the chunks already stored in the database.  Only entries
+    whose chunk texts have changed are sent to the embedding API; unchanged
+    entries reuse their stored embeddings.  This dramatically reduces API
+    calls when only a small number of entries were added or edited.
+
     Steps:
-    1. Load all KB entries from the database.
-    2. Chunk each entry.
-    3. Generate embeddings for all chunks.
-    4. Build the FAISS index.
-    5. Save chunks to the database and index to disk.
+    1. Load all active KB entries and create chunks.
+    2. Load existing stored chunks from the DB.
+    3. Determine which entries have changed.
+    4. Generate embeddings only for changed entries.
+    5. Build the FAISS index from all embeddings (reused + new).
+    6. Save changed chunks to the database and index to disk.
     """
     with _REBUILD_LOCK:
         logger.info("Rebuilding RAG index...")
@@ -121,14 +132,16 @@ def rebuild_index():
 
         # Step 1: Create chunks for all entries
         all_chunks = []
+        chunks_by_entry: dict[int, list[dict]] = {}
         for entry in entries:
             chunks = create_chunks_for_entry(
                 entry_id=entry["id"],
                 category=entry["category"],
                 title=entry["title"],
-                content=entry["content"]
+                content=entry["content"],
             )
             all_chunks.extend(chunks)
+            chunks_by_entry[entry["id"]] = chunks
 
         if not all_chunks:
             logger.warning("No chunks created. Creating empty index.")
@@ -144,42 +157,99 @@ def rebuild_index():
             len(entries),
         )
 
-        # Step 2: Generate embeddings
-        chunk_texts = [c["text"] for c in all_chunks]
-        embeddings = get_embeddings_batch(chunk_texts)
+        # Step 2: Load existing stored chunks to detect changes
+        entry_ids = list(chunks_by_entry.keys())
+        stored_chunks = db.get_chunks_for_entries(entry_ids)
 
-        logger.info("Generated %s embeddings", len(embeddings))
+        # Step 3: Determine which entries have changed by comparing chunk texts
+        changed_entry_ids: set[int] = set()
+        unchanged_entry_ids: set[int] = set()
 
-        # Step 3: Prepare metadata
-        metadata = []
+        for eid, new_chunks in chunks_by_entry.items():
+            old_chunks = stored_chunks.get(eid, [])
+            new_texts = [c["text"] for c in new_chunks]
+            old_texts = [c["chunk_text"] for c in old_chunks]
+
+            if new_texts == old_texts and len(old_chunks) == len(new_chunks):
+                unchanged_entry_ids.add(eid)
+            else:
+                changed_entry_ids.add(eid)
+
+        logger.info(
+            "Incremental rebuild: %d entries unchanged, %d entries need re-embedding",
+            len(unchanged_entry_ids),
+            len(changed_entry_ids),
+        )
+
+        # Step 4: Build embeddings — reuse stored ones for unchanged, generate for changed
+        all_embeddings = []
+        all_metadata = []
+        entries_to_save: dict[int, list[dict]] = {}  # only changed entries
+
         for chunk in all_chunks:
-            metadata.append({
-                "entry_id": chunk["entry_id"],
+            eid = chunk["entry_id"]
+            all_metadata.append({
+                "entry_id": eid,
                 "chunk_index": chunk["index"],
                 "category": chunk["category"],
                 "title": chunk["title"],
-                "text": chunk["text"]
+                "text": chunk["text"],
             })
 
-        # Step 4: Build and save the index
-        reset_vector_store()
-        store = get_vector_store()
-        store.build_index(embeddings, metadata)
-        store.save()
+        # Collect chunks that need new embeddings
+        new_embed_indices: list[int] = []  # positions in all_chunks
+        new_embed_texts: list[str] = []
 
-        # Step 5: Save chunks with embeddings to database
-        chunks_by_entry = {}
         for i, chunk in enumerate(all_chunks):
             eid = chunk["entry_id"]
-            if eid not in chunks_by_entry:
-                chunks_by_entry[eid] = []
-            chunks_by_entry[eid].append({
-                "index": chunk["index"],
-                "text": chunk["text"],
-                "embedding": embeddings[i].tobytes()
-            })
+            if eid in unchanged_entry_ids:
+                # Reuse stored embedding
+                old_chunks = stored_chunks[eid]
+                matching = [c for c in old_chunks if c["chunk_index"] == chunk["index"]]
+                if matching and matching[0]["embedding"]:
+                    emb = np.frombuffer(matching[0]["embedding"], dtype=np.float32).copy()
+                    all_embeddings.append(emb)
+                    continue
+                # Fallback: if stored embedding is missing, re-generate
+                changed_entry_ids.add(eid)
+                unchanged_entry_ids.discard(eid)
 
-        for entry_id, entry_chunks in chunks_by_entry.items():
+            all_embeddings.append(None)  # placeholder
+            new_embed_indices.append(i)
+            new_embed_texts.append(chunk["text"])
+
+        # Generate embeddings only for new/changed chunks
+        if new_embed_texts:
+            new_embeddings = get_embeddings_batch(new_embed_texts)
+            for j, idx in enumerate(new_embed_indices):
+                all_embeddings[idx] = new_embeddings[j]
+            logger.info(
+                "Generated %d new embeddings (reused %d from cache)",
+                len(new_embed_texts),
+                len(all_chunks) - len(new_embed_texts),
+            )
+        else:
+            logger.info("All %d embeddings reused from cache", len(all_chunks))
+
+        embeddings_array = np.array(all_embeddings, dtype=np.float32)
+
+        # Step 5: Build and save the FAISS index
+        reset_vector_store()
+        store = get_vector_store()
+        store.build_index(embeddings_array, all_metadata)
+        store.save()
+
+        # Step 6: Save chunks to DB only for changed entries
+        for i, chunk in enumerate(all_chunks):
+            eid = chunk["entry_id"]
+            if eid in changed_entry_ids:
+                entries_to_save.setdefault(eid, []).append({
+                    "index": chunk["index"],
+                    "text": chunk["text"],
+                    "embedding": embeddings_array[i].tobytes(),
+                })
+
+        for entry_id, entry_chunks in entries_to_save.items():
             db.save_chunks(entry_id, entry_chunks)
 
         _maybe_clear_stale(start_stale_token)
