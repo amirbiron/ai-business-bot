@@ -325,6 +325,7 @@ def _generate_vcard_text() -> str:
         "BEGIN:VCARD",
         "VERSION:3.0",
         f"FN:{BUSINESS_NAME}",
+        f"N:{BUSINESS_NAME};;;;",
         f"ORG:{BUSINESS_NAME}",
     ]
     if BUSINESS_PHONE:
@@ -336,7 +337,7 @@ def _generate_vcard_text() -> str:
     if hours_summary:
         lines.append(f"NOTE:{hours_summary}")
     lines.append("END:VCARD")
-    return "\n".join(lines)
+    return "\r\n".join(lines)
 
 
 @rate_limit_guard
