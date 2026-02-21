@@ -54,7 +54,7 @@
         <form hx-post="/live-chat/{{ user_id }}/send"
               hx-target="#live-chat-messages"
               hx-swap="innerHTML"
-              hx-sync="#live-chat-messages:abort"
+              hx-sync="#live-chat-messages:replace"
               hx-on::after-request="if(event.detail.successful) this.reset()"
               class="live-chat-form">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
