@@ -34,7 +34,6 @@ from ai_chatbot.config import (
     BUSINESS_ADDRESS,
     BUSINESS_WEBSITE,
     TELEGRAM_OWNER_CHAT_ID,
-    TELEGRAM_BOT_USERNAME,
     FALLBACK_RESPONSE,
     CONTEXT_WINDOW_SIZE,
 )
@@ -829,33 +828,22 @@ async def _maybe_send_referral_code(update: Update, user_id: str):
     """שליחת קוד הפניה אם המשתמש עדיין לא קיבל אחד.
 
     נקרא אחרי אישור תור או לאחר מעורבות גבוהה.
-    משתמש ב-mark_referral_code_as_sent כנעילה אטומית — רק תהליך אחד
-    (בוט או אדמין) מצליח לשלוח, גם אם שניהם רצים במקביל.
-    אם השליחה נכשלת — הדגל מתאפס כדי לאפשר ניסיון חוזר.
+    הטקסט מגיע מ-referral_service (מקור אמת יחיד לבוט ולאדמין).
+    נעילה אטומית ו-rollback בכישלון.
     """
+    from ai_chatbot.referral_service import get_referral_message_text
+
     code = db.generate_referral_code(user_id)
     if not code:
         return
 
-    # נעילה אטומית — רק מי שמצליח לסמן sent=1 שולח בפועל
     if not db.mark_referral_code_as_sent(user_id):
         return
 
-    if TELEGRAM_BOT_USERNAME:
-        link = f"https://t.me/{TELEGRAM_BOT_USERNAME}?start={code}"
-    else:
-        link = code
-
-    referral_text = (
-        "🎁 *רוצים לשתף עם חבר/ה?*\n\n"
-        f"שלחו להם את הלינק הזה:\n{link}\n\n"
-        "כשהם יקבעו וישלימו תור — *גם אתם וגם הם תקבלו 10% הנחה לחודשיים!*"
-    )
-
+    text = get_referral_message_text(code)
     try:
-        await _reply_markdown_safe(update.message, referral_text)
+        await _reply_markdown_safe(update.message, text)
     except Exception:
-        # השליחה נכשלה — מאפסים את הדגל כדי לאפשר ניסיון חוזר
         db.unmark_referral_code_sent(user_id)
         logger.error("Failed to send referral code to user %s, flag reset", user_id)
 

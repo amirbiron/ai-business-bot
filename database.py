@@ -168,12 +168,11 @@ def init_db():
             CREATE TABLE IF NOT EXISTS referrals (
                 id              INTEGER PRIMARY KEY AUTOINCREMENT,
                 referrer_id     TEXT NOT NULL,
-                referred_id     TEXT NOT NULL,
+                referred_id     TEXT NOT NULL UNIQUE,
                 code            TEXT NOT NULL,
                 status          TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'completed')),
                 created_at      TEXT DEFAULT (datetime('now')),
-                completed_at    TEXT,
-                UNIQUE(referrer_id, referred_id)
+                completed_at    TEXT
             );
 
             -- Referral credits (זיכויים מהפניות)
@@ -287,12 +286,11 @@ def init_db():
                 CREATE TABLE referrals (
                     id              INTEGER PRIMARY KEY AUTOINCREMENT,
                     referrer_id     TEXT NOT NULL,
-                    referred_id     TEXT NOT NULL,
+                    referred_id     TEXT NOT NULL UNIQUE,
                     code            TEXT NOT NULL,
                     status          TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'completed')),
                     created_at      TEXT DEFAULT (datetime('now')),
-                    completed_at    TEXT,
-                    UNIQUE(referrer_id, referred_id)
+                    completed_at    TEXT
                 )
             """)
             conn.execute("""
@@ -308,6 +306,36 @@ def init_db():
             logger.info("Migrated referrals table to multi-referral schema")
 
         _ensure_column("referral_codes", "sent", "INTEGER DEFAULT 0")
+
+        # מיגרציה: UNIQUE(referrer_id, referred_id) → UNIQUE(referred_id)
+        # כל משתמש יכול להיות מופנה פעם אחת בלבד (ע"י כל מפנה שהוא).
+        create_sql = conn.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='referrals'"
+        ).fetchone()
+        if create_sql and "UNIQUE(referrer_id, referred_id)" in (create_sql["sql"] or ""):
+            conn.execute("ALTER TABLE referrals RENAME TO _referrals_old2")
+            conn.execute("""
+                CREATE TABLE referrals (
+                    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                    referrer_id     TEXT NOT NULL,
+                    referred_id     TEXT NOT NULL UNIQUE,
+                    code            TEXT NOT NULL,
+                    status          TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'completed')),
+                    created_at      TEXT DEFAULT (datetime('now')),
+                    completed_at    TEXT
+                )
+            """)
+            conn.execute("""
+                INSERT OR IGNORE INTO referrals
+                    (referrer_id, referred_id, code, status, created_at, completed_at)
+                SELECT referrer_id, referred_id, code, status, created_at, completed_at
+                FROM _referrals_old2
+            """)
+            conn.execute("DROP TABLE _referrals_old2")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referrals(referrer_id)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_referrals_referred ON referrals(referred_id)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_referrals_code ON referrals(code)")
+            logger.info("Migrated referrals: UNIQUE(referrer_id, referred_id) → UNIQUE(referred_id)")
 
 
 def cleanup_stale_live_chats():
@@ -1107,18 +1135,13 @@ def register_referral(code: str, referred_id: str) -> bool:
         if referrer_id == referred_id:
             return False
 
-        # בדיקה שהמשתמש החדש לא כבר הופנה על ידי מישהו אחר
-        existing = conn.execute(
-            "SELECT 1 FROM referrals WHERE referred_id = ?", (referred_id,)
-        ).fetchone()
-        if existing:
-            return False
-
-        conn.execute(
+        # UNIQUE(referred_id) מבטיח ברמת ה-DB שכל משתמש מופנה רק פעם אחת.
+        # INSERT OR IGNORE מחזיר rowcount=0 אם referred_id כבר קיים.
+        cursor = conn.execute(
             "INSERT OR IGNORE INTO referrals (referrer_id, referred_id, code) VALUES (?, ?, ?)",
             (referrer_id, referred_id, code),
         )
-        return True
+        return cursor.rowcount > 0
 
 
 def complete_referral(referred_id: str) -> bool:

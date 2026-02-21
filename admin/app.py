@@ -50,6 +50,7 @@ from ai_chatbot.config import (
 )
 from ai_chatbot.rag.engine import rebuild_index, mark_index_stale, is_index_stale
 from ai_chatbot.live_chat_service import LiveChatService, send_telegram_message
+from ai_chatbot.referral_service import try_send_referral_code
 from ai_chatbot.vacation_service import VacationService
 from ai_chatbot.business_hours import DAY_NAMES_HE
 
@@ -574,27 +575,12 @@ def create_admin_app() -> Flask:
                         )
 
                 # שליחת קוד הפניה ללקוח אחרי אישור תור
-                # generate_referral_code אידמפוטנטי, mark_referral_code_as_sent
-                # אטומי — רק תהליך אחד (בוט/אדמין) מצליח לשלוח.
-                # אם השליחה נכשלת — הדגל מתאפס כדי לאפשר ניסיון חוזר.
-                code = db.generate_referral_code(user_id)
-                if code and db.mark_referral_code_as_sent(user_id):
-                    if TELEGRAM_BOT_USERNAME:
-                        link = f"https://t.me/{TELEGRAM_BOT_USERNAME}?start={code}"
-                    else:
-                        link = code
-                    referral_text = (
-                        "🎁 רוצים לשתף עם חבר/ה?\n\n"
-                        f"שלחו להם את הלינק הזה:\n{link}\n\n"
-                        "כשהם יקבעו וישלימו תור — "
-                        "גם אתם וגם הם תקבלו 10% הנחה לחודשיים!"
-                    )
-                    if not send_telegram_message(user_id, referral_text):
-                        db.unmark_referral_code_sent(user_id)
-                        logger.error(
-                            "Failed to send referral code to user %s, flag reset",
-                            user_id,
-                        )
+                # try_send_referral_code — לוגיקה משותפת לבוט ולאדמין:
+                # generate → mark → send → unmark on failure
+                try_send_referral_code(
+                    user_id,
+                    send_fn=lambda text: send_telegram_message(user_id, text),
+                )
 
         if request.headers.get("HX-Request"):
             appt = db.get_appointment(appt_id)
