@@ -866,6 +866,7 @@ async def _check_high_engagement_referral(update: Update, user_id: str):
 
     from datetime import datetime, timedelta, timezone
     now = datetime.now(timezone.utc)
+    should_send = False
     with db.get_connection() as conn:
         thirty_min_ago = (now - timedelta(minutes=30)).strftime("%Y-%m-%d %H:%M:%S")
         one_day_ago = (now - timedelta(days=1)).strftime("%Y-%m-%d %H:%M:%S")
@@ -884,8 +885,10 @@ async def _check_high_engagement_referral(update: Update, user_id: str):
         ).fetchone()
         engaged_1d = row_1d and int(row_1d["cnt"]) >= 20
 
-        if engaged_30m or engaged_1d:
-            await _maybe_send_referral_code(update, user_id)
+        should_send = engaged_30m or engaged_1d
+
+    if should_send:
+        await _maybe_send_referral_code(update, user_id)
 
 
 # ─── Error Handler ───────────────────────────────────────────────────────────

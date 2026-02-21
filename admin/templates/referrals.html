@@ -95,10 +95,8 @@
                         <td>
                             {% if ref.status == 'completed' %}
                             <span class="badge badge-success">הושלם</span>
-                            {% elif ref.referred_id %}
-                            <span class="badge badge-warning">ממתין</span>
                             {% else %}
-                            <span class="badge badge-secondary">לא נוצל</span>
+                            <span class="badge badge-warning">ממתין</span>
                             {% endif %}
                         </td>
                         <td>{{ ref.created_at|il_datetime }}</td>

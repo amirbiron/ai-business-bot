@@ -6,7 +6,7 @@ import logging
 import sqlite3
 import json
 from contextlib import contextmanager
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -155,15 +155,24 @@ def init_db():
                 created_at  TEXT DEFAULT (datetime('now'))
             );
 
-            -- Referrals (מערכת הפניות)
+            -- Referral codes (קוד הפניה קבוע לכל משתמש)
+            CREATE TABLE IF NOT EXISTS referral_codes (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id         TEXT NOT NULL UNIQUE,
+                code            TEXT NOT NULL UNIQUE,
+                created_at      TEXT DEFAULT (datetime('now'))
+            );
+
+            -- Referrals (כל הפניה בודדת)
             CREATE TABLE IF NOT EXISTS referrals (
                 id              INTEGER PRIMARY KEY AUTOINCREMENT,
                 referrer_id     TEXT NOT NULL,
-                referred_id     TEXT,
-                code            TEXT NOT NULL UNIQUE,
+                referred_id     TEXT NOT NULL,
+                code            TEXT NOT NULL,
                 status          TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'completed')),
                 created_at      TEXT DEFAULT (datetime('now')),
-                completed_at    TEXT
+                completed_at    TEXT,
+                UNIQUE(referrer_id, referred_id)
             );
 
             -- Referral credits (זיכויים מהפניות)
@@ -197,6 +206,7 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_live_chats_user_active ON live_chats(user_id, is_active);
             CREATE INDEX IF NOT EXISTS idx_unanswered_questions_status ON unanswered_questions(status);
             CREATE UNIQUE INDEX IF NOT EXISTS idx_special_days_date_unique ON special_days(date);
+            CREATE INDEX IF NOT EXISTS idx_referral_codes_user ON referral_codes(user_id);
             CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referrals(referrer_id);
             CREATE INDEX IF NOT EXISTS idx_referrals_referred ON referrals(referred_id);
             CREATE INDEX IF NOT EXISTS idx_referrals_code ON referrals(code);
@@ -256,6 +266,45 @@ def init_db():
             conn.execute(
                 "CREATE UNIQUE INDEX IF NOT EXISTS idx_special_days_date_unique ON special_days(date)"
             )
+
+        # מיגרציה: מעבר ממודל הפניה-בודדת (UNIQUE code, referred_id nullable)
+        # למודל ריבוי-הפניות (referral_codes לקוד קבוע, referrals לאירועי הפניה).
+        referral_cols = {
+            c["name"]: c
+            for c in conn.execute("PRAGMA table_info(referrals)").fetchall()
+        }
+        referred_id_col = referral_cols.get("referred_id")
+        if referred_id_col and not referred_id_col["notnull"]:
+            # סכימה ישנה — referred_id nullable → צריך מיגרציה
+            conn.execute("""
+                INSERT OR IGNORE INTO referral_codes (user_id, code, created_at)
+                SELECT referrer_id, code, MIN(created_at)
+                FROM referrals GROUP BY referrer_id
+            """)
+            conn.execute("ALTER TABLE referrals RENAME TO _referrals_old")
+            conn.execute("""
+                CREATE TABLE referrals (
+                    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                    referrer_id     TEXT NOT NULL,
+                    referred_id     TEXT NOT NULL,
+                    code            TEXT NOT NULL,
+                    status          TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'completed')),
+                    created_at      TEXT DEFAULT (datetime('now')),
+                    completed_at    TEXT,
+                    UNIQUE(referrer_id, referred_id)
+                )
+            """)
+            conn.execute("""
+                INSERT OR IGNORE INTO referrals
+                    (referrer_id, referred_id, code, status, created_at, completed_at)
+                SELECT referrer_id, referred_id, code, status, created_at, completed_at
+                FROM _referrals_old WHERE referred_id IS NOT NULL
+            """)
+            conn.execute("DROP TABLE _referrals_old")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referrals(referrer_id)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_referrals_referred ON referrals(referred_id)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_referrals_code ON referrals(code)")
+            logger.info("Migrated referrals table to multi-referral schema")
 
 
 def cleanup_stale_live_chats():
@@ -990,61 +1039,71 @@ def update_vacation_mode(is_active: bool, vacation_end_date: str = "", vacation_
 # ─── Referrals (מערכת הפניות) ────────────────────────────────────────────
 
 def generate_referral_code(user_id: str) -> str:
-    """יצירת קוד הפניה ייחודי למשתמש. אם כבר קיים — מחזיר את הקוד הקיים."""
+    """יצירת קוד הפניה ייחודי למשתמש. אם כבר קיים — מחזיר את הקוד הקיים.
+
+    הקוד נשמר ב-referral_codes ונשאר קבוע — ניתן לשימוש חוזר עבור הפניות מרובות.
+    """
     import hashlib
-    with get_connection() as conn:
-        row = conn.execute(
-            "SELECT code FROM referrals WHERE referrer_id = ? LIMIT 1",
-            (user_id,),
-        ).fetchone()
-        if row:
-            return row["code"]
 
-        # יצירת קוד ייחודי על בסיס user_id + timestamp
-        raw = f"{user_id}_{datetime.now().isoformat()}"
-        short_hash = hashlib.sha256(raw.encode()).hexdigest()[:8].upper()
-        code = f"REF_{short_hash}"
+    existing = get_user_referral_code(user_id)
+    if existing:
+        return existing
 
-        # וידוא ייחודיות (מקרה קצה נדיר של התנגשות)
-        while conn.execute("SELECT 1 FROM referrals WHERE code = ?", (code,)).fetchone():
-            raw += "_retry"
-            short_hash = hashlib.sha256(raw.encode()).hexdigest()[:8].upper()
-            code = f"REF_{short_hash}"
+    raw = f"{user_id}_{datetime.now().isoformat()}"
+    short_hash = hashlib.sha256(raw.encode()).hexdigest()[:8].upper()
+    code = f"REF_{short_hash}"
 
-        conn.execute(
-            "INSERT INTO referrals (referrer_id, code) VALUES (?, ?)",
-            (user_id, code),
-        )
-        return code
+    try:
+        with get_connection() as conn:
+            # וידוא ייחודיות (מקרה קצה נדיר של התנגשות)
+            while conn.execute("SELECT 1 FROM referral_codes WHERE code = ?", (code,)).fetchone():
+                raw += "_retry"
+                short_hash = hashlib.sha256(raw.encode()).hexdigest()[:8].upper()
+                code = f"REF_{short_hash}"
+
+            conn.execute(
+                "INSERT INTO referral_codes (user_id, code) VALUES (?, ?)",
+                (user_id, code),
+            )
+    except sqlite3.IntegrityError:
+        # race condition — תהליך אחר יצר קוד בו-זמנית
+        existing = get_user_referral_code(user_id)
+        if existing:
+            return existing
+        logger.error("Failed to generate referral code for user %s", user_id)
+        return ""
+
+    return code
 
 
 def get_referral_by_code(code: str) -> Optional[dict]:
-    """חיפוש הפניה לפי קוד."""
+    """חיפוש קוד הפניה ב-referral_codes."""
     with get_connection() as conn:
         row = conn.execute(
-            "SELECT * FROM referrals WHERE code = ?", (code,)
+            "SELECT * FROM referral_codes WHERE code = ?", (code,)
         ).fetchone()
         return dict(row) if row else None
 
 
 def register_referral(code: str, referred_id: str) -> bool:
-    """רישום הפניה — מקשר את המשתמש החדש לקוד ההפניה.
+    """רישום הפניה — יוצר רשומת הפניה חדשה המקשרת את המשתמש לקוד.
 
-    מחזיר True אם הרישום הצליח, False אם הקוד לא קיים, כבר מנוצל,
-    או שהמשתמש מנסה להפנות את עצמו.
+    מחזיר True אם הרישום הצליח, False אם הקוד לא קיים,
+    המשתמש מנסה להפנות את עצמו, או שכבר הופנה ע"י מישהו.
     """
     with get_connection() as conn:
-        row = conn.execute(
-            "SELECT * FROM referrals WHERE code = ?", (code,)
+        # חיפוש המפנה לפי הקוד ב-referral_codes
+        code_row = conn.execute(
+            "SELECT user_id FROM referral_codes WHERE code = ?", (code,)
         ).fetchone()
-        if not row:
+        if not code_row:
             return False
+        referrer_id = code_row["user_id"]
+
         # לא מאפשרים הפניה עצמית
-        if row["referrer_id"] == referred_id:
+        if referrer_id == referred_id:
             return False
-        # הקוד כבר שויך למשתמש אחר
-        if row["referred_id"]:
-            return False
+
         # בדיקה שהמשתמש החדש לא כבר הופנה על ידי מישהו אחר
         existing = conn.execute(
             "SELECT 1 FROM referrals WHERE referred_id = ?", (referred_id,)
@@ -1053,8 +1112,8 @@ def register_referral(code: str, referred_id: str) -> bool:
             return False
 
         conn.execute(
-            "UPDATE referrals SET referred_id = ? WHERE code = ?",
-            (referred_id, code),
+            "INSERT OR IGNORE INTO referrals (referrer_id, referred_id, code) VALUES (?, ?, ?)",
+            (referrer_id, referred_id, code),
         )
         return True
 
@@ -1072,8 +1131,8 @@ def complete_referral(referred_id: str) -> bool:
         if not row:
             return False
 
-        now = datetime.now()
-        # תוקף הזיכוי — חודשיים מרגע ההפעלה
+        now = datetime.now(timezone.utc)
+        # תוקף הזיכוי — חודשיים מרגע ההפעלה (UTC כמו datetime('now') של SQLite)
         expires_at = (now + timedelta(days=60)).strftime("%Y-%m-%d %H:%M:%S")
 
         # סימון ההפניה כהושלמה
@@ -1101,7 +1160,7 @@ def get_user_referral_code(user_id: str) -> Optional[str]:
     """החזרת קוד ההפניה של משתמש (אם קיים)."""
     with get_connection() as conn:
         row = conn.execute(
-            "SELECT code FROM referrals WHERE referrer_id = ? LIMIT 1",
+            "SELECT code FROM referral_codes WHERE user_id = ?",
             (user_id,),
         ).fetchone()
         return row["code"] if row else None
@@ -1138,7 +1197,7 @@ def count_referrals(user_id: str, status: str | None = None) -> int:
             ).fetchone()
         else:
             row = conn.execute(
-                "SELECT COUNT(*) AS count FROM referrals WHERE referrer_id = ? AND referred_id IS NOT NULL",
+                "SELECT COUNT(*) AS count FROM referrals WHERE referrer_id = ?",
                 (user_id,),
             ).fetchone()
         return int(row["count"]) if row else 0
@@ -1148,13 +1207,13 @@ def get_referral_stats() -> dict:
     """סטטיסטיקות הפניות לדשבורד האדמין."""
     with get_connection() as conn:
         total = conn.execute(
-            "SELECT COUNT(*) AS c FROM referrals WHERE referred_id IS NOT NULL"
+            "SELECT COUNT(*) AS c FROM referrals"
         ).fetchone()["c"]
         completed = conn.execute(
             "SELECT COUNT(*) AS c FROM referrals WHERE status = 'completed'"
         ).fetchone()["c"]
         pending = conn.execute(
-            "SELECT COUNT(*) AS c FROM referrals WHERE status = 'pending' AND referred_id IS NOT NULL"
+            "SELECT COUNT(*) AS c FROM referrals WHERE status = 'pending'"
         ).fetchone()["c"]
         active_credits = conn.execute(
             "SELECT COUNT(*) AS c FROM credits WHERE used = 0 AND expires_at > datetime('now')"
@@ -1175,7 +1234,6 @@ def get_top_referrers(limit: int = 10) -> list[dict]:
                       COUNT(*) AS total_referrals,
                       SUM(CASE WHEN r.status = 'completed' THEN 1 ELSE 0 END) AS completed_referrals
                FROM referrals r
-               WHERE r.referred_id IS NOT NULL
                GROUP BY r.referrer_id
                ORDER BY completed_referrals DESC, total_referrals DESC
                LIMIT ?""",
