@@ -83,6 +83,11 @@
                     </a>
                 </li>
                 <li>
+                    <a href="/referrals" class="{% if request.endpoint == 'referrals' %}active{% endif %}">
+                        <i class="bi bi-people-fill"></i> הפניות
+                    </a>
+                </li>
+                <li>
                     <a href="/qr-code" class="{% if request.endpoint in ['qr_code'] %}active{% endif %}">
                         <i class="bi bi-qr-code"></i> QR Code
                     </a>

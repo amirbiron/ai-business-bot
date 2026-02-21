@@ -6,7 +6,7 @@ import logging
 import sqlite3
 import json
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
@@ -155,6 +155,29 @@ def init_db():
                 created_at  TEXT DEFAULT (datetime('now'))
             );
 
+            -- Referrals (מערכת הפניות)
+            CREATE TABLE IF NOT EXISTS referrals (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                referrer_id     TEXT NOT NULL,
+                referred_id     TEXT,
+                code            TEXT NOT NULL UNIQUE,
+                status          TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'completed')),
+                created_at      TEXT DEFAULT (datetime('now')),
+                completed_at    TEXT
+            );
+
+            -- Referral credits (זיכויים מהפניות)
+            CREATE TABLE IF NOT EXISTS credits (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id         TEXT NOT NULL,
+                amount          REAL NOT NULL,
+                type            TEXT NOT NULL CHECK(type IN ('referrer', 'referred')),
+                reason          TEXT DEFAULT '',
+                used            INTEGER DEFAULT 0,
+                expires_at      TEXT NOT NULL,
+                created_at      TEXT DEFAULT (datetime('now'))
+            );
+
             -- Vacation mode (שורה בודדת — תמיד id=1)
             CREATE TABLE IF NOT EXISTS vacation_mode (
                 id                  INTEGER PRIMARY KEY CHECK(id = 1),
@@ -174,6 +197,10 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_live_chats_user_active ON live_chats(user_id, is_active);
             CREATE INDEX IF NOT EXISTS idx_unanswered_questions_status ON unanswered_questions(status);
             CREATE UNIQUE INDEX IF NOT EXISTS idx_special_days_date_unique ON special_days(date);
+            CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referrals(referrer_id);
+            CREATE INDEX IF NOT EXISTS idx_referrals_referred ON referrals(referred_id);
+            CREATE INDEX IF NOT EXISTS idx_referrals_code ON referrals(code);
+            CREATE INDEX IF NOT EXISTS idx_credits_user ON credits(user_id);
         """)
 
         # Lightweight migrations for existing databases (SQLite can only ADD COLUMN).
@@ -958,3 +985,240 @@ def update_vacation_mode(is_active: bool, vacation_end_date: str = "", vacation_
                WHERE id = 1""",
             (int(is_active), vacation_end_date, vacation_message),
         )
+
+
+# ─── Referrals (מערכת הפניות) ────────────────────────────────────────────
+
+def generate_referral_code(user_id: str) -> str:
+    """יצירת קוד הפניה ייחודי למשתמש. אם כבר קיים — מחזיר את הקוד הקיים."""
+    import hashlib
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT code FROM referrals WHERE referrer_id = ? LIMIT 1",
+            (user_id,),
+        ).fetchone()
+        if row:
+            return row["code"]
+
+        # יצירת קוד ייחודי על בסיס user_id + timestamp
+        raw = f"{user_id}_{datetime.now().isoformat()}"
+        short_hash = hashlib.sha256(raw.encode()).hexdigest()[:8].upper()
+        code = f"REF_{short_hash}"
+
+        # וידוא ייחודיות (מקרה קצה נדיר של התנגשות)
+        while conn.execute("SELECT 1 FROM referrals WHERE code = ?", (code,)).fetchone():
+            raw += "_retry"
+            short_hash = hashlib.sha256(raw.encode()).hexdigest()[:8].upper()
+            code = f"REF_{short_hash}"
+
+        conn.execute(
+            "INSERT INTO referrals (referrer_id, code) VALUES (?, ?)",
+            (user_id, code),
+        )
+        return code
+
+
+def get_referral_by_code(code: str) -> Optional[dict]:
+    """חיפוש הפניה לפי קוד."""
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM referrals WHERE code = ?", (code,)
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def register_referral(code: str, referred_id: str) -> bool:
+    """רישום הפניה — מקשר את המשתמש החדש לקוד ההפניה.
+
+    מחזיר True אם הרישום הצליח, False אם הקוד לא קיים, כבר מנוצל,
+    או שהמשתמש מנסה להפנות את עצמו.
+    """
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM referrals WHERE code = ?", (code,)
+        ).fetchone()
+        if not row:
+            return False
+        # לא מאפשרים הפניה עצמית
+        if row["referrer_id"] == referred_id:
+            return False
+        # הקוד כבר שויך למשתמש אחר
+        if row["referred_id"]:
+            return False
+        # בדיקה שהמשתמש החדש לא כבר הופנה על ידי מישהו אחר
+        existing = conn.execute(
+            "SELECT 1 FROM referrals WHERE referred_id = ?", (referred_id,)
+        ).fetchone()
+        if existing:
+            return False
+
+        conn.execute(
+            "UPDATE referrals SET referred_id = ? WHERE code = ?",
+            (referred_id, code),
+        )
+        return True
+
+
+def complete_referral(referred_id: str) -> bool:
+    """הפעלת ההפניה — נקרא לאחר שהלקוח המופנה השלים תור ראשון.
+
+    יוצר זיכויים (credits) לשני הצדדים. מחזיר True אם הופעל בהצלחה.
+    """
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM referrals WHERE referred_id = ? AND status = 'pending'",
+            (referred_id,),
+        ).fetchone()
+        if not row:
+            return False
+
+        now = datetime.now()
+        # תוקף הזיכוי — חודשיים מרגע ההפעלה
+        expires_at = (now + timedelta(days=60)).strftime("%Y-%m-%d %H:%M:%S")
+
+        # סימון ההפניה כהושלמה
+        conn.execute(
+            "UPDATE referrals SET status = 'completed', completed_at = datetime('now') WHERE id = ?",
+            (row["id"],),
+        )
+
+        # זיכוי למפנה — 10% הנחה
+        conn.execute(
+            "INSERT INTO credits (user_id, amount, type, reason, expires_at) VALUES (?, ?, ?, ?, ?)",
+            (row["referrer_id"], 10.0, "referrer", f"הפניית לקוח חדש (קוד: {row['code']})", expires_at),
+        )
+
+        # זיכוי למופנה — 10% הנחה
+        conn.execute(
+            "INSERT INTO credits (user_id, amount, type, reason, expires_at) VALUES (?, ?, ?, ?, ?)",
+            (referred_id, 10.0, "referred", f"הצטרפות דרך הפניה (קוד: {row['code']})", expires_at),
+        )
+
+        return True
+
+
+def get_user_referral_code(user_id: str) -> Optional[str]:
+    """החזרת קוד ההפניה של משתמש (אם קיים)."""
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT code FROM referrals WHERE referrer_id = ? LIMIT 1",
+            (user_id,),
+        ).fetchone()
+        return row["code"] if row else None
+
+
+def get_active_credits(user_id: str) -> list[dict]:
+    """החזרת זיכויים פעילים (לא נוצלו ולא פגו) של משתמש."""
+    with get_connection() as conn:
+        rows = conn.execute(
+            """SELECT * FROM credits
+               WHERE user_id = ? AND used = 0 AND expires_at > datetime('now')
+               ORDER BY expires_at ASC""",
+            (user_id,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def use_credit(credit_id: int):
+    """סימון זיכוי כמנוצל."""
+    with get_connection() as conn:
+        conn.execute(
+            "UPDATE credits SET used = 1 WHERE id = ?",
+            (credit_id,),
+        )
+
+
+def count_referrals(user_id: str, status: str | None = None) -> int:
+    """ספירת הפניות של משתמש מפנה."""
+    with get_connection() as conn:
+        if status:
+            row = conn.execute(
+                "SELECT COUNT(*) AS count FROM referrals WHERE referrer_id = ? AND status = ?",
+                (user_id, status),
+            ).fetchone()
+        else:
+            row = conn.execute(
+                "SELECT COUNT(*) AS count FROM referrals WHERE referrer_id = ? AND referred_id IS NOT NULL",
+                (user_id,),
+            ).fetchone()
+        return int(row["count"]) if row else 0
+
+
+def get_referral_stats() -> dict:
+    """סטטיסטיקות הפניות לדשבורד האדמין."""
+    with get_connection() as conn:
+        total = conn.execute(
+            "SELECT COUNT(*) AS c FROM referrals WHERE referred_id IS NOT NULL"
+        ).fetchone()["c"]
+        completed = conn.execute(
+            "SELECT COUNT(*) AS c FROM referrals WHERE status = 'completed'"
+        ).fetchone()["c"]
+        pending = conn.execute(
+            "SELECT COUNT(*) AS c FROM referrals WHERE status = 'pending' AND referred_id IS NOT NULL"
+        ).fetchone()["c"]
+        active_credits = conn.execute(
+            "SELECT COUNT(*) AS c FROM credits WHERE used = 0 AND expires_at > datetime('now')"
+        ).fetchone()["c"]
+        return {
+            "total_referrals": total,
+            "completed_referrals": completed,
+            "pending_referrals": pending,
+            "active_credits": active_credits,
+        }
+
+
+def get_top_referrers(limit: int = 10) -> list[dict]:
+    """החזרת מפנים מובילים (לפי כמות הפניות שהושלמו)."""
+    with get_connection() as conn:
+        rows = conn.execute(
+            """SELECT r.referrer_id,
+                      COUNT(*) AS total_referrals,
+                      SUM(CASE WHEN r.status = 'completed' THEN 1 ELSE 0 END) AS completed_referrals
+               FROM referrals r
+               WHERE r.referred_id IS NOT NULL
+               GROUP BY r.referrer_id
+               ORDER BY completed_referrals DESC, total_referrals DESC
+               LIMIT ?""",
+            (limit,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def get_all_referrals(limit: int | None = None) -> list[dict]:
+    """החזרת כל ההפניות לפאנל האדמין."""
+    with get_connection() as conn:
+        query = """SELECT r.*,
+                          c_referrer.username AS referrer_name,
+                          c_referred.username AS referred_name
+                   FROM referrals r
+                   LEFT JOIN (SELECT user_id, username FROM conversations WHERE username != ''
+                              GROUP BY user_id) c_referrer ON r.referrer_id = c_referrer.user_id
+                   LEFT JOIN (SELECT user_id, username FROM conversations WHERE username != ''
+                              GROUP BY user_id) c_referred ON r.referred_id = c_referred.user_id
+                   ORDER BY r.created_at DESC"""
+        params: list[object] = []
+        if limit is not None:
+            query += " LIMIT ?"
+            params.append(limit)
+        rows = conn.execute(query, params).fetchall()
+        return [dict(r) for r in rows]
+
+
+def has_pending_referral(user_id: str) -> bool:
+    """בדיקה האם למשתמש יש הפניה ממתינה (נרשם דרך קוד אבל עוד לא השלים תור)."""
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT 1 FROM referrals WHERE referred_id = ? AND status = 'pending'",
+            (user_id,),
+        ).fetchone()
+        return row is not None
+
+
+def has_completed_appointment(user_id: str) -> bool:
+    """בדיקה האם למשתמש יש לפחות תור אחד שהושלם (confirmed)."""
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT 1 FROM appointments WHERE user_id = ? AND status = 'confirmed'",
+            (user_id,),
+        ).fetchone()
+        return row is not None

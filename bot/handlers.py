@@ -34,6 +34,7 @@ from ai_chatbot.config import (
     BUSINESS_ADDRESS,
     BUSINESS_WEBSITE,
     TELEGRAM_OWNER_CHAT_ID,
+    TELEGRAM_BOT_USERNAME,
     FALLBACK_RESPONSE,
     CONTEXT_WINDOW_SIZE,
 )
@@ -185,8 +186,20 @@ async def _handoff_to_human(
 @rate_limit_guard
 @live_chat_guard
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle the /start command — send welcome message with menu."""
+    """Handle the /start command — send welcome message with menu.
+
+    אם ה-deep link מכיל פרמטר ref_XXX — נרשום את ההפניה.
+    """
     user_id, display_name, _telegram_username = _get_user_info(update)
+
+    # זיהוי קוד הפניה מה-deep link: /start REF_XXXXXXXX
+    referral_registered = False
+    if context.args:
+        arg = context.args[0]
+        if arg.startswith("REF_"):
+            referral_registered = db.register_referral(arg, user_id)
+            if referral_registered:
+                logger.info("Referral registered: user %s via code %s", user_id, arg)
 
     welcome_text = (
         f"👋 ברוכים הבאים ל-*{BUSINESS_NAME}*!\n\n"
@@ -197,13 +210,20 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"• חיבור לנציג אנושי\n\n"
         f"פשוט כתבו את השאלה שלכם או השתמשו בכפתורים למטה! 👇"
     )
-    
+
+    if referral_registered:
+        welcome_text += (
+            "\n\n🎁 *הגעתם דרך הפניה!* "
+            "לאחר שתקבעו ותשלימו את התור הראשון שלכם — "
+            "גם אתם וגם החבר/ה שהפנה אתכם תקבלו *10% הנחה לחודשיים!*"
+        )
+
     await update.message.reply_text(
         welcome_text,
         parse_mode="Markdown",
         reply_markup=_get_main_keyboard()
     )
-    
+
     # Log the interaction
     db.save_message(user_id, display_name, "user", "/start")
     db.save_message(user_id, display_name, "assistant", "[Welcome message sent]")
@@ -514,7 +534,7 @@ async def booking_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         service = context.user_data.get("booking_service", "")
         date = context.user_data.get("booking_date", "")
         time = context.user_data.get("booking_time", "")
-        
+
         # Save appointment to database
         appt_id = db.create_appointment(
             user_id=user_id,
@@ -524,7 +544,7 @@ async def booking_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             preferred_time=time,
             telegram_username=telegram_username,
         )
-        
+
         # Notify business owner
         if TELEGRAM_OWNER_CHAT_ID:
             try:
@@ -543,10 +563,10 @@ async def booking_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 )
             except Exception as e:
                 logger.error("Failed to send appointment notification: %s", e)
-        
+
         db.save_message(user_id, display_name, "assistant",
                         f"בקשת תור: {service} בתאריך {date} בשעה {time}")
-        
+
         await update.message.reply_text(
             f"📋 בקשת התור התקבלה!\n\n"
             f"• שירות: {service}\n"
@@ -556,6 +576,9 @@ async def booking_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             f"ניצור איתכם קשר בהקדם לאישור סופי של השעה.",
             reply_markup=_get_main_keyboard()
         )
+
+        # הצעת קוד הפניה לאחר בקשת תור ראשונה
+        await _maybe_send_referral_code(update, user_id)
     else:
         await update.message.reply_text(
             "❌ בקשת התור בוטלה. אין בעיה!\n"
@@ -752,6 +775,11 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         handoff_reason=handoff_reason,
     )
 
+    # בדיקת מעורבות גבוהה — שליחת קוד הפניה אם רלוונטי
+    context.application.create_task(
+        _check_high_engagement_referral(update, user_id)
+    )
+
 
 # ─── Cancellation Confirmation Callback ──────────────────────────────────────
 
@@ -794,6 +822,56 @@ async def cancel_appointment_callback(update: Update, context: ContextTypes.DEFA
         text="👇",
         reply_markup=_get_main_keyboard(),
     )
+
+
+# ─── Referral System (מערכת הפניות) ──────────────────────────────────────
+
+async def _maybe_send_referral_code(update: Update, user_id: str):
+    """שליחת קוד הפניה אם המשתמש עדיין לא קיבל אחד.
+
+    נקרא אחרי בקשת תור ראשונה או לאחר מעורבות גבוהה.
+    """
+    # אם כבר קיים קוד — לא שולחים שוב (שליחה ראשונה בלבד)
+    existing_code = db.get_user_referral_code(user_id)
+    if existing_code:
+        return
+
+    code = db.generate_referral_code(user_id)
+    if not code:
+        return
+
+    if TELEGRAM_BOT_USERNAME:
+        link = f"https://t.me/{TELEGRAM_BOT_USERNAME}?start={code}"
+    else:
+        link = code
+
+    referral_text = (
+        "🎁 *רוצים לשתף עם חבר/ה?*\n\n"
+        f"שלחו להם את הלינק הזה:\n{link}\n\n"
+        "כשהם יקבעו וישלימו תור — *גם אתם וגם הם תקבלו 10% הנחה לחודשיים!*"
+    )
+
+    await _reply_markdown_safe(update.message, referral_text)
+
+
+async def _check_high_engagement_referral(update: Update, user_id: str):
+    """בדיקת מעורבות גבוהה — שליחת קוד הפניה אם המשתמש מאוד פעיל.
+
+    תנאי: 10+ הודעות ב-30 הדקות האחרונות, ועדיין לא קיבל קוד הפניה.
+    """
+    # אם כבר יש קוד — לא צריך לבדוק
+    if db.get_user_referral_code(user_id):
+        return
+
+    from datetime import datetime, timedelta, timezone
+    with db.get_connection() as conn:
+        thirty_min_ago = (datetime.now(timezone.utc) - timedelta(minutes=30)).strftime("%Y-%m-%d %H:%M:%S")
+        row = conn.execute(
+            "SELECT COUNT(*) AS cnt FROM conversations WHERE user_id = ? AND role = 'user' AND created_at >= ?",
+            (user_id, thirty_min_ago),
+        ).fetchone()
+        if row and int(row["cnt"]) >= 10:
+            await _maybe_send_referral_code(update, user_id)
 
 
 # ─── Error Handler ───────────────────────────────────────────────────────────
