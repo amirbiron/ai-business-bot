@@ -16,6 +16,7 @@ from telegram import Update
 from telegram.ext import ContextTypes, ConversationHandler
 
 from ai_chatbot import database as db
+from ai_chatbot.live_chat_service import LiveChatService
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +84,11 @@ def vacation_guard_booking(handler):
 
     @wraps(handler)
     async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        # בזמן צ'אט חי — לא חוסמים, נותנים ל-live_chat_guard לטפל
+        user = update.effective_user
+        if user and LiveChatService.is_active(str(user.id)):
+            return await handler(update, context)
+
         if not VacationService.is_active():
             return await handler(update, context)
 
@@ -101,6 +107,11 @@ def vacation_guard_agent(handler):
 
     @wraps(handler)
     async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        # בזמן צ'אט חי — לא חוסמים, נותנים ל-live_chat_guard לטפל
+        user = update.effective_user
+        if user and LiveChatService.is_active(str(user.id)):
+            return await handler(update, context)
+
         if not VacationService.is_active():
             return await handler(update, context)
 
