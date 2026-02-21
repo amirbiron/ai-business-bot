@@ -307,14 +307,25 @@ def get_unique_users() -> list[dict]:
     """Get list of unique users with their last message time."""
     with get_connection() as conn:
         rows = conn.execute("""
-            SELECT user_id, username, 
+            SELECT user_id, username,
                    MAX(created_at) as last_active,
                    COUNT(*) as message_count
-            FROM conversations 
-            GROUP BY user_id 
+            FROM conversations
+            GROUP BY user_id
             ORDER BY last_active DESC
         """).fetchall()
         return [dict(r) for r in rows]
+
+
+def get_username_for_user(user_id: str) -> Optional[str]:
+    """Look up the display name for a single user without scanning all users."""
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT username FROM conversations WHERE user_id = ? AND username != '' "
+            "ORDER BY id DESC LIMIT 1",
+            (user_id,),
+        ).fetchone()
+        return row["username"] if row else None
 
 
 def get_unsummarized_message_count(user_id: str) -> int:

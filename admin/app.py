@@ -395,10 +395,7 @@ def create_admin_app() -> Flask:
 
     def _get_customer_username(user_id: str) -> str:
         """Look up the customer's display name for a given user_id."""
-        users = db.get_unique_users()
-        user_info = next((u for u in users if u["user_id"] == user_id), None)
-        return (user_info["username"] if user_info and user_info["username"]
-                else user_id)
+        return db.get_username_for_user(user_id) or user_id
 
     @app.route("/live-chat/<user_id>")
     @login_required
@@ -424,7 +421,8 @@ def create_admin_app() -> Flask:
         db.start_live_chat(user_id, username)
         notify_msg = "👤 נציג אנושי הצטרף לשיחה. כעת תקבלו מענה ישיר."
         sent = _send_telegram_message(user_id, notify_msg)
-        db.save_message(user_id, username, "assistant", notify_msg)
+        if sent:
+            db.save_message(user_id, username, "assistant", notify_msg)
         return sent
 
     @app.route("/live-chat/<user_id>/start", methods=["POST"])
@@ -446,7 +444,8 @@ def create_admin_app() -> Flask:
         # Notify the customer that the bot is back
         end_msg = "🤖 הבוט חזר לנהל את השיחה. אם תרצו לדבר עם נציג שוב, לחצו על 'דברו עם נציג'."
         sent = _send_telegram_message(user_id, end_msg)
-        db.save_message(user_id, username, "assistant", end_msg)
+        if sent:
+            db.save_message(user_id, username, "assistant", end_msg)
         # Deactivate *after* sending the notification so the bot stays
         # suspended until the customer receives the transition message.
         db.end_live_chat(user_id)
