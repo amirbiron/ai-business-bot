@@ -321,6 +321,11 @@ def generate_answer(
         raw_answer = response.choices[0].message.content.strip()
     except Exception as e:
         logger.error("LLM API error: %s", e)
+        if user_id:
+            try:
+                db.save_unanswered_question(user_id, username or "", user_query)
+            except Exception as log_err:
+                logger.error("Failed to log unanswered question: %s", log_err)
         return {
             "answer": FALLBACK_RESPONSE,
             "sources": [],

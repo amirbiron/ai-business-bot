@@ -668,8 +668,9 @@ def count_unanswered_questions(status: str | None = None) -> int:
 def update_unanswered_question_status(question_id: int, status: str):
     """Update the status of an unanswered question."""
     with get_connection() as conn:
+        resolved_at = "datetime('now')" if status == "resolved" else "NULL"
         conn.execute(
-            "UPDATE unanswered_questions SET status=?, resolved_at=datetime('now') WHERE id=?",
+            f"UPDATE unanswered_questions SET status=?, resolved_at={resolved_at} WHERE id=?",
             (status, question_id),
         )
 
