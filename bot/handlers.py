@@ -171,7 +171,11 @@ async def _handoff_to_human(
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle the /start command — send welcome message with menu."""
     user_id, display_name, _telegram_username = _get_user_info(update)
-    
+
+    if db.is_live_chat_active(user_id):
+        db.save_message(user_id, display_name, "user", "/start")
+        return
+
     welcome_text = (
         f"👋 ברוכים הבאים ל-*{BUSINESS_NAME}*!\n\n"
         f"אני העוזר הווירטואלי שלכם. אני יכול לעזור לכם עם:\n"
@@ -197,6 +201,12 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle the /help command."""
+    user_id, display_name, _ = _get_user_info(update)
+
+    if db.is_live_chat_active(user_id):
+        db.save_message(user_id, display_name, "user", "/help")
+        return
+
     help_text = (
         "🤖 *איך להשתמש בבוט:*\n\n"
         "• פשוט כתבו כל שאלה ואעשה כמיטב יכולתי לענות!\n"

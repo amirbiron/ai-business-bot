@@ -424,8 +424,6 @@ def create_admin_app() -> Flask:
     @login_required
     def live_chat_start(user_id):
         _do_start_live_chat(user_id)
-        if request.headers.get("HX-Request"):
-            return redirect(url_for("live_chat", user_id=user_id))
         return redirect(url_for("live_chat", user_id=user_id))
 
     @app.route("/live-chat/<user_id>/end", methods=["POST"])
@@ -436,8 +434,6 @@ def create_admin_app() -> Flask:
         end_msg = "🤖 הבוט חזר לנהל את השיחה. אם תרצו לדבר עם נציג שוב, לחצו על 'דברו עם נציג'."
         _send_telegram_message(user_id, end_msg)
         db.save_message(user_id, BUSINESS_NAME, "assistant", end_msg)
-        if request.headers.get("HX-Request"):
-            return redirect(url_for("conversations"))
         return redirect(url_for("conversations"))
 
     @app.route("/live-chat/<user_id>/send", methods=["POST"])
