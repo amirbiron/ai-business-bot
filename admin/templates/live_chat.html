@@ -75,6 +75,9 @@
 {% block scripts %}
 <script>
     var _wasNearBottom = true;
+    // שמירת התגובה האחרונה מהשרת — להשוואה ישירה (innerHTML לא אמין כי הדפדפן מנרמל)
+    var _lastServerResponse = null;
+
     function scrollToBottom() {
         var c = document.getElementById('live-chat-messages');
         if (c) c.scrollTop = c.scrollHeight;
@@ -86,15 +89,16 @@
     }
     // Scroll on initial page load
     scrollToBottom();
-    // דילוג על swap אם התוכן לא השתנה — מונע בהוב מיותר
+
+    // דילוג על swap אם התגובה מהשרת זהה לקודמת — מונע בהוב מיותר
     document.body.addEventListener('htmx:beforeSwap', function(e) {
         if (e.detail.target && e.detail.target.id === 'live-chat-messages') {
-            var newHtml = (e.detail.serverResponse || '').trim();
-            var oldHtml = e.detail.target.innerHTML.trim();
-            if (newHtml === oldHtml) {
+            var newHtml = e.detail.serverResponse || '';
+            if (_lastServerResponse !== null && newHtml === _lastServerResponse) {
                 e.detail.shouldSwap = false;
                 return;
             }
+            _lastServerResponse = newHtml;
             _wasNearBottom = checkNearBottom();
         }
     });
