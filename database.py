@@ -1410,13 +1410,33 @@ def complete_broadcast(broadcast_id: int, sent_count: int, failed_count: int):
         )
 
 
-def fail_broadcast(broadcast_id: int, sent_count: int, failed_count: int):
-    """סימון שידור ככישלון."""
+def fail_broadcast(broadcast_id: int, sent_count: int | None = None, failed_count: int | None = None):
+    """סימון שידור ככישלון.
+
+    אם sent_count/failed_count הם None — שומר על הערכים שכבר ב-DB
+    (שנכתבו ע"י update_broadcast_progress במהלך השליחה).
+    """
+    with get_connection() as conn:
+        if sent_count is not None and failed_count is not None:
+            conn.execute(
+                "UPDATE broadcast_messages SET sent_count = ?, failed_count = ?, "
+                "status = 'failed', completed_at = datetime('now') WHERE id = ?",
+                (sent_count, failed_count, broadcast_id),
+            )
+        else:
+            conn.execute(
+                "UPDATE broadcast_messages SET status = 'failed', "
+                "completed_at = datetime('now') WHERE id = ?",
+                (broadcast_id,),
+            )
+
+
+def mark_broadcast_sending(broadcast_id: int):
+    """סימון שידור כ-sending — נקרא בתחילת השליחה בפועל."""
     with get_connection() as conn:
         conn.execute(
-            "UPDATE broadcast_messages SET sent_count = ?, failed_count = ?, "
-            "status = 'failed', completed_at = datetime('now') WHERE id = ?",
-            (sent_count, failed_count, broadcast_id),
+            "UPDATE broadcast_messages SET status = 'sending' WHERE id = ? AND status = 'queued'",
+            (broadcast_id,),
         )
 
 

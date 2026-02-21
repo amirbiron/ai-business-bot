@@ -45,6 +45,9 @@ async def send_broadcast(
     if needs_init:
         await bot.initialize()
 
+    # סימון מיידי כ-sending — גם לרשימות קטנות מ-PROGRESS_UPDATE_INTERVAL
+    db.mark_broadcast_sending(broadcast_id)
+
     sent = 0
     failed = 0
 
@@ -119,7 +122,7 @@ def start_broadcast_task(
         )
         # טיפול בשגיאות שנופלות מחוץ ללולאת ה-per-message (למשל DB errors)
         future.add_done_callback(
-            lambda f: _handle_future_error(f, broadcast_id, len(recipients))
+            lambda f: _handle_future_error(f, broadcast_id)
         )
     else:
         # fallback — הרצה בלולאה חדשה (admin-only mode ללא בוט פעיל)
@@ -130,18 +133,20 @@ def start_broadcast_task(
                 asyncio.run(send_broadcast(bot, broadcast_id, message_text, recipients, needs_init=needs_init))
             except Exception as e:
                 logger.error("Broadcast thread failed: %s", e)
-                db.fail_broadcast(broadcast_id, 0, len(recipients))
+                # לא דורסים sent/failed — שומרים את ההתקדמות שכבר נכתבה ל-DB
+                db.fail_broadcast(broadcast_id)
 
         thread = threading.Thread(target=_run, daemon=True, name=f"broadcast-{broadcast_id}")
         thread.start()
 
 
-def _handle_future_error(future: asyncio.Future, broadcast_id: int, total: int) -> None:
+def _handle_future_error(future: asyncio.Future, broadcast_id: int) -> None:
     """callback לטיפול בשגיאות של broadcast task שרץ ב-event loop."""
     exc = future.exception()
     if exc is not None:
         logger.error("Broadcast %d task failed: %s", broadcast_id, exc)
         try:
-            db.fail_broadcast(broadcast_id, 0, total)
+            # לא דורסים sent/failed — שומרים את ההתקדמות שכבר נכתבה ל-DB
+            db.fail_broadcast(broadcast_id)
         except Exception as db_err:
             logger.error("Broadcast %d: failed to mark as failed in DB: %s", broadcast_id, db_err)
