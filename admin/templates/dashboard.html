@@ -54,9 +54,18 @@
                         <span class="fw-semibold">{{ lc.username or lc.user_id }}</span>
                         <br><span class="text-small text-muted">התחילה: {{ lc.started_at|il_datetime }}</span>
                     </div>
-                    <a href="/live-chat/{{ lc.user_id }}" class="btn btn-primary btn-sm">
-                        <i class="bi bi-headset"></i> כנס לשיחה
-                    </a>
+                    <div class="d-flex gap-sm align-center">
+                        <a href="/live-chat/{{ lc.user_id }}" class="btn btn-primary btn-sm">
+                            <i class="bi bi-headset"></i> כנס לשיחה
+                        </a>
+                        <form method="POST" action="/live-chat/{{ lc.user_id }}/end" style="margin: 0;">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-danger btn-sm"
+                                    onclick="return confirm('להחזיר את השיחה לבוט?')">
+                                <i class="bi bi-robot"></i> החזר לבוט
+                            </button>
+                        </form>
+                    </div>
                 </div>
             </div>
             {% endfor %}
