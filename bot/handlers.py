@@ -26,7 +26,7 @@ from telegram.error import BadRequest
 from telegram.ext import ContextTypes, ConversationHandler
 
 from ai_chatbot import database as db
-from ai_chatbot.llm import generate_answer, strip_source_citation, maybe_summarize, extract_follow_up_questions, strip_follow_up_questions
+from ai_chatbot.llm import generate_answer, strip_source_citation, maybe_summarize
 from ai_chatbot.intent import Intent, detect_intent, get_direct_response
 from ai_chatbot.business_hours import is_currently_open, get_weekly_schedule_text
 from ai_chatbot.config import (
@@ -40,7 +40,7 @@ from ai_chatbot.config import (
     FOLLOW_UP_ENABLED,
 )
 from ai_chatbot.live_chat_service import live_chat_guard, live_chat_guard_booking
-from ai_chatbot.rate_limiter import rate_limit_guard, rate_limit_guard_booking
+from ai_chatbot.rate_limiter import rate_limit_guard, rate_limit_guard_booking, check_rate_limit, record_message
 from ai_chatbot.vacation_service import (
     VacationService,
     vacation_guard_booking,
@@ -969,6 +969,17 @@ async def follow_up_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     if LiveChatService.is_active(user_id):
         return
+
+    # בדיקת rate limit — שאלות המשך צורכות קריאת LLM כמו הודעה רגילה
+    limit_msg = check_rate_limit(user_id)
+    if limit_msg is not None:
+        try:
+            await query.edit_message_text(limit_msg, parse_mode="Markdown")
+        except Exception:
+            await query.edit_message_text(limit_msg)
+        return
+
+    record_message(user_id)
 
     cb_data = query.data
     # שליפת טקסט השאלה מ-bot_data

@@ -160,8 +160,8 @@ def extract_follow_up_questions(response_text: str) -> list[str]:
 
 
 def strip_follow_up_questions(response_text: str) -> str:
-    """הסרת בלוק שאלות ההמשך מהטקסט לפני שליחה ללקוח."""
-    return _FOLLOW_UP_PATTERN.sub("", response_text).strip()
+    """הסרת בלוק שאלות ההמשך (כולל שורות ריקות שלפניו) מהטקסט לפני שליחה ללקוח."""
+    return re.sub(r"\n*\[שאלות_המשך:\s*.*?\]", "", response_text).strip()
 
 
 def strip_source_citation(response_text: str) -> str:
