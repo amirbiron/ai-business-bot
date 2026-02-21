@@ -32,7 +32,38 @@
         <div class="stat-value">{{ stats.pending_appointments }}</div>
         <div class="stat-label">תורים ממתינים</div>
     </div>
+    <div class="stat-card gradient-success animate-slide-up stagger-5">
+        <div class="stat-icon"><i class="bi bi-headset"></i></div>
+        <div class="stat-value">{{ stats.active_live_chats }}</div>
+        <div class="stat-label">שיחות חיות</div>
+    </div>
 </div>
+
+<!-- Active Live Chats -->
+{% if active_live_chats %}
+<div class="card animate-slide-up stagger-3" style="margin-bottom: var(--space-sm);">
+    <div class="card-header">
+        <span><i class="bi bi-headset"></i> שיחות חיות פעילות</span>
+    </div>
+    <div class="card-body">
+        <div class="list-group">
+            {% for lc in active_live_chats %}
+            <div class="list-group-item">
+                <div class="d-flex justify-between align-center">
+                    <div>
+                        <span class="fw-semibold">{{ lc.username or lc.user_id }}</span>
+                        <br><span class="text-small text-muted">התחילה: {{ lc.started_at|il_datetime }}</span>
+                    </div>
+                    <a href="/live-chat/{{ lc.user_id }}" class="btn btn-primary btn-sm">
+                        <i class="bi bi-headset"></i> כנס לשיחה
+                    </a>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
 
 <!-- Recent Items -->
 <div class="content-two-col">
@@ -58,7 +89,12 @@
                             {% endif %}
                             <br><span class="text-small text-muted">{{ req.created_at|il_datetime }}</span>
                         </div>
-                        <span class="badge badge-warning">ממתין</span>
+                        <div class="d-flex gap-sm align-center">
+                            <a href="/live-chat/{{ req.user_id }}" class="btn btn-primary btn-sm">
+                                <i class="bi bi-headset"></i>
+                            </a>
+                            <span class="badge badge-warning">ממתין</span>
+                        </div>
                     </div>
                 </div>
                 {% endfor %}

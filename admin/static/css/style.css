@@ -882,6 +882,64 @@ table tbody tr:last-child td {
     color: var(--text-muted);
 }
 
+/* --- Live Chat --- */
+.live-chat-container {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 280px);
+    min-height: 400px;
+}
+
+.live-chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1rem;
+}
+
+.live-chat-input {
+    border-top: 1px solid var(--border);
+    padding: 1rem;
+    background: var(--bg-darker);
+    border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+}
+
+.live-chat-form {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+}
+
+.live-chat-form .form-input {
+    flex: 1;
+}
+
+.live-chat-form .btn {
+    flex-shrink: 0;
+}
+
+/* Transfer alert banner in conversations page */
+.transfer-alerts {
+    margin-bottom: var(--space-sm);
+}
+
+.transfer-alert {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.transfer-alert-content {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.transfer-alert-content i {
+    font-size: 1.25rem;
+    flex-shrink: 0;
+}
+
 /* --- Login Page --- */
 .login-page {
     min-height: 100vh;

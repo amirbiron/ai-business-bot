@@ -29,6 +29,9 @@
     <td data-label="פעולות">
         {% if req.status == 'pending' %}
         <div class="actions-cell">
+            <a href="/live-chat/{{ req.user_id }}" class="btn btn-primary btn-sm">
+                <i class="bi bi-headset"></i> כנס לשיחה
+            </a>
             <button class="btn btn-success btn-sm"
                     hx-post="/requests/{{ req.id }}/handle"
                     hx-vals='{"status": "handled"}'

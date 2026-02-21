@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header animate-fade-in">
+    <h1><i class="bi bi-headset"></i> שיחה חיה — {{ username or user_id }}</h1>
+    <div class="d-flex gap-sm">
+        {% if live_session %}
+        <form method="POST" action="/live-chat/{{ user_id }}/end">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-danger btn-sm"
+                    onclick="return confirm('להחזיר את השיחה לבוט?')">
+                <i class="bi bi-robot"></i> סיום והחזרה לבוט
+            </button>
+        </form>
+        {% else %}
+        <form method="POST" action="/live-chat/{{ user_id }}/start">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-primary btn-sm">
+                <i class="bi bi-headset"></i> התחל שיחה חיה
+            </button>
+        </form>
+        {% endif %}
+        <a href="/conversations?user_id={{ user_id }}" class="btn btn-secondary btn-sm">
+            <i class="bi bi-arrow-right"></i> חזרה לשיחות
+        </a>
+    </div>
+</div>
+
+{% if live_session %}
+<div class="alert alert-success">
+    <span><i class="bi bi-headset"></i> שיחה חיה פעילה — הבוט מושהה. הודעות הלקוח יופיעו כאן בזמן אמת.</span>
+</div>
+{% else %}
+<div class="alert alert-info">
+    <span><i class="bi bi-info-circle"></i> השיחה מנוהלת על ידי הבוט. לחצו "התחל שיחה חיה" כדי להשתלט על השיחה.</span>
+</div>
+{% endif %}
+
+<div class="live-chat-container card animate-slide-up">
+    <!-- Messages area with auto-polling -->
+    <div class="live-chat-messages" id="live-chat-messages"
+         hx-get="/api/live-chat/{{ user_id }}/messages"
+         hx-trigger="every 3s"
+         hx-swap="innerHTML"
+         hx-target="#live-chat-messages">
+        {% include "partials/live_chat_messages.html" %}
+    </div>
+
+    {% if live_session %}
+    <!-- Message input -->
+    <div class="live-chat-input">
+        <form hx-post="/live-chat/{{ user_id }}/send"
+              hx-target="#live-chat-messages"
+              hx-swap="innerHTML"
+              hx-on::after-request="if(event.detail.successful) this.reset()"
+              class="live-chat-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="text" name="message" class="form-input"
+                   placeholder="כתבו הודעה..."
+                   autocomplete="off"
+                   autofocus
+                   required>
+            <button type="submit" class="btn btn-primary">
+                <i class="bi bi-send"></i> שלח
+            </button>
+        </form>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Auto-scroll to bottom of messages on load and after each HTMX swap
+    function scrollToBottom() {
+        var container = document.getElementById('live-chat-messages');
+        if (container) {
+            container.scrollTop = container.scrollHeight;
+        }
+    }
+    scrollToBottom();
+    document.body.addEventListener('htmx:afterSwap', function(e) {
+        if (e.detail.target && e.detail.target.id === 'live-chat-messages') {
+            scrollToBottom();
+        }
+    });
+</script>
+{% endblock %}

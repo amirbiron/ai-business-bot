@@ -222,6 +222,10 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def price_list_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle the Price List button — retrieve pricing info from KB."""
     user_id, display_name, telegram_username = _get_user_info(update)
+
+    if db.is_live_chat_active(user_id):
+        db.save_message(user_id, display_name, "user", "📋 מחירון")
+        return
     
     await update.message.reply_text("📋 תנו לי רגע לחפש את המחירון שלנו...")
     
@@ -255,6 +259,10 @@ async def price_list_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
 async def location_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle the Send Location button — send business location info."""
     user_id, display_name, telegram_username = _get_user_info(update)
+
+    if db.is_live_chat_active(user_id):
+        db.save_message(user_id, display_name, "user", "📍 מיקום")
+        return
     
     # Use RAG to find location/address info
     result = await _generate_answer_async("מה הכתובת והמיקום של העסק? איך מגיעים?")
@@ -287,6 +295,10 @@ async def location_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def talk_to_agent_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle the Talk to Agent button — notify the business owner."""
     user_id, display_name, telegram_username = _get_user_info(update)
+
+    if db.is_live_chat_active(user_id):
+        db.save_message(user_id, display_name, "user", "👤 שיחה עם נציג")
+        return
     
     # Create agent request in database
     await _create_request_and_notify_owner(
@@ -544,6 +556,11 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     user_id, display_name, telegram_username = _get_user_info(update)
     user_message = update.message.text
+
+    # ── Live-chat mode: bot is paused, business owner handles the conversation
+    if db.is_live_chat_active(user_id):
+        db.save_message(user_id, display_name, "user", user_message)
+        return
 
     # Check for button texts and route accordingly
     if user_message == BUTTON_PRICE_LIST:

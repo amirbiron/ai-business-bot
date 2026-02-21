@@ -5,6 +5,29 @@
     <h1><i class="bi bi-chat-dots"></i> יומן שיחות</h1>
 </div>
 
+<!-- Transfer Notifications (pending agent requests) -->
+{% if pending_requests %}
+<div class="transfer-alerts animate-slide-up">
+    {% for req in pending_requests %}
+    <div class="alert alert-warning transfer-alert">
+        <div class="transfer-alert-content">
+            <i class="bi bi-bell-fill"></i>
+            <div>
+                <strong>בקשת העברה לנציג</strong> —
+                {{ req.username }}
+                {% if req.telegram_username %}(@{{ req.telegram_username }}){% endif %}
+                <br>
+                <span class="text-small">{{ req.message }}</span>
+            </div>
+        </div>
+        <a href="/live-chat/{{ req.user_id }}" class="btn btn-primary btn-sm">
+            <i class="bi bi-headset"></i> כנס לשיחה
+        </a>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
 <div class="conversation-layout animate-slide-up">
     <!-- User List -->
     <div class="card">
@@ -23,7 +46,12 @@
                 <a href="/conversations?user_id={{ user.user_id }}"
                    class="list-group-item {% if selected_user == user.user_id %}active{% endif %}">
                     <div class="d-flex justify-between align-center">
-                        <span class="fw-semibold">{{ user.username or 'לא ידוע' }}</span>
+                        <span class="fw-semibold">
+                            {{ user.username or 'לא ידוע' }}
+                            {% if user.user_id in active_live_chats %}
+                            <span class="badge badge-success" style="margin-right: 0.25rem;">חיה</span>
+                            {% endif %}
+                        </span>
                         <span class="badge badge-info">{{ user.message_count }}</span>
                     </div>
                     <span class="text-small text-muted">אחרון: {{ user.last_active|il_datetime }}</span>
@@ -43,6 +71,16 @@
                 כל ההודעות האחרונות
                 {% endif %}
             </span>
+            {% if selected_user %}
+            <a href="/live-chat/{{ selected_user }}" class="btn btn-primary btn-sm">
+                <i class="bi bi-headset"></i>
+                {% if selected_user in active_live_chats %}
+                כנס לשיחה חיה
+                {% else %}
+                התחל שיחה חיה
+                {% endif %}
+            </a>
+            {% endif %}
         </div>
         <div class="messages-container">
             {% if messages %}
