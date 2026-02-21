@@ -137,9 +137,14 @@ def _quality_check(response_text: str) -> str:
     return FALLBACK_RESPONSE
 
 
-# ביטוי רגולרי לזיהוי שאלות המשך מתשובת ה-LLM
+# ביטויים רגולריים לזיהוי שאלות המשך מתשובת ה-LLM
+# תבנית ראשית: [שאלות_המשך: שאלה1 | שאלה2 | שאלה3]
+# תבנית חלופית: שאלות המשך (עם/בלי קו תחתון, עם/בלי סוגריים מרובעים)
 _FOLLOW_UP_PATTERN = re.compile(
-    r"\[שאלות_המשך:\s*(.+?)\]"
+    r"\[שאלות[_ ]המשך:\s*(.+?)\]"
+)
+_FOLLOW_UP_PATTERN_ALT = re.compile(
+    r"שאלות[_ ]המשך:\s*(.+?)(?:\n|$)"
 )
 
 
@@ -148,20 +153,34 @@ def extract_follow_up_questions(response_text: str) -> list[str]:
     חילוץ שאלות המשך מתשובת ה-LLM.
 
     מחפש את התבנית [שאלות_המשך: שאלה1 | שאלה2 | שאלה3] ומחזיר רשימת שאלות.
+    תומך גם בווריאציות נפוצות (בלי סוגריים, עם רווח במקום קו תחתון).
     מחזיר רשימה ריקה אם לא נמצאו שאלות.
     """
     match = _FOLLOW_UP_PATTERN.search(response_text)
     if not match:
+        # ניסיון עם תבנית חלופית (בלי סוגריים מרובעים)
+        match = _FOLLOW_UP_PATTERN_ALT.search(response_text)
+        if match:
+            logger.debug("follow-up: matched alt pattern (no brackets)")
+    if not match:
+        # לוג לדיבוג — מראה את סוף התשובה כדי להבין למה לא תפס
+        tail = response_text[-200:] if len(response_text) > 200 else response_text
+        logger.warning("follow-up: no match in response tail: %r", tail)
         return []
     raw = match.group(1)
     questions = [q.strip() for q in raw.split("|") if q.strip()]
     # הגבלה ל-3 שאלות מקסימום
+    logger.debug("follow-up: extracted %d questions: %s", len(questions[:3]), questions[:3])
     return questions[:3]
 
 
 def strip_follow_up_questions(response_text: str) -> str:
     """הסרת בלוק שאלות ההמשך (כולל שורות ריקות שלפניו) מהטקסט לפני שליחה ללקוח."""
-    return re.sub(r"\n*\[שאלות_המשך:\s*.*?\]", "", response_text).strip()
+    # הסרת הפורמט עם סוגריים מרובעים
+    text = re.sub(r"\n*\[שאלות[_ ]המשך:\s*.*?\]", "", response_text)
+    # הסרת הפורמט החלופי בלי סוגריים
+    text = re.sub(r"\n*שאלות[_ ]המשך:\s*.+?(?:\n|$)", "\n", text)
+    return text.strip()
 
 
 def strip_source_citation(response_text: str) -> str:
@@ -384,12 +403,16 @@ def generate_answer(
     if FOLLOW_UP_ENABLED:
         follow_up_questions = extract_follow_up_questions(raw_answer)
         raw_answer = strip_follow_up_questions(raw_answer)
+    else:
+        logger.debug("follow-up: FOLLOW_UP_ENABLED is False, skipping extraction")
 
     # Step 5: Quality check (Layer C)
     final_answer = _quality_check(raw_answer)
 
     # Log unanswered question if fallback was triggered
     if final_answer == FALLBACK_RESPONSE and user_id:
+        if follow_up_questions:
+            logger.debug("follow-up: clearing %d questions due to fallback", len(follow_up_questions))
         follow_up_questions = []  # לא מציגים שאלות המשך על fallback
         try:
             db.save_unanswered_question(user_id, username or "", user_query)
