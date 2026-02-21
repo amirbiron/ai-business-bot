@@ -33,6 +33,7 @@ from ai_chatbot.config import (
     CONTEXT_WINDOW_SIZE,
 )
 from ai_chatbot.live_chat_service import live_chat_guard, live_chat_guard_booking
+from ai_chatbot.rate_limiter import rate_limit_guard, rate_limit_guard_booking
 
 logger = logging.getLogger(__name__)
 
@@ -169,6 +170,7 @@ async def _handoff_to_human(
 
 # ─── /start Command ──────────────────────────────────────────────────────────
 
+@rate_limit_guard
 @live_chat_guard
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle the /start command — send welcome message with menu."""
@@ -197,6 +199,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ─── /help Command ───────────────────────────────────────────────────────────
 
+@rate_limit_guard
 @live_chat_guard
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle the /help command."""
@@ -224,6 +227,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ─── Price List Button ───────────────────────────────────────────────────────
 
+@rate_limit_guard
 @live_chat_guard
 async def price_list_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle the Price List button — retrieve pricing info from KB."""
@@ -258,6 +262,7 @@ async def price_list_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 # ─── Send Location Button ────────────────────────────────────────────────────
 
+@rate_limit_guard
 @live_chat_guard
 async def location_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle the Send Location button — send business location info."""
@@ -291,6 +296,7 @@ async def location_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ─── Talk to Agent Button ────────────────────────────────────────────────────
 
+@rate_limit_guard
 @live_chat_guard
 async def talk_to_agent_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle the Talk to Agent button — notify the business owner."""
@@ -322,6 +328,7 @@ async def talk_to_agent_handler(update: Update, context: ContextTypes.DEFAULT_TY
 
 # ─── Appointment Booking Flow ────────────────────────────────────────────────
 
+@rate_limit_guard_booking
 @live_chat_guard_booking
 async def booking_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Start the appointment booking conversation."""
@@ -356,6 +363,7 @@ async def booking_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     return BOOKING_SERVICE
 
 
+@rate_limit_guard_booking
 @live_chat_guard_booking
 async def booking_service(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Receive the service selection."""
@@ -370,6 +378,7 @@ async def booking_service(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     return BOOKING_DATE
 
 
+@rate_limit_guard_booking
 @live_chat_guard_booking
 async def booking_date(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Receive the preferred date."""
@@ -384,6 +393,7 @@ async def booking_date(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     return BOOKING_TIME
 
 
+@rate_limit_guard_booking
 @live_chat_guard_booking
 async def booking_time(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Receive the preferred time and show confirmation."""
@@ -405,6 +415,7 @@ async def booking_time(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     return BOOKING_CONFIRM
 
 
+@rate_limit_guard_booking
 @live_chat_guard_booking
 async def booking_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Handle booking confirmation."""
@@ -468,6 +479,7 @@ async def booking_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     return ConversationHandler.END
 
 
+@rate_limit_guard_booking
 @live_chat_guard_booking
 async def booking_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Cancel the booking flow."""
@@ -479,22 +491,25 @@ async def booking_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     return ConversationHandler.END
 
 
+@rate_limit_guard_booking
 @live_chat_guard_booking
 async def booking_button_interrupt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Handle button clicks during an active booking — cancel booking and route to the clicked button."""
     context.user_data.clear()
     user_message = update.message.text
 
+    # Use __wrapped__ to skip the rate_limit_guard layer — the current
+    # handler already recorded the message.
     if user_message == BUTTON_BOOKING:
         # Restart the booking flow from scratch
-        return await booking_start(update, context)
+        return await booking_start.__wrapped__(update, context)
 
     if user_message == BUTTON_PRICE_LIST:
-        await price_list_handler(update, context)
+        await price_list_handler.__wrapped__(update, context)
     elif user_message == BUTTON_LOCATION:
-        await location_handler(update, context)
+        await location_handler.__wrapped__(update, context)
     elif user_message == BUTTON_AGENT:
-        await talk_to_agent_handler(update, context)
+        await talk_to_agent_handler.__wrapped__(update, context)
     else:
         # Safety fallback — should not happen, but avoid a silent dead-end
         logger.warning("booking_button_interrupt: unexpected text %r", user_message)
@@ -549,6 +564,7 @@ async def _handle_rag_query(
 
 # ─── Free-Text Message Handler ───────────────────────────────────────────────
 
+@rate_limit_guard
 @live_chat_guard
 async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
@@ -561,13 +577,16 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id, display_name, telegram_username = _get_user_info(update)
     user_message = update.message.text
 
-    # Check for button texts and route accordingly
+    # Check for button texts and route accordingly.
+    # Use __wrapped__ to skip the rate_limit_guard layer — the current
+    # handler already recorded the message so re-entering the decorated
+    # version would count it twice.
     if user_message == BUTTON_PRICE_LIST:
-        return await price_list_handler(update, context)
+        return await price_list_handler.__wrapped__(update, context)
     elif user_message == BUTTON_LOCATION:
-        return await location_handler(update, context)
+        return await location_handler.__wrapped__(update, context)
     elif user_message == BUTTON_AGENT:
-        return await talk_to_agent_handler(update, context)
+        return await talk_to_agent_handler.__wrapped__(update, context)
 
     # ── Intent Detection ──────────────────────────────────────────────────
     intent = detect_intent(user_message)
