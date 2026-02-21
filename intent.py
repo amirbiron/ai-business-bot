@@ -88,7 +88,7 @@ _INTENT_PATTERNS: list[tuple[Intent, re.Pattern]] = [
         Intent.PRICING,
         re.compile(
             r"("
-            r"how\s*much|what.*price|what.*cost|pricing|price\s*list"
+            r"how\s*much|what.*price\b|what.*cost\b|pricing|price\s*list"
             r"|כמה\s*עולה|כמה\s*זה\s*עולה|מה\s*המחיר|מה\s*העלות|מחיר|מחירון|מחירים"
             r"|כמה\s*יעלה|כמה\s*כסף|עלות|תעריף|תעריפים"
             r")",
