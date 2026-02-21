@@ -97,8 +97,12 @@ async def send_broadcast(
         )
     finally:
         # סגירת ה-Bot אם אותחל כאן (admin-only mode)
+        # בתוך try/except נפרד כדי שכשל ב-shutdown לא ידרוס סטטוס completed
         if needs_init:
-            await bot.shutdown()
+            try:
+                await bot.shutdown()
+            except Exception as e:
+                logger.error("Broadcast %d: bot shutdown failed: %s", broadcast_id, e)
 
 
 def start_broadcast_task(

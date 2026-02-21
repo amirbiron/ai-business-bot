@@ -1496,8 +1496,8 @@ def _broadcast_audience_sql(audience: str) -> tuple[str, str]:
     base_where = "COALESCE(us.is_subscribed, 1) = 1"
 
     if audience == "booked":
-        join = f"JOIN appointments a ON c.user_id = a.user_id\n                {base_join}"
-        where = base_where
+        join = base_join
+        where = f"EXISTS (SELECT 1 FROM appointments a WHERE a.user_id = c.user_id)\n                  AND {base_where}"
     elif audience == "recent":
         join = base_join
         where = f"c.created_at >= datetime('now', '-30 days')\n                  AND {base_where}"
