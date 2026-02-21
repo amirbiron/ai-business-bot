@@ -74,13 +74,17 @@ STATUS_TRANSLATION = {
 
 
 def _format_il_datetime(value: str) -> str:
-    """Format a UTC datetime string to Israel time as DD-MM-YYYY  HH:MM."""
+    """Format a UTC datetime string to Israel time as DD-MM-YYYY  HH:MM.
+
+    משתמש ב-non-breaking space (\\u00a0) כדי שהדפדפן לא יקרוס את הרווח בין
+    התאריך לשעה (whitespace collapse).
+    """
     if not value:
         return ""
     try:
         dt = datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
         dt = dt.replace(tzinfo=timezone.utc).astimezone(ISRAEL_TZ)
-        return dt.strftime("%d-%m-%Y  %H:%M")
+        return dt.strftime("%d-%m-%Y") + "\u00a0\u00a0" + dt.strftime("%H:%M")
     except (ValueError, TypeError):
         return value
 

@@ -1049,6 +1049,12 @@ tr.htmx-swapping {
     transition: opacity 0.3s ease-out;
 }
 
+/* ביטול אנימציית swap בצ'אט חי — מונע בהוב פאנלים בזמן polling */
+#live-chat-messages.htmx-swapping {
+    opacity: 1;
+    transition: none;
+}
+
 /* Loading indicator */
 .htmx-indicator {
     display: none;
@@ -1266,7 +1272,8 @@ textarea:focus-visible,
     }
 
     .btn-sm,
-    .d-flex > .btn {
+    .d-flex > .btn,
+    .live-chat-form .btn {
         width: auto;
     }
 
