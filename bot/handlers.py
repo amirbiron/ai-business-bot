@@ -86,6 +86,14 @@ async def _reply_markdown_safe(message, text: str, **kwargs):
         return await message.reply_text(text, **kwargs)
 
 
+async def _send_markdown_safe(bot, chat_id: int, text: str, **kwargs):
+    """שליחת הודעה עם Markdown ל-chat_id, עם fallback לטקסט רגיל."""
+    try:
+        return await bot.send_message(chat_id=chat_id, text=text, parse_mode="Markdown", **kwargs)
+    except BadRequest:
+        return await bot.send_message(chat_id=chat_id, text=text, **kwargs)
+
+
 def _get_main_keyboard() -> ReplyKeyboardMarkup:
     """Create the main menu keyboard with action buttons."""
     keyboard = [
@@ -216,6 +224,8 @@ async def _handoff_to_human(
     display_name: str,
     telegram_username: str,
     reason: str,
+    *,
+    chat_id: int | None = None,
 ) -> None:
     await _create_request_and_notify_owner(
         context,
@@ -227,10 +237,18 @@ async def _handoff_to_human(
 
     response_text = FALLBACK_RESPONSE
     db.save_message(user_id, display_name, "assistant", response_text)
-    await update.message.reply_text(
-        response_text,
-        reply_markup=_get_main_keyboard(),
-    )
+    # callback queries לא מספקים update.message — שליחה ישירה לצ'אט
+    if chat_id is not None and update.message is None:
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=response_text,
+            reply_markup=_get_main_keyboard(),
+        )
+    else:
+        await update.message.reply_text(
+            response_text,
+            reply_markup=_get_main_keyboard(),
+        )
 
 
 # ─── /start Command ──────────────────────────────────────────────────────────
@@ -697,9 +715,17 @@ async def _handle_rag_query(
     user_message: str,
     query: str,
     handoff_reason: str,
+    chat_id: int | None = None,
 ) -> None:
-    """Run the RAG + LLM pipeline and send the result (or hand off to a human)."""
-    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
+    """הרצת צינור RAG + LLM ושליחת התוצאה (או העברה לנציג).
+
+    כש-chat_id מסופק ו-update.message לא קיים (למשל callback query),
+    השליחה נעשית ישירות לצ'אט במקום כ-reply.
+    """
+    effective_chat_id = chat_id or update.effective_chat.id
+    use_direct_send = chat_id is not None and update.message is None
+
+    await context.bot.send_chat_action(chat_id=effective_chat_id, action="typing")
 
     history = db.get_conversation_history(user_id, limit=CONTEXT_WINDOW_SIZE)
     db.save_message(user_id, display_name, "user", user_message)
@@ -719,21 +745,32 @@ async def _handle_rag_query(
             display_name=display_name,
             telegram_username=telegram_username,
             reason=handoff_reason,
+            chat_id=effective_chat_id,
         )
     else:
         db.save_message(user_id, display_name, "assistant", result["answer"], ", ".join(result["sources"]))
-        await _reply_markdown_safe(update.message, stripped, reply_markup=_get_main_keyboard())
+        if use_direct_send:
+            await _send_markdown_safe(context.bot, effective_chat_id, stripped, reply_markup=_get_main_keyboard())
+        else:
+            await _reply_markdown_safe(update.message, stripped, reply_markup=_get_main_keyboard())
 
         # שאלות המשך — שליחה כהודעה נפרדת עם כפתורי inline
         follow_up_qs = result.get("follow_up_questions", [])
         if FOLLOW_UP_ENABLED and follow_up_qs:
             follow_up_kb = _build_follow_up_keyboard(follow_up_qs, context.bot_data, user_id)
             if follow_up_kb:
-                await update.message.reply_text(
-                    "💡 *אולי תרצו גם לשאול:*",
-                    parse_mode="Markdown",
-                    reply_markup=follow_up_kb,
-                )
+                if use_direct_send:
+                    await _send_markdown_safe(
+                        context.bot, effective_chat_id,
+                        "💡 *אולי תרצו גם לשאול:*",
+                        reply_markup=follow_up_kb,
+                    )
+                else:
+                    await update.message.reply_text(
+                        "💡 *אולי תרצו גם לשאול:*",
+                        parse_mode="Markdown",
+                        reply_markup=follow_up_kb,
+                    )
 
     context.application.create_task(_summarize_safe(user_id))
 
@@ -979,14 +1016,15 @@ async def follow_up_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
             await query.edit_message_text(limit_msg)
         return
 
-    record_message(user_id)
-
     cb_data = query.data
     # שליפת טקסט השאלה מ-bot_data
     question_text = context.bot_data.pop(cb_data, None)
     if not question_text:
         logger.warning("follow_up_callback: missing question for %s", cb_data)
         return
+
+    # רישום rate limit רק אחרי שוידאנו שהשאלה קיימת
+    record_message(user_id)
 
     display_name = user.full_name or (f"@{user.username}" if user.username else f"User {user.id}")
     telegram_username = user.username or ""
@@ -998,63 +1036,17 @@ async def follow_up_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     except Exception as e:
         logger.error("Failed to edit follow-up message: %s", e)
 
-    # הרצת צינור ה-RAG ישירות (callback query אין לו update.message)
-    await context.bot.send_chat_action(chat_id=chat_id, action="typing")
-
-    history = db.get_conversation_history(user_id, limit=CONTEXT_WINDOW_SIZE)
-    db.save_message(user_id, display_name, "user", question_text)
-
-    result = await _generate_answer_async(
-        user_query=question_text,
-        conversation_history=history,
+    # שימוש בצינור RAG המשותף
+    await _handle_rag_query(
+        update, context,
         user_id=user_id,
-        username=display_name,
+        display_name=display_name,
+        telegram_username=telegram_username,
+        user_message=question_text,
+        query=question_text,
+        handoff_reason=f"הלקוח שאל שאלת המשך: {question_text}",
+        chat_id=chat_id,
     )
-
-    stripped = strip_source_citation(result["answer"])
-    if _should_handoff_to_human(stripped):
-        await _create_request_and_notify_owner(
-            context,
-            user_id=user_id,
-            display_name=display_name,
-            telegram_username=telegram_username,
-            message=f"הלקוח שאל שאלת המשך: {question_text}",
-        )
-        db.save_message(user_id, display_name, "assistant", FALLBACK_RESPONSE)
-        await context.bot.send_message(
-            chat_id=chat_id,
-            text=FALLBACK_RESPONSE,
-            reply_markup=_get_main_keyboard(),
-        )
-    else:
-        db.save_message(user_id, display_name, "assistant", result["answer"], ", ".join(result["sources"]))
-        try:
-            await context.bot.send_message(
-                chat_id=chat_id,
-                text=stripped,
-                parse_mode="Markdown",
-                reply_markup=_get_main_keyboard(),
-            )
-        except BadRequest:
-            await context.bot.send_message(
-                chat_id=chat_id,
-                text=stripped,
-                reply_markup=_get_main_keyboard(),
-            )
-
-        # שאלות המשך נוספות
-        follow_up_qs = result.get("follow_up_questions", [])
-        if FOLLOW_UP_ENABLED and follow_up_qs:
-            follow_up_kb = _build_follow_up_keyboard(follow_up_qs, context.bot_data, user_id)
-            if follow_up_kb:
-                await context.bot.send_message(
-                    chat_id=chat_id,
-                    text="💡 *אולי תרצו גם לשאול:*",
-                    parse_mode="Markdown",
-                    reply_markup=follow_up_kb,
-                )
-
-    context.application.create_task(_summarize_safe(user_id))
 
 
 # ─── Error Handler ───────────────────────────────────────────────────────────
