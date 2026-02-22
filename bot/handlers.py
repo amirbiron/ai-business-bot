@@ -304,6 +304,8 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ─── /stop Command (ביטול הרשמה לשידורים) ────────────────────────────────────
 
+@rate_limit_guard
+@live_chat_guard
 async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """טיפול בפקודת /stop — ביטול הרשמה לקבלת הודעות שידור."""
     user_id, display_name, _ = _get_user_info(update)
@@ -330,6 +332,8 @@ async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ─── /subscribe Command (הרשמה מחדש לשידורים) ────────────────────────────────
 
+@rate_limit_guard
+@live_chat_guard
 async def subscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """טיפול בפקודת /subscribe — הרשמה מחדש לקבלת שידורים."""
     user_id, display_name, _ = _get_user_info(update)

@@ -45,13 +45,13 @@ async def send_broadcast(
     if needs_init:
         await bot.initialize()
 
-    # סימון מיידי כ-sending — גם לרשימות קטנות מ-PROGRESS_UPDATE_INTERVAL
-    db.mark_broadcast_sending(broadcast_id)
-
     sent = 0
     failed = 0
 
     try:
+        # סימון מיידי כ-sending — גם לרשימות קטנות מ-PROGRESS_UPDATE_INTERVAL
+        db.mark_broadcast_sending(broadcast_id)
+
         for i, user_id in enumerate(recipients):
             try:
                 await bot.send_message(chat_id=int(user_id), text=message_text)
