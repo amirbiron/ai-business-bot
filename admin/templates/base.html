@@ -83,6 +83,11 @@
                     </a>
                 </li>
                 <li>
+                    <a href="/broadcast" class="{% if request.endpoint in ['broadcast'] %}active{% endif %}">
+                        <i class="bi bi-megaphone"></i> שליחת הודעות
+                    </a>
+                </li>
+                <li>
                     <a href="/referrals" class="{% if request.endpoint == 'referrals' %}active{% endif %}">
                         <i class="bi bi-people-fill"></i> הפניות
                     </a>

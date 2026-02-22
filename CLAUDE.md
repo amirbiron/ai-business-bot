@@ -35,6 +35,23 @@
 ### Exceptions — תמיד לרשום ללוג
 - `except Exception: pass` אסור. תמיד `logger.error(...)` כדי שבאגים לא ייעלמו בשקט.
 
+### Handlers — דקורטורים על כל handler
+- כל handler חדש (command, message, callback) חייב לעבור דרך `@rate_limit_guard` ו-`@live_chat_guard`. בלי `@live_chat_guard` — ה-handler יגיב ישירות למשתמש במהלך live chat ויפר את הזרימה.
+
+### לולאות I/O ארוכות — עמידות בפני כשלים
+- בלולאה שמבצעת I/O (רשת, DB) על רשימת פריטים: לעטוף **כל** קריאת I/O בתוך הלולאה ב-`try/except` עם לוג. כשל בפריט אחד לא צריך לעצור את עיבוד שאר הפריטים. דוגמה: `broadcast_service.py` — כשל DB בהודעה 10 לא עוצר 990 הודעות שנותרו.
+
+### asyncio — ניהול lifecycle ו-futures
+- **Bot standalone**: `Bot(token=...)` שנוצר מחוץ ל-`Application` דורש `await bot.initialize()` לפני שימוש ו-`await bot.shutdown()` בסיום (python-telegram-bot v20+).
+- **Futures**: כש-`run_coroutine_threadsafe` מחזיר `Future` — לא לזרוק אותו. להוסיף `add_done_callback` שמטפל בכשלון. לבדוק `future.cancelled()` **לפני** `future.exception()`.
+- **Cleanup ב-finally**: אם `shutdown()` / `close()` יכול להיכשל — לעטוף ב-`try/except` נפרד כדי שלא ידרוס את התוצאה של הפעולה העיקרית (למשל סטטוס `completed` שכבר נכתב ל-DB).
+
+### DB — לא לדרוס התקדמות ב-error paths
+- כשפונקציית כישלון (כמו `fail_broadcast`) נקראת ב-error handler — לא לדרוס מונים (sent/failed) עם 0 אם כבר נכתבה התקדמות ל-DB. לתמוך בקריאה ללא מונים שמעדכנת רק סטטוס.
+
+### DB — למנוע כפילות לוגיקה בשאילתות
+- כשיש שתי פונקציות שחולקות לוגיקת סינון (למשל `get_X` ו-`count_X`) — לחלץ helper פנימי משותף. שכפול WHERE/JOIN בין פונקציות מזמין סטייה שקטה כשמעדכנים רק אחת מהן.
+
 ### Handlers — צינור RAG אחד בלבד
 - כל נתיב שמפעיל את צינור ה-RAG (כולל callback queries) חייב לעבור דרך `_handle_rag_query` ולא לשכפל את הלוגיקה. לצורך callbacks בלי `update.message` — להעביר `chat_id`.
 

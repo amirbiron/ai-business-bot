@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header animate-fade-in">
+    <h1><i class="bi bi-megaphone"></i> שליחת הודעות</h1>
+</div>
+
+<!-- טופס שליחה -->
+<div class="card animate-slide-up stagger-1" style="margin-bottom: var(--space-sm);">
+    <div class="card-header">
+        <span><i class="bi bi-send"></i> הודעה חדשה</span>
+    </div>
+    <div class="card-body">
+        <form method="POST" action="/broadcast/send" id="broadcast-form"
+              onsubmit="return confirm('לשלוח את ההודעה ל-' + document.querySelector('#recipient-count').textContent + ' נמענים?')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <!-- בחירת קהל יעד -->
+            <div class="form-group" style="margin-bottom: var(--space-sm);">
+                <label class="form-label"><strong>קהל יעד:</strong></label>
+                <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.25rem;">
+                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                        <input type="radio" name="audience" value="all" checked
+                               hx-get="/broadcast/count?audience=all"
+                               hx-target="#recipient-count"
+                               hx-swap="innerHTML">
+                        <span>כל הלקוחות</span>
+                        <span class="text-small text-muted">(כל מי שדיבר עם הבוט)</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                        <input type="radio" name="audience" value="booked"
+                               hx-get="/broadcast/count?audience=booked"
+                               hx-target="#recipient-count"
+                               hx-swap="innerHTML">
+                        <span>קבעו תור</span>
+                        <span class="text-small text-muted">(רק מי שקבע תור אי פעם)</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                        <input type="radio" name="audience" value="recent"
+                               hx-get="/broadcast/count?audience=recent"
+                               hx-target="#recipient-count"
+                               hx-swap="innerHTML">
+                        <span>פעילים לאחרונה</span>
+                        <span class="text-small text-muted">(פעילות ב-30 הימים האחרונים)</span>
+                    </label>
+                </div>
+                <div style="margin-top: 0.5rem; padding: 0.5rem; background: var(--bg-secondary); border-radius: var(--radius);">
+                    <i class="bi bi-people"></i>
+                    נמענים: <strong id="recipient-count">{{ recipient_counts.all }}</strong>
+                </div>
+            </div>
+
+            <!-- תוכן ההודעה -->
+            <div class="form-group" style="margin-bottom: var(--space-sm);">
+                <label for="message_text" class="form-label"><strong>תוכן ההודעה:</strong></label>
+                <textarea name="message_text" id="message_text" class="form-control"
+                          rows="5" maxlength="4096" required
+                          placeholder="כתבו כאן את ההודעה שתישלח ללקוחות..."
+                          style="resize: vertical;"></textarea>
+                <div class="text-small text-muted" style="margin-top: 0.25rem;">
+                    עד 4,096 תווים. ההודעה תישלח כטקסט רגיל.
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary"
+                    {% if recipient_counts.all == 0 %}disabled{% endif %}>
+                <i class="bi bi-send"></i> שלח הודעה
+            </button>
+        </form>
+    </div>
+</div>
+
+<!-- היסטוריית שידורים -->
+<div class="card animate-slide-up stagger-2">
+    <div class="card-header">
+        <span><i class="bi bi-clock-history"></i> היסטוריית שידורים</span>
+    </div>
+    <div class="card-body">
+        {% if broadcasts %}
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>קהל</th>
+                        <th>הודעה</th>
+                        <th>נשלח</th>
+                        <th>נכשל</th>
+                        <th>סטטוס</th>
+                        <th>תאריך</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for bc in broadcasts %}
+                    <tr>
+                        <td data-label="#">{{ bc.id }}</td>
+                        <td data-label="קהל">{{ audience_labels.get(bc.audience, bc.audience) }}</td>
+                        <td data-label="הודעה">
+                            <span title="{{ bc.message_text }}">
+                                {{ bc.message_text[:80] }}{% if bc.message_text|length > 80 %}...{% endif %}
+                            </span>
+                        </td>
+                        <td data-label="נשלח">{{ bc.sent_count }} / {{ bc.total_recipients }}</td>
+                        <td data-label="נכשל">{{ bc.failed_count }}</td>
+                        <td data-label="סטטוס">
+                            {% if bc.status == 'queued' %}
+                            <span class="badge badge-warning">בתור</span>
+                            {% elif bc.status == 'sending' %}
+                            <span class="badge badge-info">שולח...</span>
+                            {% elif bc.status == 'completed' %}
+                            <span class="badge badge-success">הושלם</span>
+                            {% elif bc.status == 'failed' %}
+                            <span class="badge badge-danger">נכשל</span>
+                            {% endif %}
+                        </td>
+                        <td data-label="תאריך" class="text-small text-muted">{{ bc.created_at|il_datetime }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <i class="bi bi-megaphone"></i>
+            <p>עדיין לא נשלחו הודעות שידור.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

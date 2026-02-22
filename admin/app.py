@@ -43,6 +43,7 @@ from ai_chatbot.config import (
     ADMIN_HOST,
     ADMIN_PORT,
     BUSINESS_NAME,
+    TELEGRAM_BOT_TOKEN,
     TELEGRAM_BOT_USERNAME,
     BUSINESS_PHONE,
     BUSINESS_ADDRESS,
@@ -806,6 +807,94 @@ def create_admin_app() -> Flask:
         buf.seek(0)
 
         return send_file(buf, mimetype="image/png")
+
+    # ─── Broadcast (שליחת הודעות יזומות) ──────────────────────────────────
+
+    AUDIENCE_LABELS = {
+        "all": "כל הלקוחות",
+        "booked": "קבעו תור",
+        "recent": "פעילים לאחרונה",
+    }
+
+    @app.route("/broadcast")
+    @login_required
+    def broadcast():
+        broadcasts = db.get_all_broadcasts(limit=50)
+        recipient_counts = {
+            "all": db.count_broadcast_recipients("all"),
+            "booked": db.count_broadcast_recipients("booked"),
+            "recent": db.count_broadcast_recipients("recent"),
+        }
+        return render_template(
+            "broadcast.html",
+            business_name=BUSINESS_NAME,
+            broadcasts=broadcasts,
+            recipient_counts=recipient_counts,
+            audience_labels=AUDIENCE_LABELS,
+        )
+
+    @app.route("/broadcast/count")
+    @login_required
+    def broadcast_count():
+        """HTMX endpoint — מחזיר ספירת נמענים לקהל שנבחר."""
+        audience = request.args.get("audience", "all")
+        if audience not in ("all", "booked", "recent"):
+            audience = "all"
+        count = db.count_broadcast_recipients(audience)
+        return str(count)
+
+    @app.route("/broadcast/send", methods=["POST"])
+    @login_required
+    def broadcast_send():
+        message_text = request.form.get("message_text", "").strip()
+        audience = request.form.get("audience", "all")
+
+        if audience not in ("all", "booked", "recent"):
+            flash("סוג קהל לא חוקי.", "danger")
+            return redirect(url_for("broadcast"))
+
+        if not message_text:
+            flash("לא ניתן לשלוח הודעה ריקה.", "danger")
+            return redirect(url_for("broadcast"))
+
+        if len(message_text) > 4096:
+            flash("ההודעה ארוכה מדי (מקסימום 4,096 תווים).", "danger")
+            return redirect(url_for("broadcast"))
+
+        recipients = db.get_broadcast_recipients(audience)
+        if not recipients:
+            flash("אין נמענים לשידור.", "warning")
+            return redirect(url_for("broadcast"))
+
+        # יצירת רשומת broadcast ב-DB
+        broadcast_id = db.create_broadcast(message_text, audience, len(recipients))
+
+        # הפעלת שליחה ברקע
+        from ai_chatbot.bot_state import get_bot, get_loop
+        from ai_chatbot.broadcast_service import start_broadcast_task
+        from telegram import Bot as TelegramBot
+
+        bot = get_bot()
+        loop = get_loop()
+
+        # admin-only mode — יוצרים Bot חדש שיאותחל ע"י ה-worker
+        needs_init = False
+        if bot is None:
+            if TELEGRAM_BOT_TOKEN:
+                bot = TelegramBot(token=TELEGRAM_BOT_TOKEN)
+                needs_init = True
+            else:
+                db.fail_broadcast(broadcast_id, 0, len(recipients))
+                flash("לא ניתן לשלוח — אין טוקן בוט מוגדר.", "danger")
+                return redirect(url_for("broadcast"))
+
+        start_broadcast_task(bot, broadcast_id, message_text, recipients, loop, needs_init=needs_init)
+        flash(
+            f"ההודעה נכנסה לתור שליחה — {len(recipients)} נמענים. "
+            "ניתן לעקוב אחר ההתקדמות בטבלה למטה.",
+            "success",
+        )
+        return redirect(url_for("broadcast"))
 
     # ─── API Endpoints (for AJAX) ─────────────────────────────────────────
 
