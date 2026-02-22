@@ -14,7 +14,10 @@ from llm import (
     strip_source_citation,
     _build_messages,
 )
-from config import FALLBACK_RESPONSE, build_system_prompt, TONE_DEFINITIONS, BUSINESS_NAME
+from config import (
+    FALLBACK_RESPONSE, build_system_prompt, TONE_DEFINITIONS, BUSINESS_NAME,
+    _AGENT_DESCRIPTOR, _CONVERSATION_GUIDELINES, _RESPONSE_STRUCTURE,
+)
 
 
 class TestQualityCheck:
@@ -150,15 +153,39 @@ class TestBuildSystemPrompt:
         assert "לעולם אל תצא מהדמות" in prompt
         assert "ז'רגון תאגידי" in prompt
 
-    def test_output_structure(self):
-        """סקשן מבנה התשובה — פתיחה חמה, תשובה, סגירה."""
+    def test_output_structure_friendly(self):
+        """סקשן מבנה התשובה — פתיחה חמה, תשובה, סגירה (טון ידידותי)."""
         prompt = build_system_prompt()
         assert "פתיחה חמה" in prompt
         assert "סגירה טבעית" in prompt
 
+    def test_output_structure_per_tone(self):
+        """כל טון מקבל מבנה תשובה ייחודי."""
+        for tone in TONE_DEFINITIONS:
+            prompt = build_system_prompt(tone=tone)
+            assert _RESPONSE_STRUCTURE[tone].split("\n")[0] in prompt
+
     def test_all_tones_defined(self):
-        """כל ארבעת הטונים מוגדרים."""
-        assert set(TONE_DEFINITIONS.keys()) == {"friendly", "formal", "sales", "luxury"}
+        """כל ארבעת הטונים מוגדרים בכל המילונים."""
+        expected = {"friendly", "formal", "sales", "luxury"}
+        assert set(TONE_DEFINITIONS.keys()) == expected
+        assert set(_AGENT_DESCRIPTOR.keys()) == expected
+        assert set(_CONVERSATION_GUIDELINES.keys()) == expected
+        assert set(_RESPONSE_STRUCTURE.keys()) == expected
+
+    def test_formal_tone_no_warm_casual_language(self):
+        """טון רשמי — אין שפה חמה/שיחתית שסותרת את הטון."""
+        prompt = build_system_prompt(tone="formal")
+        assert "שיחתית וחמה" not in prompt
+        assert "פתיחה חמה" not in prompt
+        assert "חבר צוות" not in prompt
+
+    def test_luxury_tone_no_warm_casual_language(self):
+        """טון יוקרתי — אין שפה חמה/שיחתית שסותרת את הטון."""
+        prompt = build_system_prompt(tone="luxury")
+        assert "שיחתית וחמה" not in prompt
+        assert "פתיחה חמה" not in prompt
+        assert "חבר צוות" not in prompt
 
     def test_follow_up_rule_placement(self):
         """כשהפיצ'ר שאלות המשך פעיל — כלל 11 מופיע אחרי כלל 10, לפני סקשן המגבלות."""
