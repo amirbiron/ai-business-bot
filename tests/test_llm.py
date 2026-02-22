@@ -14,7 +14,7 @@ from llm import (
     strip_source_citation,
     _build_messages,
 )
-from config import FALLBACK_RESPONSE
+from config import FALLBACK_RESPONSE, build_system_prompt, TONE_DEFINITIONS, BUSINESS_NAME
 
 
 class TestQualityCheck:
@@ -98,6 +98,67 @@ class TestStripSourceCitation:
     def test_no_source_unchanged(self):
         text = "תשובה ללא מקור."
         assert strip_source_citation(text) == text
+
+
+class TestBuildSystemPrompt:
+    def test_default_friendly_tone(self):
+        """ברירת מחדל — טון ידידותי."""
+        prompt = build_system_prompt()
+        assert BUSINESS_NAME in prompt
+        assert "ידידותי" in prompt or "חברי" in prompt
+        # מוודאים שהכללים המקוריים נמצאים
+        assert "ענה רק על סמך המידע" in prompt
+        assert "מקור:" in prompt
+
+    def test_formal_tone(self):
+        """טון רשמי."""
+        prompt = build_system_prompt(tone="formal")
+        assert "רשמי" in prompt
+        assert "הימנע מסלנג" in prompt
+
+    def test_sales_tone(self):
+        """טון מכירתי."""
+        prompt = build_system_prompt(tone="sales")
+        assert "מכירות" in prompt or "מוכוון" in prompt
+
+    def test_luxury_tone(self):
+        """טון יוקרתי."""
+        prompt = build_system_prompt(tone="luxury")
+        assert "יוקרתי" in prompt or "מעודן" in prompt
+
+    def test_custom_phrases_included(self):
+        """ביטויים מותאמים אישית מוזרקים לפרומפט."""
+        prompt = build_system_prompt(custom_phrases="אהלן, בשמחה, בכיף")
+        assert "אהלן, בשמחה, בכיף" in prompt
+        assert "ביטויים אופייניים" in prompt
+
+    def test_empty_custom_phrases_omitted(self):
+        """ביטויים ריקים לא יוצרים סקשן מיותר."""
+        prompt = build_system_prompt(custom_phrases="")
+        assert "ביטויים אופייניים" not in prompt
+
+    def test_invalid_tone_falls_back(self):
+        """טון לא מוכר — חוזר ל-friendly."""
+        prompt = build_system_prompt(tone="nonexistent")
+        # צריך להכיל את הטון הידידותי כ-fallback
+        friendly_text = TONE_DEFINITIONS["friendly"]
+        assert friendly_text in prompt
+
+    def test_constraints_section(self):
+        """סקשן מגבלות — לא לצאת מהדמות."""
+        prompt = build_system_prompt()
+        assert "לעולם אל תצא מהדמות" in prompt
+        assert "ז'רגון תאגידי" in prompt
+
+    def test_output_structure(self):
+        """סקשן מבנה התשובה — פתיחה חמה, תשובה, סגירה."""
+        prompt = build_system_prompt()
+        assert "פתיחה חמה" in prompt
+        assert "סגירה טבעית" in prompt
+
+    def test_all_tones_defined(self):
+        """כל ארבעת הטונים מוגדרים."""
+        assert set(TONE_DEFINITIONS.keys()) == {"friendly", "formal", "sales", "luxury"}
 
 
 class TestBuildMessages:

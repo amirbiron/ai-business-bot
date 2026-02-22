@@ -93,6 +93,11 @@
                     </a>
                 </li>
                 <li>
+                    <a href="/bot-settings" class="{% if request.endpoint == 'bot_settings' %}active{% endif %}">
+                        <i class="bi bi-sliders"></i> הגדרות בוט
+                    </a>
+                </li>
+                <li>
                     <a href="/qr-code" class="{% if request.endpoint in ['qr_code'] %}active{% endif %}">
                         <i class="bi bi-qr-code"></i> QR Code
                     </a>

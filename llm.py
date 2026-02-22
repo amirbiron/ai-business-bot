@@ -21,6 +21,7 @@ from ai_chatbot.config import (
     SUMMARY_THRESHOLD,
     FOLLOW_UP_ENABLED,
     FOLLOW_UP_PROMPT,
+    build_system_prompt,
 )
 from ai_chatbot.rag.engine import retrieve, format_context
 from ai_chatbot import database as db
@@ -52,8 +53,17 @@ def _build_messages(
     """
     messages = []
 
-    # Layer A — System prompt (+ הוראות שאלות המשך אם הפיצ'ר פעיל)
-    system_content = SYSTEM_PROMPT
+    # Layer A — System prompt דינמי (טון + DNA מה-DB, + הוראות שאלות המשך אם הפיצ'ר פעיל)
+    try:
+        settings = db.get_bot_settings()
+        system_content = build_system_prompt(
+            tone=settings.get("tone", "friendly"),
+            custom_phrases=settings.get("custom_phrases", ""),
+        )
+    except Exception as e:
+        # fallback לפרומפט הבסיסי אם קריאת DB נכשלת
+        logger.error("Failed to load bot settings, using default prompt: %s", e)
+        system_content = SYSTEM_PROMPT
     if FOLLOW_UP_ENABLED:
         system_content += FOLLOW_UP_PROMPT
     messages.append({

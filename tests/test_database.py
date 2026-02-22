@@ -334,3 +334,36 @@ class TestBroadcast:
         assert broadcasts[0]["status"] == "failed"
         assert broadcasts[0]["sent_count"] == 50
         assert broadcasts[0]["failed_count"] == 3
+
+
+class TestBotSettings:
+    def test_default_settings(self, db):
+        """ברירת מחדל — טון ידידותי, בלי ביטויים מותאמים."""
+        settings = db.get_bot_settings()
+        assert settings["tone"] == "friendly"
+        assert settings["custom_phrases"] == ""
+
+    def test_update_tone(self, db):
+        """עדכון טון תקשורת."""
+        db.update_bot_settings("formal", "")
+        settings = db.get_bot_settings()
+        assert settings["tone"] == "formal"
+
+    def test_update_custom_phrases(self, db):
+        """עדכון ביטויים מותאמים אישית."""
+        db.update_bot_settings("friendly", "אהלן, בשמחה, בכיף")
+        settings = db.get_bot_settings()
+        assert settings["custom_phrases"] == "אהלן, בשמחה, בכיף"
+
+    def test_update_tone_and_phrases(self, db):
+        """עדכון טון וביטויים ביחד."""
+        db.update_bot_settings("luxury", "בוודאי, לשירותך")
+        settings = db.get_bot_settings()
+        assert settings["tone"] == "luxury"
+        assert settings["custom_phrases"] == "בוודאי, לשירותך"
+
+    def test_invalid_tone_ignored(self, db):
+        """טון לא חוקי — לא מעדכן."""
+        db.update_bot_settings("invalid_tone")
+        settings = db.get_bot_settings()
+        assert settings["tone"] == "friendly"  # נשאר ברירת מחדל

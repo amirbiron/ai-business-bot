@@ -48,6 +48,9 @@ from ai_chatbot.config import (
     BUSINESS_PHONE,
     BUSINESS_ADDRESS,
     BUSINESS_WEBSITE,
+    TONE_DEFINITIONS,
+    TONE_LABELS,
+    build_system_prompt,
 )
 from ai_chatbot.rag.engine import rebuild_index, mark_index_stale, is_index_stale
 from ai_chatbot.live_chat_service import LiveChatService, send_telegram_message
@@ -741,6 +744,36 @@ def create_admin_app() -> Flask:
             vacation=vacation,
             preview_booking=preview_booking,
             preview_agent=preview_agent,
+        )
+
+    # ─── Bot Settings (הגדרות בוט — טון וביטויים) ─────────────────────────
+
+    @app.route("/bot-settings", methods=["GET", "POST"])
+    @login_required
+    def bot_settings():
+        if request.method == "POST":
+            tone = request.form.get("tone", "friendly").strip()
+            custom_phrases = request.form.get("custom_phrases", "").strip()
+            if tone not in TONE_DEFINITIONS:
+                flash("טון לא חוקי.", "danger")
+            else:
+                db.update_bot_settings(tone, custom_phrases)
+                flash("הגדרות הבוט עודכנו בהצלחה!", "success")
+            return redirect(url_for("bot_settings"))
+
+        settings = db.get_bot_settings()
+        # תצוגה מקדימה של הפרומפט שייווצר
+        preview_prompt = build_system_prompt(
+            tone=settings.get("tone", "friendly"),
+            custom_phrases=settings.get("custom_phrases", ""),
+        )
+        return render_template(
+            "bot_settings.html",
+            business_name=BUSINESS_NAME,
+            settings=settings,
+            tone_definitions=TONE_DEFINITIONS,
+            tone_labels=TONE_LABELS,
+            preview_prompt=preview_prompt,
         )
 
     # ─── Referrals (מערכת הפניות) ────────────────────────────────────────
