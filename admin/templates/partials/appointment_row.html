@@ -30,20 +30,30 @@
     <td data-label="פעולות">
         {% if appt.status == 'pending' %}
         <div class="actions-cell">
-            <button class="btn btn-success btn-sm"
-                    hx-post="/appointments/{{ appt.id }}/update"
-                    hx-vals='{"status": "confirmed"}'
-                    hx-target="#appointment-row-{{ appt.id }}"
-                    hx-swap="outerHTML swap:0.2s">
-                <i class="bi bi-check-lg"></i> אשר
-            </button>
-            <button class="btn btn-outline-danger btn-sm"
-                    hx-post="/appointments/{{ appt.id }}/update"
-                    hx-vals='{"status": "cancelled"}'
-                    hx-target="#appointment-row-{{ appt.id }}"
-                    hx-swap="outerHTML swap:0.2s">
-                <i class="bi bi-x-lg"></i> בטל
-            </button>
+            <input type="text"
+                   name="owner_message"
+                   id="owner-msg-{{ appt.id }}"
+                   class="form-control form-control-sm mb-1"
+                   placeholder="הודעה אישית (אופציונלי)"
+                   style="min-width: 160px;">
+            <div class="d-flex gap-1">
+                <button class="btn btn-success btn-sm"
+                        hx-post="/appointments/{{ appt.id }}/update"
+                        hx-vals='{"status": "confirmed"}'
+                        hx-include="#owner-msg-{{ appt.id }}"
+                        hx-target="#appointment-row-{{ appt.id }}"
+                        hx-swap="outerHTML swap:0.2s">
+                    <i class="bi bi-check-lg"></i> אשר
+                </button>
+                <button class="btn btn-outline-danger btn-sm"
+                        hx-post="/appointments/{{ appt.id }}/update"
+                        hx-vals='{"status": "cancelled"}'
+                        hx-include="#owner-msg-{{ appt.id }}"
+                        hx-target="#appointment-row-{{ appt.id }}"
+                        hx-swap="outerHTML swap:0.2s">
+                    <i class="bi bi-x-lg"></i> בטל
+                </button>
+            </div>
         </div>
         {% endif %}
     </td>
