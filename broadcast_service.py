@@ -28,6 +28,14 @@ _SEND_DELAY = 0.05
 _PROGRESS_UPDATE_INTERVAL = 10
 
 
+def _safe_unsubscribe(broadcast_id: int, user_id: str) -> None:
+    """ביטול הרשמת משתמש עם הגנה מפני כשל DB — לא עוצר את לולאת השליחה."""
+    try:
+        db.unsubscribe_user(user_id)
+    except Exception as e:
+        logger.error("Broadcast %d: failed to unsubscribe user %s: %s", broadcast_id, user_id, e)
+
+
 async def send_broadcast(
     bot: Bot,
     broadcast_id: int,
@@ -59,7 +67,7 @@ async def send_broadcast(
             except Forbidden:
                 # המשתמש חסם את הבוט — מסמנים כלא-מנוי
                 logger.info("Broadcast %d: user %s blocked the bot, unsubscribing", broadcast_id, user_id)
-                db.unsubscribe_user(user_id)
+                _safe_unsubscribe(broadcast_id, user_id)
                 failed += 1
             except RetryAfter as e:
                 # טלגרם מבקש להמתין — מכבדים ומנסים שוב
@@ -71,7 +79,7 @@ async def send_broadcast(
                 except Forbidden:
                     # המשתמש חסם את הבוט גם בניסיון החוזר — מסמנים כלא-מנוי
                     logger.info("Broadcast %d: user %s blocked the bot on retry, unsubscribing", broadcast_id, user_id)
-                    db.unsubscribe_user(user_id)
+                    _safe_unsubscribe(broadcast_id, user_id)
                     failed += 1
                 except Exception as retry_err:
                     logger.error("Broadcast %d: retry failed for user %s: %s", broadcast_id, user_id, retry_err)
@@ -83,9 +91,12 @@ async def send_broadcast(
                 logger.error("Broadcast %d: unexpected error for user %s: %s", broadcast_id, user_id, e)
                 failed += 1
 
-            # עדכון התקדמות ב-DB מדי פעם
+            # עדכון התקדמות ב-DB מדי פעם — כשל כאן לא עוצר את השליחה
             if (i + 1) % _PROGRESS_UPDATE_INTERVAL == 0:
-                db.update_broadcast_progress(broadcast_id, sent, failed)
+                try:
+                    db.update_broadcast_progress(broadcast_id, sent, failed)
+                except Exception as e:
+                    logger.error("Broadcast %d: progress update failed: %s", broadcast_id, e)
 
             await asyncio.sleep(_SEND_DELAY)
 
