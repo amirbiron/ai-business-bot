@@ -126,7 +126,7 @@ def _should_handoff_to_human(text: str) -> bool:
     t = text.strip()
     if t == FALLBACK_RESPONSE.strip():
         return True
-    # Common phrasing from SYSTEM_PROMPT rule #2
+    # ניסוח נפוץ מכלל מספר 2 בפרומפט המערכת
     if "תנו לי להעביר" in t and "נציג אנושי" in t:
         return True
     return False

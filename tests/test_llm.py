@@ -14,7 +14,10 @@ from llm import (
     strip_source_citation,
     _build_messages,
 )
-from config import FALLBACK_RESPONSE
+from config import (
+    FALLBACK_RESPONSE, build_system_prompt, TONE_DEFINITIONS, BUSINESS_NAME,
+    _AGENT_DESCRIPTOR, _CONVERSATION_GUIDELINES, _RESPONSE_STRUCTURE,
+)
 
 
 class TestQualityCheck:
@@ -98,6 +101,105 @@ class TestStripSourceCitation:
     def test_no_source_unchanged(self):
         text = "תשובה ללא מקור."
         assert strip_source_citation(text) == text
+
+
+class TestBuildSystemPrompt:
+    def test_default_friendly_tone(self):
+        """ברירת מחדל — טון ידידותי."""
+        prompt = build_system_prompt()
+        assert BUSINESS_NAME in prompt
+        assert "ידידותי" in prompt or "חברי" in prompt
+        # מוודאים שהכללים המקוריים נמצאים
+        assert "ענה רק על סמך המידע" in prompt
+        assert "מקור:" in prompt
+
+    def test_formal_tone(self):
+        """טון רשמי."""
+        prompt = build_system_prompt(tone="formal")
+        assert "רשמי" in prompt
+        assert "הימנע מסלנג" in prompt
+
+    def test_sales_tone(self):
+        """טון מכירתי."""
+        prompt = build_system_prompt(tone="sales")
+        assert "מכירות" in prompt or "מוכוון" in prompt
+
+    def test_luxury_tone(self):
+        """טון יוקרתי."""
+        prompt = build_system_prompt(tone="luxury")
+        assert "יוקרתי" in prompt or "מעודן" in prompt
+
+    def test_custom_phrases_included(self):
+        """ביטויים מותאמים אישית מוזרקים לפרומפט."""
+        prompt = build_system_prompt(custom_phrases="אהלן, בשמחה, בכיף")
+        assert "אהלן, בשמחה, בכיף" in prompt
+        assert "ביטויים אופייניים" in prompt
+
+    def test_empty_custom_phrases_omitted(self):
+        """ביטויים ריקים לא יוצרים סקשן מיותר."""
+        prompt = build_system_prompt(custom_phrases="")
+        assert "ביטויים אופייניים" not in prompt
+
+    def test_invalid_tone_falls_back(self):
+        """טון לא מוכר — חוזר ל-friendly."""
+        prompt = build_system_prompt(tone="nonexistent")
+        # צריך להכיל את הטון הידידותי כ-fallback
+        friendly_text = TONE_DEFINITIONS["friendly"]
+        assert friendly_text in prompt
+
+    def test_constraints_section(self):
+        """סקשן מגבלות — לא לצאת מהדמות."""
+        prompt = build_system_prompt()
+        assert "לעולם אל תצא מהדמות" in prompt
+        assert "ז'רגון תאגידי" in prompt
+
+    def test_output_structure_friendly(self):
+        """סקשן מבנה התשובה — פתיחה חמה, תשובה, סגירה (טון ידידותי)."""
+        prompt = build_system_prompt()
+        assert "פתיחה חמה" in prompt
+        assert "סגירה טבעית" in prompt
+
+    def test_output_structure_per_tone(self):
+        """כל טון מקבל מבנה תשובה ייחודי."""
+        for tone in TONE_DEFINITIONS:
+            prompt = build_system_prompt(tone=tone)
+            assert _RESPONSE_STRUCTURE[tone].split("\n")[0] in prompt
+
+    def test_all_tones_defined(self):
+        """כל ארבעת הטונים מוגדרים בכל המילונים."""
+        expected = {"friendly", "formal", "sales", "luxury"}
+        assert set(TONE_DEFINITIONS.keys()) == expected
+        assert set(_AGENT_DESCRIPTOR.keys()) == expected
+        assert set(_CONVERSATION_GUIDELINES.keys()) == expected
+        assert set(_RESPONSE_STRUCTURE.keys()) == expected
+
+    def test_formal_tone_no_warm_casual_language(self):
+        """טון רשמי — אין שפה חמה/שיחתית שסותרת את הטון."""
+        prompt = build_system_prompt(tone="formal")
+        assert "שיחתית וחמה" not in prompt
+        assert "פתיחה חמה" not in prompt
+        assert "חבר צוות" not in prompt
+
+    def test_luxury_tone_no_warm_casual_language(self):
+        """טון יוקרתי — אין שפה חמה/שיחתית שסותרת את הטון."""
+        prompt = build_system_prompt(tone="luxury")
+        assert "שיחתית וחמה" not in prompt
+        assert "פתיחה חמה" not in prompt
+        assert "חבר צוות" not in prompt
+
+    def test_follow_up_rule_placement(self):
+        """כשהפיצ'ר שאלות המשך פעיל — כלל 11 מופיע אחרי כלל 10, לפני סקשן המגבלות."""
+        prompt = build_system_prompt(follow_up_enabled=True)
+        pos_rule_10 = prompt.index("10. ענה באותה שפה")
+        pos_rule_11 = prompt.index("11. בסוף כל תשובה")
+        pos_constraints = prompt.index("── מגבלות ──")
+        assert pos_rule_10 < pos_rule_11 < pos_constraints
+
+    def test_follow_up_rule_absent_by_default(self):
+        """ברירת מחדל — כלל 11 לא מופיע."""
+        prompt = build_system_prompt()
+        assert "11." not in prompt
+        assert "שאלות_המשך" not in prompt
 
 
 class TestBuildMessages:
