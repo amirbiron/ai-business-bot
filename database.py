@@ -12,7 +12,7 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-from ai_chatbot.config import DB_PATH
+from ai_chatbot.config import DB_PATH, TONE_DEFINITIONS
 
 
 @contextmanager
@@ -1100,7 +1100,8 @@ def update_vacation_mode(is_active: bool, vacation_end_date: str = "", vacation_
 
 # ─── Bot Settings (הגדרות בוט — טון וביטויים) ─────────────────────────────
 
-VALID_TONES = {"friendly", "formal", "sales", "luxury"}
+# מקור אמת יחיד — נגזר מהגדרות הטון ב-config.py
+VALID_TONES = set(TONE_DEFINITIONS.keys())
 
 
 def get_bot_settings() -> dict:

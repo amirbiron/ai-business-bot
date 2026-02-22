@@ -160,6 +160,20 @@ class TestBuildSystemPrompt:
         """כל ארבעת הטונים מוגדרים."""
         assert set(TONE_DEFINITIONS.keys()) == {"friendly", "formal", "sales", "luxury"}
 
+    def test_follow_up_rule_placement(self):
+        """כשהפיצ'ר שאלות המשך פעיל — כלל 11 מופיע אחרי כלל 10, לפני סקשן המגבלות."""
+        prompt = build_system_prompt(follow_up_enabled=True)
+        pos_rule_10 = prompt.index("10. ענה באותה שפה")
+        pos_rule_11 = prompt.index("11. בסוף כל תשובה")
+        pos_constraints = prompt.index("── מגבלות ──")
+        assert pos_rule_10 < pos_rule_11 < pos_constraints
+
+    def test_follow_up_rule_absent_by_default(self):
+        """ברירת מחדל — כלל 11 לא מופיע."""
+        prompt = build_system_prompt()
+        assert "11." not in prompt
+        assert "שאלות_המשך" not in prompt
+
 
 class TestBuildMessages:
     def test_basic_structure(self):
