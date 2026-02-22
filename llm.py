@@ -14,7 +14,6 @@ from ai_chatbot.openai_client import get_openai_client
 from ai_chatbot.config import (
     OPENAI_MODEL,
     LLM_MAX_TOKENS,
-    SYSTEM_PROMPT,
     SOURCE_CITATION_PATTERN,
     FALLBACK_RESPONSE,
     CONTEXT_WINDOW_SIZE,
@@ -61,9 +60,9 @@ def _build_messages(
             follow_up_enabled=FOLLOW_UP_ENABLED,
         )
     except Exception as e:
-        # fallback לפרומפט הבסיסי אם קריאת DB נכשלת
+        # fallback לפרומפט משופר עם ברירות מחדל (ללא תלות ב-DB)
         logger.error("Failed to load bot settings, using default prompt: %s", e)
-        system_content = SYSTEM_PROMPT
+        system_content = build_system_prompt(follow_up_enabled=FOLLOW_UP_ENABLED)
     messages.append({
         "role": "system",
         "content": system_content

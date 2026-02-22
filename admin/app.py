@@ -50,6 +50,7 @@ from ai_chatbot.config import (
     BUSINESS_WEBSITE,
     TONE_DEFINITIONS,
     TONE_LABELS,
+    FOLLOW_UP_ENABLED,
     build_system_prompt,
 )
 from ai_chatbot.rag.engine import rebuild_index, mark_index_stale, is_index_stale
@@ -762,10 +763,11 @@ def create_admin_app() -> Flask:
             return redirect(url_for("bot_settings"))
 
         settings = db.get_bot_settings()
-        # תצוגה מקדימה של הפרומפט שייווצר
+        # תצוגה מקדימה של הפרומפט שייווצר (כולל כלל 11 אם הפיצ'ר פעיל)
         preview_prompt = build_system_prompt(
             tone=settings.get("tone", "friendly"),
             custom_phrases=settings.get("custom_phrases", ""),
+            follow_up_enabled=FOLLOW_UP_ENABLED,
         )
         return render_template(
             "bot_settings.html",
