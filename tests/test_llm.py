@@ -16,7 +16,8 @@ from llm import (
 )
 from config import (
     FALLBACK_RESPONSE, build_system_prompt, TONE_DEFINITIONS, BUSINESS_NAME,
-    _AGENT_DESCRIPTOR, _CONVERSATION_GUIDELINES, _RESPONSE_STRUCTURE,
+    _AGENT_IDENTITY, _AGENT_DESCRIPTOR, _CONVERSATION_GUIDELINES,
+    _RESPONSE_STRUCTURE,
 )
 
 
@@ -169,9 +170,23 @@ class TestBuildSystemPrompt:
         """כל ארבעת הטונים מוגדרים בכל המילונים."""
         expected = {"friendly", "formal", "sales", "luxury"}
         assert set(TONE_DEFINITIONS.keys()) == expected
+        assert set(_AGENT_IDENTITY.keys()) == expected
         assert set(_AGENT_DESCRIPTOR.keys()) == expected
         assert set(_CONVERSATION_GUIDELINES.keys()) == expected
         assert set(_RESPONSE_STRUCTURE.keys()) == expected
+
+    def test_identity_section_present(self):
+        """פסקת הזהות מוזרקת לפרומפט בכל הטונים."""
+        for tone in TONE_DEFINITIONS:
+            prompt = build_system_prompt(tone=tone)
+            # כל הטונים מכילים את המשפט "אתה לא בינה מלאכותית"
+            assert 'אתה לא "בינה מלאכותית"' in prompt
+
+    def test_identity_formal_no_casual_language(self):
+        """פסקת זהות רשמית — ללא ניסוחים חמים כמו '100% אנושית' או 'עסק קטן'."""
+        prompt = build_system_prompt(tone="formal")
+        assert "100% אנושית" not in prompt
+        assert "עסק קטן" not in prompt
 
     def test_formal_tone_no_warm_casual_language(self):
         """טון רשמי — אין שפה חמה/שיחתית שסותרת את הטון."""
