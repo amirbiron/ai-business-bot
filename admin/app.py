@@ -52,6 +52,7 @@ from ai_chatbot.config import (
 from ai_chatbot.rag.engine import rebuild_index, mark_index_stale, is_index_stale
 from ai_chatbot.live_chat_service import LiveChatService, send_telegram_message
 from ai_chatbot.referral_service import try_send_referral_code
+from ai_chatbot.appointment_notifications import notify_appointment_status
 from ai_chatbot.vacation_service import VacationService
 from ai_chatbot.business_hours import DAY_NAMES_HE
 
@@ -551,6 +552,7 @@ def create_admin_app() -> Flask:
     @login_required
     def update_appointment(appt_id):
         status = request.form.get("status", "confirmed")
+        owner_message = request.form.get("owner_message", "").strip()
         if status not in VALID_APPOINTMENT_STATUSES:
             if request.headers.get("HX-Request"):
                 resp = app.make_response(("", 422))
@@ -562,29 +564,39 @@ def create_admin_app() -> Flask:
             return redirect(url_for("appointments"))
         db.update_appointment_status(appt_id, status)
 
-        # הפעלת מערכת הפניות — כשתור מאושר, בודקים אם הלקוח הגיע דרך הפניה
-        if status == "confirmed":
-            appt = db.get_appointment(appt_id)
-            if appt:
-                user_id = appt["user_id"]
-                if db.has_pending_referral(user_id):
-                    activated = db.complete_referral(user_id)
-                    if activated:
-                        logger.info(
-                            "Referral completed for user %s (appointment #%d)",
-                            user_id, appt_id,
-                        )
-
-                # שליחת קוד הפניה ללקוח אחרי אישור תור
-                # try_send_referral_code — לוגיקה משותפת לבוט ולאדמין:
-                # generate → mark → send → unmark on failure
-                try_send_referral_code(
-                    user_id,
-                    send_fn=lambda text: send_telegram_message(user_id, text),
+        # שליחת התראת סטטוס אוטומטית ללקוח בטלגרם
+        appt = db.get_appointment(appt_id)
+        if appt:
+            try:
+                notify_appointment_status(appt, owner_message=owner_message)
+            except Exception:
+                logger.error(
+                    "Failed to send status notification for appointment #%d",
+                    appt_id, exc_info=True,
                 )
 
+        # הפעלת מערכת הפניות — כשתור מאושר, בודקים אם הלקוח הגיע דרך הפניה
+        if status == "confirmed" and appt:
+            user_id = appt["user_id"]
+            if db.has_pending_referral(user_id):
+                activated = db.complete_referral(user_id)
+                if activated:
+                    logger.info(
+                        "Referral completed for user %s (appointment #%d)",
+                        user_id, appt_id,
+                    )
+
+            # שליחת קוד הפניה ללקוח אחרי אישור תור
+            # try_send_referral_code — לוגיקה משותפת לבוט ולאדמין:
+            # generate → mark → send → unmark on failure
+            try_send_referral_code(
+                user_id,
+                send_fn=lambda text: send_telegram_message(user_id, text),
+            )
+
         if request.headers.get("HX-Request"):
-            appt = db.get_appointment(appt_id)
+            if not appt:
+                appt = db.get_appointment(appt_id)
             if appt:
                 return render_template("partials/appointment_row.html", appt=appt)
             return ""
