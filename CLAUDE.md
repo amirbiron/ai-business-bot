@@ -65,6 +65,13 @@
 - המסמך `docs/client_checklist.md` מתאר את תהליך ההקלטה ללקוח חדש.
 - בכל שינוי ב-`seed_data.py` (קטגוריות, שדות, מבנה), `config.py` (משתני סביבה, system prompt), `.env.example`, או פיצ'רים בבוט/אדמין — **יש לעדכן גם את הצ'ק ליסט** כדי שישקף את המצב הנוכחי של הקוד.
 
+### טסטים — כיסוי ותחזוקה
+- **הרצה:** `python -m pytest tests/ -v`
+- **מבנה:** קובץ טסט לכל מודול — `tests/test_<module>.py`. fixtures משותפים ב-`tests/conftest.py`.
+- **DB בטסטים:** כל טסט מקבל DB זמני נפרד (tmp_path). לעולם לא לגעת ב-DB אמיתי.
+- **תלויות חיצוניות:** מודולים שתלויים ב-telegram / OpenAI — mock לפני ייבוא. לא לקרוא ל-API בטסטים.
+- **כשמוסיפים לוגיקה חדשה:** להוסיף טסט באותו commit. עדיפות למודולים עם לוגיקה טהורה (intent, chunker, rate_limiter, business_hours).
+
 ## פקודות
 
 ```bash
@@ -79,4 +86,7 @@ python main.py --admin
 
 # Seed data
 python main.py --seed
+
+# טסטים
+python -m pytest tests/ -v
 ```
