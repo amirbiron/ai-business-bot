@@ -6,6 +6,7 @@ LLM Module — Integrates the three-layer architecture:
   Layer C (Quality Check):   Regex-based source citation verification.
 """
 
+import html as _html
 import re
 import logging
 import threading
@@ -199,6 +200,23 @@ def strip_source_citation(response_text: str) -> str:
     """
     cleaned = re.sub(r"\n*" + SOURCE_CITATION_PATTERN, "", response_text)
     return cleaned.strip()
+
+
+# תגי HTML שטלגרם תומך בהם — רק אותם נשמור בפלט המסונן
+_TELEGRAM_HTML_TAGS = {"b", "i", "u", "s", "code", "pre"}
+
+
+def sanitize_telegram_html(text: str) -> str:
+    """סניטציה של פלט LLM ל-HTML בטוח לטלגרם.
+
+    קודם מבריח את כל התווים המיוחדים (&, <, >) ואז משחזר רק
+    תגי HTML שטלגרם תומך בהם (<b>, </b>, <i>, </i>, <u>, </u> וכו').
+    """
+    escaped = _html.escape(text, quote=False)
+    for tag in _TELEGRAM_HTML_TAGS:
+        escaped = escaped.replace(f"&lt;{tag}&gt;", f"<{tag}>")
+        escaped = escaped.replace(f"&lt;/{tag}&gt;", f"</{tag}>")
+    return escaped
 
 
 def _generate_summary(messages: list[dict], existing_summary: str = None) -> str | None:
