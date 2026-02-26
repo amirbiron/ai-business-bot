@@ -309,6 +309,24 @@ class TestSanitizeTelegramHtml:
         result = sanitize_telegram_html(text)
         assert result == "<b>כותרת</b> ו-snippet"
 
+    def test_attributed_then_plain_same_tag(self):
+        """תג עם מאפיינים לפני תג פשוט מאותו סוג — הפשוט נשמר שלם."""
+        text = '<code class="language-python">block</code> ואז <code>inline</code>'
+        result = sanitize_telegram_html(text)
+        assert result == "block ואז <code>inline</code>"
+
+    def test_multiple_attributed_then_plain(self):
+        """כמה תגים עם מאפיינים ואז פשוט — רק הפשוט נשמר."""
+        text = '<code class="a">x</code><code class="b">y</code><code>z</code>'
+        result = sanitize_telegram_html(text)
+        assert result == "xy<code>z</code>"
+
+    def test_plain_then_attributed_same_tag(self):
+        """תג פשוט לפני תג עם מאפיינים — הפשוט נשמר שלם."""
+        text = '<code>inline</code> ואז <code class="x">block</code>'
+        result = sanitize_telegram_html(text)
+        assert result == "<code>inline</code> ואז block"
+
 
 class TestFormattingInSystemPrompt:
     """טסטים שמוודאים שהנחיות העיצוב מוזרקות נכון ל-system prompt."""

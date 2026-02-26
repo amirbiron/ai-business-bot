@@ -220,18 +220,18 @@ def sanitize_telegram_html(text: str) -> str:
     """
     escaped = _html.escape(text, quote=False)
 
-    # שלב 1: שחזור תגי פתיחה/סגירה פשוטים (בלי מאפיינים)
-    # ומחיקה מלאה של תגי פתיחה עם מאפיינים + תגי הסגירה היתומים שלהם
-    tags_with_attrs: set[str] = set()
+    # מונה לכל שם תג: כמה תגי פתיחה עם מאפיינים עדיין מחכים לסגירה יתומה
+    orphan_counts: dict[str, int] = {}
 
     def _restore_or_strip(m: re.Match) -> str:
         slash, tag, attrs = m.group(1), m.group(2), m.group(3)
         if not slash and attrs:
-            # תג פתיחה עם מאפיינים — מסמנים למחיקה ומסירים
-            tags_with_attrs.add(tag)
+            # תג פתיחה עם מאפיינים — מגדילים מונה ומסירים
+            orphan_counts[tag] = orphan_counts.get(tag, 0) + 1
             return ""
-        if slash and tag in tags_with_attrs:
-            # תג סגירה יתום — התג הפותח נמחק, אז גם הסגירה
+        if slash and orphan_counts.get(tag, 0) > 0:
+            # תג סגירה יתום — מקטינים מונה ומסירים
+            orphan_counts[tag] -= 1
             return ""
         # תג רגיל בלי מאפיינים — משחזרים
         return f"<{slash}{tag}>"
