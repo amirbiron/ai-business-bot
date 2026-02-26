@@ -291,6 +291,24 @@ class TestSanitizeTelegramHtml:
         text = "<s>מחיק</s>"
         assert sanitize_telegram_html(text) == text
 
+    def test_strips_attributed_opening_and_closing_tags(self):
+        """תג עם מאפיינים (class וכו') נמחק יחד עם תג הסגירה שלו."""
+        text = '<code class="language-python">print("hi")</code>'
+        result = sanitize_telegram_html(text)
+        assert result == 'print("hi")'
+
+    def test_attributed_pre_tag_stripped(self):
+        """תג pre עם מאפיינים נמחק שלם."""
+        text = '<pre lang="python">code</pre>'
+        result = sanitize_telegram_html(text)
+        assert result == "code"
+
+    def test_mixed_plain_and_attributed_tags(self):
+        """תגים רגילים נשמרים, תגים עם מאפיינים נמחקים."""
+        text = '<b>כותרת</b> ו-<code class="x">snippet</code>'
+        result = sanitize_telegram_html(text)
+        assert result == "<b>כותרת</b> ו-snippet"
+
 
 class TestFormattingInSystemPrompt:
     """טסטים שמוודאים שהנחיות העיצוב מוזרקות נכון ל-system prompt."""

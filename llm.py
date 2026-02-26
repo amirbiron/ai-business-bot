@@ -205,18 +205,39 @@ def strip_source_citation(response_text: str) -> str:
 # תגי HTML שטלגרם תומך בהם — רק אותם נשמור בפלט המסונן
 _TELEGRAM_HTML_TAGS = {"b", "i", "u", "s", "code", "pre"}
 
+# ביטוי רגולרי למציאת תגי פתיחה (עם/בלי מאפיינים) וסגירה שהוברחו
+_ESCAPED_TAG_RE = re.compile(
+    r"&lt;(/?)(" + "|".join(_TELEGRAM_HTML_TAGS) + r")(\s[^&]*?)?&gt;"
+)
+
 
 def sanitize_telegram_html(text: str) -> str:
     """סניטציה של פלט LLM ל-HTML בטוח לטלגרם.
 
     קודם מבריח את כל התווים המיוחדים (&, <, >) ואז משחזר רק
-    תגי HTML שטלגרם תומך בהם (<b>, </b>, <i>, </i>, <u>, </u> וכו').
+    תגי HTML שטלגרם תומך בהם. תגים עם מאפיינים (כמו class) נמחקים
+    כי טלגרם לא תומך בהם — וגם תג הסגירה המתאים נמחק למניעת HTML שבור.
     """
     escaped = _html.escape(text, quote=False)
-    for tag in _TELEGRAM_HTML_TAGS:
-        escaped = escaped.replace(f"&lt;{tag}&gt;", f"<{tag}>")
-        escaped = escaped.replace(f"&lt;/{tag}&gt;", f"</{tag}>")
-    return escaped
+
+    # שלב 1: שחזור תגי פתיחה/סגירה פשוטים (בלי מאפיינים)
+    # ומחיקה מלאה של תגי פתיחה עם מאפיינים + תגי הסגירה היתומים שלהם
+    tags_with_attrs: set[str] = set()
+
+    def _restore_or_strip(m: re.Match) -> str:
+        slash, tag, attrs = m.group(1), m.group(2), m.group(3)
+        if not slash and attrs:
+            # תג פתיחה עם מאפיינים — מסמנים למחיקה ומסירים
+            tags_with_attrs.add(tag)
+            return ""
+        if slash and tag in tags_with_attrs:
+            # תג סגירה יתום — התג הפותח נמחק, אז גם הסגירה
+            return ""
+        # תג רגיל בלי מאפיינים — משחזרים
+        return f"<{slash}{tag}>"
+
+    result = _ESCAPED_TAG_RE.sub(_restore_or_strip, escaped)
+    return result
 
 
 def _generate_summary(messages: list[dict], existing_summary: str = None) -> str | None:
