@@ -12,6 +12,7 @@ Features:
 """
 
 import asyncio
+import html as _html
 import logging
 import time
 from io import BytesIO
@@ -26,7 +27,7 @@ from telegram.error import BadRequest
 from telegram.ext import ContextTypes, ConversationHandler
 
 from ai_chatbot import database as db
-from ai_chatbot.llm import generate_answer, strip_source_citation, maybe_summarize
+from ai_chatbot.llm import generate_answer, strip_source_citation, sanitize_telegram_html, maybe_summarize
 from ai_chatbot.intent import Intent, detect_intent, get_direct_response
 from ai_chatbot.business_hours import is_currently_open, get_weekly_schedule_text
 from ai_chatbot.config import (
@@ -73,23 +74,20 @@ async def _summarize_safe(user_id: str):
         logger.error("Background summarization failed for user %s: %s", user_id, e)
 
 
-async def _reply_markdown_safe(message, text: str, **kwargs):
-    """
-    Send a Markdown-formatted message, with a fallback to plain text if Telegram
-    rejects invalid Markdown from model/user-provided content.
-    """
+async def _reply_html_safe(message, text: str, **kwargs):
+    """שליחת הודעה עם HTML formatting, עם fallback לטקסט רגיל אם טלגרם דוחה."""
     if message is None:
         return None
     try:
-        return await message.reply_text(text, parse_mode="Markdown", **kwargs)
+        return await message.reply_text(text, parse_mode="HTML", **kwargs)
     except BadRequest:
         return await message.reply_text(text, **kwargs)
 
 
-async def _send_markdown_safe(bot, chat_id: int, text: str, **kwargs):
-    """שליחת הודעה עם Markdown ל-chat_id, עם fallback לטקסט רגיל."""
+async def _send_html_safe(bot, chat_id: int, text: str, **kwargs):
+    """שליחת הודעה עם HTML ל-chat_id, עם fallback לטקסט רגיל."""
     try:
-        return await bot.send_message(chat_id=chat_id, text=text, parse_mode="Markdown", **kwargs)
+        return await bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML", **kwargs)
     except BadRequest:
         return await bot.send_message(chat_id=chat_id, text=text, **kwargs)
 
@@ -275,7 +273,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logger.info("Referral registered: user %s via code %s", user_id, arg)
 
     welcome_text = (
-        f"👋 ברוכים הבאים ל-*{BUSINESS_NAME}*!\n\n"
+        f"👋 ברוכים הבאים ל-<b>{_html.escape(BUSINESS_NAME)}</b>!\n\n"
         f"אני העוזר הווירטואלי שלכם. אני יכול לעזור לכם עם:\n"
         f"• מידע על השירותים והמחירים שלנו\n"
         f"• בקשת תורים\n"
@@ -286,14 +284,14 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if referral_registered:
         welcome_text += (
-            "\n\n🎁 *הגעתם דרך הפניה!* "
+            "\n\n🎁 <b>הגעתם דרך הפניה!</b> "
             "לאחר שתקבעו ותשלימו את התור הראשון שלכם — "
-            "גם אתם וגם החבר/ה שהפנה אתכם תקבלו *10% הנחה לחודשיים!*"
+            "גם אתם וגם החבר/ה שהפנה אתכם תקבלו <b>10% הנחה לחודשיים!</b>"
         )
 
     await update.message.reply_text(
         welcome_text,
-        parse_mode="Markdown",
+        parse_mode="HTML",
         reply_markup=_get_main_keyboard()
     )
 
@@ -365,22 +363,22 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id, display_name, _ = _get_user_info(update)
 
     help_text = (
-        "🤖 *איך להשתמש בבוט:*\n\n"
+        "🤖 <b>איך להשתמש בבוט:</b>\n\n"
         "• פשוט כתבו כל שאלה ואעשה כמיטב יכולתי לענות!\n"
-        "• לחצו על *📋 מחירון* כדי לראות את השירותים והמחירים\n"
-        "• לחצו על *📅 בקשת תור* כדי לבקש תור\n"
-        "• לחצו על *📍 שליחת מיקום* כדי לקבל את הכתובת והמפה שלנו\n"
-        "• לחצו על *📇 שמור איש קשר* כדי לשמור אותנו באנשי הקשר\n"
-        "• לחצו על *👤 דברו עם נציג* כדי לדבר עם נציג אמיתי\n\n"
+        "• לחצו על <b>📋 מחירון</b> כדי לראות את השירותים והמחירים\n"
+        "• לחצו על <b>📅 בקשת תור</b> כדי לבקש תור\n"
+        "• לחצו על <b>📍 שליחת מיקום</b> כדי לקבל את הכתובת והמפה שלנו\n"
+        "• לחצו על <b>📇 שמור איש קשר</b> כדי לשמור אותנו באנשי הקשר\n"
+        "• לחצו על <b>👤 דברו עם נציג</b> כדי לדבר עם נציג אמיתי\n\n"
         "אפשר גם לשאול שאלות כמו:\n"
-        '  _"מה שעות הפתיחה שלכם?"_\n'
-        '  _"האם אתם מציעים צביעת שיער?"_\n'
-        '  _"מה מדיניות הביטולים שלכם?"_'
+        '  <i>"מה שעות הפתיחה שלכם?"</i>\n'
+        '  <i>"האם אתם מציעים צביעת שיער?"</i>\n'
+        '  <i>"מה מדיניות הביטולים שלכם?"</i>'
     )
-    
+
     await update.message.reply_text(
         help_text,
-        parse_mode="Markdown",
+        parse_mode="HTML",
         reply_markup=_get_main_keyboard()
     )
 
@@ -552,14 +550,15 @@ async def booking_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         )
         return ConversationHandler.END
 
+    stripped = sanitize_telegram_html(stripped)
     text = (
-        "📅 *בקשת תור*\n\n"
+        "📅 <b>בקשת תור</b>\n\n"
         f"{stripped}\n\n"
-        "אנא כתבו את *השירות* שתרצו להזמין "
+        "אנא כתבו את <b>השירות</b> שתרצו להזמין "
         "(או הקלידו /cancel כדי לחזור):"
     )
 
-    await _reply_markdown_safe(update.message, text)
+    await _reply_html_safe(update.message, text)
     return BOOKING_SERVICE
 
 # שרשרת ניתוב פנימי — מדלגת על rate_limit (הקורא כבר עבר אותו)
@@ -576,10 +575,10 @@ async def booking_service(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     context.user_data["booking_service"] = update.message.text
 
     await update.message.reply_text(
-        "📆 מעולה! באיזה *תאריך* תעדיפו?\n"
+        "📆 מעולה! באיזה <b>תאריך</b> תעדיפו?\n"
         "(לדוגמה, 'יום שני', '15 במרץ', 'מחר')\n\n"
         "הקלידו /cancel כדי לחזור.",
-        parse_mode="Markdown"
+        parse_mode="HTML"
     )
     return BOOKING_DATE
 
@@ -591,10 +590,10 @@ async def booking_date(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     context.user_data["booking_date"] = update.message.text
 
     await update.message.reply_text(
-        "🕐 איזו *שעה* מתאימה לכם?\n"
+        "🕐 איזו <b>שעה</b> מתאימה לכם?\n"
         "(לדוגמה, '10:00', 'אחר הצהריים', '14:00')\n\n"
         "הקלידו /cancel כדי לחזור.",
-        parse_mode="Markdown"
+        parse_mode="HTML"
     )
     return BOOKING_TIME
 
@@ -605,19 +604,19 @@ async def booking_time(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     """Receive the preferred time and show confirmation."""
     context.user_data["booking_time"] = update.message.text
 
-    service = context.user_data.get("booking_service", "")
-    date = context.user_data.get("booking_date", "")
-    time = context.user_data.get("booking_time", "")
-    
+    service = _html.escape(context.user_data.get("booking_service", ""))
+    date = _html.escape(context.user_data.get("booking_date", ""))
+    time = _html.escape(context.user_data.get("booking_time", ""))
+
     confirmation_text = (
-        "📋 *סיכום בקשת התור:*\n\n"
+        "📋 <b>סיכום בקשת התור:</b>\n\n"
         f"• שירות: {service}\n"
         f"• תאריך: {date}\n"
         f"• שעה: {time}\n\n"
-        "אנא אשרו על ידי כתיבת *כן* או *לא*:"
+        "אנא אשרו על ידי כתיבת <b>כן</b> או <b>לא</b>:"
     )
-    
-    await update.message.reply_text(confirmation_text, parse_mode="Markdown")
+
+    await _reply_html_safe(update.message, confirmation_text)
     return BOOKING_CONFIRM
 
 
@@ -777,10 +776,11 @@ async def _handle_rag_query(
         )
     else:
         db.save_message(user_id, display_name, "assistant", result["answer"], ", ".join(result["sources"]))
+        sanitized = sanitize_telegram_html(stripped)
         if use_direct_send:
-            await _send_markdown_safe(context.bot, effective_chat_id, stripped, reply_markup=_get_main_keyboard())
+            await _send_html_safe(context.bot, effective_chat_id, sanitized, reply_markup=_get_main_keyboard())
         else:
-            await _reply_markdown_safe(update.message, stripped, reply_markup=_get_main_keyboard())
+            await _reply_html_safe(update.message, sanitized, reply_markup=_get_main_keyboard())
 
         # שאלות המשך — שליחה כהודעה נפרדת עם כפתורי inline
         follow_up_qs = result.get("follow_up_questions", [])
@@ -788,15 +788,15 @@ async def _handle_rag_query(
             follow_up_kb = _build_follow_up_keyboard(follow_up_qs, context.bot_data, user_id)
             if follow_up_kb:
                 if use_direct_send:
-                    await _send_markdown_safe(
+                    await _send_html_safe(
                         context.bot, effective_chat_id,
-                        "💡 *אולי תרצו גם לשאול:*",
+                        "💡 <b>אולי תרצו גם לשאול:</b>",
                         reply_markup=follow_up_kb,
                     )
                 else:
                     await update.message.reply_text(
-                        "💡 *אולי תרצו גם לשאול:*",
-                        parse_mode="Markdown",
+                        "💡 <b>אולי תרצו גם לשאול:</b>",
+                        parse_mode="HTML",
                         reply_markup=follow_up_kb,
                     )
 
@@ -873,10 +873,10 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         response = (
             "אשמח לעזור לכם לבקש תור! 📅\n\n"
-            "לחצו על הכפתור *📅 בקשת תור* למטה כדי להתחיל."
+            "לחצו על הכפתור <b>📅 בקשת תור</b> למטה כדי להתחיל."
         )
         db.save_message(user_id, display_name, "assistant", response)
-        await _reply_markdown_safe(
+        await _reply_html_safe(
             update.message, response, reply_markup=_get_main_keyboard()
         )
         return
@@ -976,7 +976,7 @@ async def _maybe_send_referral_code(update: Update, user_id: str):
     text = get_referral_message_text(code)
     success = False
     try:
-        result = await _reply_markdown_safe(update.message, text)
+        result = await _reply_html_safe(update.message, text)
         success = result is not None
     except Exception:
         logger.error("Exception sending referral code to user %s", user_id, exc_info=True)
@@ -1042,7 +1042,7 @@ async def follow_up_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     limit_msg = check_rate_limit(user_id)
     if limit_msg is not None:
         try:
-            await query.edit_message_text(limit_msg, parse_mode="Markdown")
+            await query.edit_message_text(limit_msg, parse_mode="HTML")
         except Exception:
             await query.edit_message_text(limit_msg)
         return

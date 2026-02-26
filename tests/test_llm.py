@@ -12,6 +12,7 @@ from llm import (
     extract_follow_up_questions,
     strip_follow_up_questions,
     strip_source_citation,
+    sanitize_telegram_html,
     _build_messages,
 )
 from config import (
@@ -241,3 +242,125 @@ class TestBuildMessages:
         msgs = _build_messages("שאלה", "הקשר", conversation_summary="סיכום ישן")
         contents = " ".join(m["content"] for m in msgs)
         assert "סיכום ישן" in contents
+
+
+class TestSanitizeTelegramHtml:
+    """טסטים לפונקציית sanitize_telegram_html — סניטציה של פלט LLM ל-HTML בטוח לטלגרם."""
+
+    def test_preserves_allowed_tags(self):
+        text = "<b>כותרת</b> ו-<i>הערה</i> ו-<u>מודגש</u>"
+        assert sanitize_telegram_html(text) == text
+
+    def test_preserves_closing_tags(self):
+        text = "<b>טקסט</b>"
+        assert sanitize_telegram_html(text) == text
+
+    def test_escapes_ampersand(self):
+        text = "מחיר: 100₪ & הנחה"
+        result = sanitize_telegram_html(text)
+        assert "&amp;" in result
+        assert "& " not in result
+
+    def test_escapes_angle_brackets_in_text(self):
+        text = "3 < 5 > 2"
+        result = sanitize_telegram_html(text)
+        assert "&lt;" in result
+        assert "&gt;" in result
+
+    def test_escapes_unknown_tags(self):
+        text = "<script>alert('xss')</script>"
+        result = sanitize_telegram_html(text)
+        assert "<script>" not in result
+        assert "&lt;script&gt;" in result
+
+    def test_mixed_valid_and_invalid(self):
+        text = "<b>כותרת</b> עם <div>תג לא חוקי</div>"
+        result = sanitize_telegram_html(text)
+        assert "<b>כותרת</b>" in result
+        assert "&lt;div&gt;" in result
+
+    def test_plain_text_unchanged(self):
+        text = "שלום עולם, הכל בסדר"
+        assert sanitize_telegram_html(text) == text
+
+    def test_preserves_code_and_pre_tags(self):
+        text = "<code>snippet</code> ו-<pre>block</pre>"
+        assert sanitize_telegram_html(text) == text
+
+    def test_preserves_strikethrough_tag(self):
+        text = "<s>מחיק</s>"
+        assert sanitize_telegram_html(text) == text
+
+    def test_strips_attributed_opening_and_closing_tags(self):
+        """תג עם מאפיינים (class וכו') נמחק יחד עם תג הסגירה שלו."""
+        text = '<code class="language-python">print("hi")</code>'
+        result = sanitize_telegram_html(text)
+        assert result == 'print("hi")'
+
+    def test_attributed_pre_tag_stripped(self):
+        """תג pre עם מאפיינים נמחק שלם."""
+        text = '<pre lang="python">code</pre>'
+        result = sanitize_telegram_html(text)
+        assert result == "code"
+
+    def test_mixed_plain_and_attributed_tags(self):
+        """תגים רגילים נשמרים, תגים עם מאפיינים נמחקים."""
+        text = '<b>כותרת</b> ו-<code class="x">snippet</code>'
+        result = sanitize_telegram_html(text)
+        assert result == "<b>כותרת</b> ו-snippet"
+
+    def test_attributed_then_plain_same_tag(self):
+        """תג עם מאפיינים לפני תג פשוט מאותו סוג — הפשוט נשמר שלם."""
+        text = '<code class="language-python">block</code> ואז <code>inline</code>'
+        result = sanitize_telegram_html(text)
+        assert result == "block ואז <code>inline</code>"
+
+    def test_multiple_attributed_then_plain(self):
+        """כמה תגים עם מאפיינים ואז פשוט — רק הפשוט נשמר."""
+        text = '<code class="a">x</code><code class="b">y</code><code>z</code>'
+        result = sanitize_telegram_html(text)
+        assert result == "xy<code>z</code>"
+
+    def test_plain_then_attributed_same_tag(self):
+        """תג פשוט לפני תג עם מאפיינים — הפשוט נשמר שלם."""
+        text = '<code>inline</code> ואז <code class="x">block</code>'
+        result = sanitize_telegram_html(text)
+        assert result == "<code>inline</code> ואז block"
+
+
+class TestFormattingInSystemPrompt:
+    """טסטים שמוודאים שהנחיות העיצוב מוזרקות נכון ל-system prompt."""
+
+    def test_formatting_section_present(self):
+        """סקשן עיצוב טקסט מופיע בפרומפט."""
+        prompt = build_system_prompt()
+        assert "── עיצוב טקסט ──" in prompt
+        assert "<b>" in prompt
+        assert "<i>" in prompt
+        assert "<u>" in prompt
+
+    def test_no_markdown_instruction(self):
+        """הפרומפט מנחה לא להשתמש ב-Markdown."""
+        prompt = build_system_prompt()
+        assert "אל תשתמש בתחביר Markdown" in prompt
+
+    def test_emoji_guidance_friendly(self):
+        """טון ידידותי — הנחיות אימוג'ים מופיעות."""
+        prompt = build_system_prompt(tone="friendly")
+        assert "💇‍♀️" in prompt
+        assert "💅" in prompt
+
+    def test_emoji_guidance_sales(self):
+        """טון מכירתי — הנחיות אימוג'ים מופיעות."""
+        prompt = build_system_prompt(tone="sales")
+        assert "💇‍♀️" in prompt
+
+    def test_no_emoji_guidance_formal(self):
+        """טון רשמי — אין הנחיות אימוג'ים ספציפיות לקטגוריות."""
+        prompt = build_system_prompt(tone="formal")
+        assert "💇‍♀️" not in prompt
+
+    def test_no_emoji_guidance_luxury(self):
+        """טון יוקרתי — אין הנחיות אימוג'ים ספציפיות לקטגוריות."""
+        prompt = build_system_prompt(tone="luxury")
+        assert "💇‍♀️" not in prompt

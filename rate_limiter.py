@@ -122,7 +122,7 @@ def rate_limit_guard(handler):
         if limit_msg is not None:
             if update.message:
                 try:
-                    await update.message.reply_text(limit_msg, parse_mode="Markdown")
+                    await update.message.reply_text(limit_msg, parse_mode="HTML")
                 except Exception:
                     await update.message.reply_text(limit_msg)
             return
@@ -158,7 +158,7 @@ def rate_limit_guard_booking(handler):
         if limit_msg is not None:
             if update.message:
                 try:
-                    await update.message.reply_text(limit_msg, parse_mode="Markdown")
+                    await update.message.reply_text(limit_msg, parse_mode="HTML")
                 except Exception:
                     await update.message.reply_text(limit_msg)
             context.user_data.clear()

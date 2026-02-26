@@ -6,6 +6,7 @@ LLM Module — Integrates the three-layer architecture:
   Layer C (Quality Check):   Regex-based source citation verification.
 """
 
+import html as _html
 import re
 import logging
 import threading
@@ -199,6 +200,44 @@ def strip_source_citation(response_text: str) -> str:
     """
     cleaned = re.sub(r"\n*" + SOURCE_CITATION_PATTERN, "", response_text)
     return cleaned.strip()
+
+
+# תגי HTML שטלגרם תומך בהם — רק אותם נשמור בפלט המסונן
+_TELEGRAM_HTML_TAGS = {"b", "i", "u", "s", "code", "pre"}
+
+# ביטוי רגולרי למציאת תגי פתיחה (עם/בלי מאפיינים) וסגירה שהוברחו
+_ESCAPED_TAG_RE = re.compile(
+    r"&lt;(/?)(" + "|".join(_TELEGRAM_HTML_TAGS) + r")(\s[^&]*?)?&gt;"
+)
+
+
+def sanitize_telegram_html(text: str) -> str:
+    """סניטציה של פלט LLM ל-HTML בטוח לטלגרם.
+
+    קודם מבריח את כל התווים המיוחדים (&, <, >) ואז משחזר רק
+    תגי HTML שטלגרם תומך בהם. תגים עם מאפיינים (כמו class) נמחקים
+    כי טלגרם לא תומך בהם — וגם תג הסגירה המתאים נמחק למניעת HTML שבור.
+    """
+    escaped = _html.escape(text, quote=False)
+
+    # מונה לכל שם תג: כמה תגי פתיחה עם מאפיינים עדיין מחכים לסגירה יתומה
+    orphan_counts: dict[str, int] = {}
+
+    def _restore_or_strip(m: re.Match) -> str:
+        slash, tag, attrs = m.group(1), m.group(2), m.group(3)
+        if not slash and attrs:
+            # תג פתיחה עם מאפיינים — מגדילים מונה ומסירים
+            orphan_counts[tag] = orphan_counts.get(tag, 0) + 1
+            return ""
+        if slash and orphan_counts.get(tag, 0) > 0:
+            # תג סגירה יתום — מקטינים מונה ומסירים
+            orphan_counts[tag] -= 1
+            return ""
+        # תג רגיל בלי מאפיינים — משחזרים
+        return f"<{slash}{tag}>"
+
+    result = _ESCAPED_TAG_RE.sub(_restore_or_strip, escaped)
+    return result
 
 
 def _generate_summary(messages: list[dict], existing_summary: str = None) -> str | None:
