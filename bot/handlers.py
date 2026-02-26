@@ -12,6 +12,7 @@ Features:
 """
 
 import asyncio
+import html as _html
 import logging
 import time
 from io import BytesIO
@@ -272,7 +273,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logger.info("Referral registered: user %s via code %s", user_id, arg)
 
     welcome_text = (
-        f"👋 ברוכים הבאים ל-<b>{BUSINESS_NAME}</b>!\n\n"
+        f"👋 ברוכים הבאים ל-<b>{_html.escape(BUSINESS_NAME)}</b>!\n\n"
         f"אני העוזר הווירטואלי שלכם. אני יכול לעזור לכם עם:\n"
         f"• מידע על השירותים והמחירים שלנו\n"
         f"• בקשת תורים\n"
@@ -603,10 +604,10 @@ async def booking_time(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     """Receive the preferred time and show confirmation."""
     context.user_data["booking_time"] = update.message.text
 
-    service = context.user_data.get("booking_service", "")
-    date = context.user_data.get("booking_date", "")
-    time = context.user_data.get("booking_time", "")
-    
+    service = _html.escape(context.user_data.get("booking_service", ""))
+    date = _html.escape(context.user_data.get("booking_date", ""))
+    time = _html.escape(context.user_data.get("booking_time", ""))
+
     confirmation_text = (
         "📋 <b>סיכום בקשת התור:</b>\n\n"
         f"• שירות: {service}\n"
@@ -615,7 +616,7 @@ async def booking_time(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
         "אנא אשרו על ידי כתיבת <b>כן</b> או <b>לא</b>:"
     )
 
-    await update.message.reply_text(confirmation_text, parse_mode="HTML")
+    await _reply_html_safe(update.message, confirmation_text)
     return BOOKING_CONFIRM
 
 
