@@ -24,8 +24,30 @@ AI Business Chatbot — a Telegram bot + Flask admin panel for small businesses 
 - Auto-seed: if the KB is empty on startup, the app auto-seeds demo data — no manual `--seed` step required for first run.
 - SQLite DB is stored at `data/chatbot.db`; FAISS index at `data/faiss_index/`. Both are created automatically.
 
+### Environment secrets
+
+| Secret | Purpose | Required for |
+|--------|---------|-------------|
+| `OPENAI_API_KEY` | LLM chat completions + real embeddings | Full RAG pipeline (fallback works without) |
+| `TELEGRAM_BOT_TOKEN` | Telegram bot polling | Bot mode |
+| `TELEGRAM_OWNER_CHAT_ID` | Notifications to business owner | Bot notifications |
+
+These are injected as env vars. The `.env` file picks them up via `python-dotenv`.
+
 ### Lint, test, build
 
 - See `CLAUDE.md` for canonical commands. Key ones:
   - **Lint:** `flake8 --max-line-length=120 .`
   - **Tests:** `python3 -m pytest tests/ -v` (213 tests, all mocked, no external APIs needed)
+
+### Testing the RAG pipeline programmatically
+
+When Telegram Web is not accessible, you can test the bot's core logic directly:
+
+```python
+from ai_chatbot.llm import generate_answer
+result = generate_answer(user_query="כמה עולה תספורת?", user_id="test_user")
+print(result["answer"])
+```
+
+This exercises the full RAG pipeline (embed query -> FAISS search -> LLM generation -> quality check).
