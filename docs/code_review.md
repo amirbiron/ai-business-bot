@@ -98,6 +98,9 @@
 | D3 | 🟢 קל | שורה 25 | `check_same_thread=False` — נדרש אבל מסוכן. כדאי הערת אזהרה שה-connection לא thread-safe ושה-context manager מגן |
 | D4 | 🟡 בינוני | conversations | חסר אינדקס על `conversations(user_id, created_at)` — שאילתות referral engagement בודקות `user_id + created_at >= X` |
 | D5 | 🟢 קל | כללי | חלק מהפונקציות (`get_X` + `count_X`) משכפלות WHERE/JOIN — תואם CLAUDE.md שאומר לחלץ helper |
+| D6 | 🟡 בינוני | appointments | חסר UNIQUE constraint על `(user_id, preferred_date, preferred_time)` — אותו משתמש יכול לקבוע שני תורים לאותה שעה |
+| D7 | 🟡 בינוני | kb_chunks | `save_chunks` — insert one-by-one בלולאה. עדיף `executemany()` לביצועים (x10-x50 מהיר יותר) |
+| D8 | 🟢 קל | init_db() | מיגרציית special_days מוחקת כפילויות בשקט (DELETE WHERE id NOT IN...) ללא לוג. אובדן נתונים בלתי נראה |
 
 ### 2.4 `config.py` (297 שורות)
 
@@ -113,6 +116,8 @@
 | C1 | 🟡 בינוני | שורה 56-58 | `ADMIN_PASSWORD` ו-`ADMIN_SECRET_KEY` ריקים by default — טוב לאבטחה, אבל אין validation ב-startup של main.py (רק ב-admin app). אם מריצים `--bot` בלי `.env` — לא מקבלים שגיאה |
 | C2 | 🟢 קל | שורות 74-100 | `TONE_DEFINITIONS` — 4 טונים hardcoded. כדאי לאפשר custom tone ב-DB |
 | C3 | 🟢 קל | שורה 32 | `gpt-4.1-mini` — ברירת מחדל. כדאי להוסיף הערה שזה ניתן לשינוי |
+| C4 | 🟡 בינוני | שורה 219 | `custom_phrases` מוזרק ישירות ל-system prompt ללא סניטציה — prompt injection אפשרי דרך פאנל Admin. עדיף whitelist של תווים מותרים |
+| C5 | 🟢 קל | שורות 73-243 | 5 dictionaries נפרדים לכל טון (definition, identity, descriptor, guidelines, response_structure). תחזוקה קשה — עדיף מבנה data-driven אחד |
 
 ### 2.5 `admin/app.py`
 
@@ -129,6 +134,9 @@
 | A1 | 🟡 בינוני | session | `PERMANENT_SESSION_LIFETIME = 30 days` — ארוך מדי. 7 ימים מספיקים |
 | A2 | 🟢 קל | כללי | חסר rate limiting על login endpoint — פגיע ל-brute force |
 | A3 | 🟢 קל | כללי | חסר audit log — פעולות admin (מחיקת KB, שינוי הגדרות) לא נרשמות |
+| A4 | 🟡 בינוני | dashboard | 10+ שאילתות DB בכל טעינת dashboard — עדיף batch query או cache |
+| A5 | 🟢 קל | CSRF handler | שגיאת CSRF לא נרשמת ללוג — חסר logging של IP ונתיב (חשוב לזיהוי התקפות) |
+| A6 | 🟢 קל | live-chat routes | `user_id` מ-URL ללא validation — עדיף regex check שזה מספר Telegram תקין |
 
 ### 2.6 `rag/engine.py` (319 שורות)
 
@@ -588,6 +596,9 @@ satisfaction_kb = InlineKeyboardMarkup([
 4. **CSP Header** — Content-Security-Policy לעמודי Admin
 5. **HSTS** — Strict-Transport-Security ב-production
 6. **Input validation** — Pydantic/WTForms לכל input ב-admin routes
+7. **Prompt injection** — סניטציה של `custom_phrases` לפני הזרקה ל-system prompt (C4)
+8. **CSRF logging** — רישום ניסיונות CSRF כושלים עם IP (A5)
+9. **Startup validation** — בדיקת TELEGRAM_OWNER_CHAT_ID, DB health, RAG index בעת עלייה
 
 ---
 
@@ -606,7 +617,9 @@ satisfaction_kb = InlineKeyboardMarkup([
 4. **Holiday cache** — `_get_israeli_holidays` cache ברמת יום
 5. **Vacation status cache** — `VacationService.is_active()` cache ל-30 שניות
 6. **Batch message saving** — save_message בלולאה → batch insert
-7. **Composite index** — `conversations(user_id, created_at)` — ראה 3.5
+7. **Composite index** — `conversations(user_id, created_at)` — ראה 3.7
+8. **Batch inserts** — `save_chunks` ב-`database.py` — `executemany()` במקום insert בלולאה (D7)
+9. **Dashboard optimization** — batch queries או cache ל-10+ שאילתות ב-dashboard (A4)
 
 ---
 
