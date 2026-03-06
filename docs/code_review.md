@@ -80,6 +80,7 @@
 | L4 | 🟢 קל | שורות 257-260 | `_generate_summary` — hardcoded temperature=0.3 ו-max_tokens=500. עדיף קונפיגורציה |
 | L5 | 🟡 בינוני | שורה 138 | Quality check pattern `([Ss]ource\|מקור):\s*.+` — מאפשר ל-LLM לכתוב "מקור: לפי הידע שלי" ולעבור בדיקת איכות. עדיף validation מול שמות מקורות אמיתיים מה-chunks |
 | L6 | 🟢 קל | שורות 96-106 | Conversation summary מוזרק כ-`system` role — נותן לו אותה סמכות כמו context. עדיף להוסיף הוראה מפורשת שלא לסמוך על הסיכום כעובדה עסקית (כבר קיים בשורות 101-103 ✅) |
+| L7 | 🟡 בינוני | שורות 284-289 | סיכום שיחה מוזרק ללא סניטציה — משתמש יכול להכניס הוראות ל-summary שישפיעו על שיחות עתידיות (prompt injection דרך history) |
 
 ### 2.3 `database.py` (66K — ענק!)
 
@@ -173,6 +174,9 @@
 | E4 | 🟢 קל | openai_client.py:13-15 | `except Exception: pass` — רחב מדי. עדיף `except ImportError:` |
 | E5 | 🟢 קל | vector_store.py:50 | `dimension = 1536` hardcoded — אם ישתנה ל-model אחר (768 dims), FAISS יתרסק |
 | E6 | 🟢 קל | embeddings.py:71 | `.replace("\n", " ")` מוריד מבנה פסקאות — אובדן מידע סמנטי |
+| E7 | 🟡 בינוני | vector_store.py:37-69 | אין validation של `len(metadata) == len(embeddings)` ב-`build_index` — אם לא תואמים, `search` יקרוס עם IndexError |
+| E8 | 🟡 בינוני | vector_store.py:90 | אין validation של dimension ב-query embedding — אם dimension שונה מה-index, crash עם הודעה קריפטית |
+| E9 | 🟢 קל | embeddings.py:82-84 | API key עלול להופיע ב-exception messages ולהירשם ללוג — עדיף סניטציה של `sk-` tokens |
 
 ### 2.8 `rate_limiter.py` (171 שורות)
 
