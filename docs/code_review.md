@@ -75,6 +75,8 @@
 | L2 | 🟢 קל | שורה 41 | `conversation_history: list[dict] = None` — mutable default argument. עדיף `= None` ולבדוק בתוך הפונקציה (מתבצע נכון, אבל pylint יתריע) |
 | L3 | 🟡 בינוני | שורה 176 | `extract_follow_up_questions` — warning log כש-follow-up לא נמצא. זה יקרה בכל תשובה כש-`FOLLOW_UP_ENABLED=False` — צריך להוריד ל-debug |
 | L4 | 🟢 קל | שורות 257-260 | `_generate_summary` — hardcoded temperature=0.3 ו-max_tokens=500. עדיף קונפיגורציה |
+| L5 | 🟡 בינוני | שורה 138 | Quality check pattern `([Ss]ource\|מקור):\s*.+` — מאפשר ל-LLM לכתוב "מקור: לפי הידע שלי" ולעבור בדיקת איכות. עדיף validation מול שמות מקורות אמיתיים מה-chunks |
+| L6 | 🟢 קל | שורות 96-106 | Conversation summary מוזרק כ-`system` role — נותן לו אותה סמכות כמו context. עדיף להוסיף הוראה מפורשת שלא לסמוך על הסיכום כעובדה עסקית (כבר קיים בשורות 101-103 ✅) |
 
 ### 2.3 `database.py` (66K — ענק!)
 
@@ -139,8 +141,29 @@
 | R1 | 🟡 בינוני | שורות 270-277 | `retrieve()` — rebuild_index בתוך retrieve אם stale. יכול לגרום ל-latency spike ב-request הראשון אחרי שינוי KB |
 | R2 | 🟢 קל | שורות 38-53 | `_index_state_lock` — fcntl import בתוך הפונקציה (2 פעמים). עדיף import ברמת המודול עם fallback |
 | R3 | 🟡 בינוני | כללי | אין query cache — אותה שאלה בדיוק תבצע embedding + FAISS search כל פעם |
+| R4 | 🔴 גבוה | שורות 206-215 | שימוש חוזר ב-embeddings לפי `chunk_index` ללא השוואת טקסט — אם תוכן ה-chunk השתנה אבל ה-index נשאר אותו דבר, embedding ישן ישמש. עדיף להוסיף `and c["chunk_text"] == chunk["text"]` לתנאי |
+| R5 | 🟡 בינוני | שורות 206-208 | O(n²) chunk matching — `[c for c in old_chunks if c["chunk_index"] == chunk["index"]]`. עדיף dict lookup |
 
-### 2.7 `rate_limiter.py` (171 שורות)
+### 2.7 `rag/embeddings.py` + `rag/vector_store.py` + `openai_client.py`
+
+#### חיוביים
+- Lazy initialization של OpenAI client — singleton pattern
+- Fallback ל-hash-based embeddings בטסטים
+- FAISS IndexFlatIP עם L2 normalization — cosine similarity
+- Batch embedding עם חלוקה ל-100 items
+
+#### ממצאים
+
+| # | חומרה | מיקום | ממצא |
+|---|--------|-------|------|
+| E1 | 🔴 גבוה | embeddings.py:28-56 | Fallback embeddings (hash-based) **לא סמנטיים** — אם OpenAI API נפל, חיפוש RAG יחזיר תוצאות חסרות משמעות בלי התראה ברורה |
+| E2 | 🟡 בינוני | openai_client.py:17-22 | Global `_client` ללא threading lock — race condition אם שני threads קוראים `get_openai_client()` במקביל |
+| E3 | 🟡 בינוני | vector_store.py:59 | `faiss.normalize_L2(embeddings)` — mutates input array in-place. אם הקורא משתמש שוב ב-array, הערכים כבר מנורמלים |
+| E4 | 🟢 קל | openai_client.py:13-15 | `except Exception: pass` — רחב מדי. עדיף `except ImportError:` |
+| E5 | 🟢 קל | vector_store.py:50 | `dimension = 1536` hardcoded — אם ישתנה ל-model אחר (768 dims), FAISS יתרסק |
+| E6 | 🟢 קל | embeddings.py:71 | `.replace("\n", " ")` מוריד מבנה פסקאות — אובדן מידע סמנטי |
+
+### 2.8 `rate_limiter.py` (171 שורות)
 
 #### חיוביים
 - Sliding window עם 3 רמות — מעולה
@@ -154,7 +177,7 @@
 | RL1 | 🟢 קל | שורה 33 | `defaultdict(deque)` — לא מגביל מספר משתמשים. דליפת זיכרון אפשרית עם הרבה משתמשים ייחודיים. עדיף LRU eviction |
 | RL2 | 🟢 קל | שורה 78 | `sum(1 for ts...)` — O(n) על כל בדיקה. בעומס גבוה אפשר binary search |
 
-### 2.8 `business_hours.py` (364 שורות)
+### 2.9 `business_hours.py` (364 שורות)
 
 #### חיוביים
 - Resolution order (special → holiday → regular) — מתוחכם ונכון
@@ -169,7 +192,7 @@
 | BH1 | 🟢 קל | שורה 56 | `_get_israeli_holidays` — נקרא בכל בדיקת שעות. עדיף cache ברמת יום |
 | BH2 | 🟢 קל | שורות 103-108 | holiday_years מוסיף את שנת המחר — ✅ boundary נכון |
 
-### 2.9 `intent.py` (174 שורות)
+### 2.10 `intent.py` (174 שורות)
 
 #### חיוביים
 - Keyword matching מהיר — ללא קריאת LLM
@@ -184,7 +207,7 @@
 | I2 | 🟢 קל | שורות 153-160 | `_GREETING_RESPONSES` / `_FAREWELL_RESPONSES` — רשימה עם פריט יחיד. אם המטרה היא randomization עתידי — ✅, אחרת מיותר |
 | I3 | 🟢 קל | כללי | חסר intent LOCATION — "איפה אתם", "מה הכתובת", "איך מגיעים" |
 
-### 2.10 `vacation_service.py` (125 שורות)
+### 2.11 `vacation_service.py` (125 שורות)
 
 #### חיוביים
 - Guards עם bypass ל-live chat — ✅
@@ -197,7 +220,7 @@
 |---|--------|-------|------|
 | V1 | 🟢 קל | שורות 28-31 | `VacationService.is_active()` — קורא DB בכל בדיקה. עדיף cache קצר (30 שניות) |
 
-### 2.11 `live_chat_service.py` (226 שורות)
+### 2.12 `live_chat_service.py` (226 שורות)
 
 #### חיוביים
 - Centralized service — מניעת פיזור לוגיקה
@@ -211,7 +234,7 @@
 | LC1 | 🟡 בינוני | שורות 28-41 | `send_telegram_message` — משתמש ב-`requests` (sync) במקום `python-telegram-bot` async. זה בוחר הנמוך — blocked thread ב-admin |
 | LC2 | 🟢 קל | כללי | חסר timeout על sessions — live chat שנשכח פתוח ישתק את הבוט לנצח לאותו משתמש |
 
-### 2.12 `broadcast_service.py` (177 שורות)
+### 2.13 `broadcast_service.py` (177 שורות)
 
 #### חיוביים
 - Per-item error handling — ✅ תואם CLAUDE.md
@@ -550,11 +573,12 @@ satisfaction_kb = InlineKeyboardMarkup([
 ## סיכום פעולות מומלצות — לפי עדיפות
 
 ### עדיפות גבוהה (עשו עכשיו)
-1. ✏️ הוספת אינדקס `conversations(user_id, created_at)`
-2. ✏️ הוספת intent COMPLAINT
-3. ✏️ Auto-timeout ל-live chat sessions
-4. ✏️ Rate limit על login endpoint
-5. 📝 טסטים ל-`handlers.py` ו-`live_chat_service.py`
+1. 🐛 תיקון R4: embedding reuse ב-`rag/engine.py` — הוספת השוואת טקסט לפני שימוש חוזר ב-embedding
+2. ✏️ הוספת אינדקס `conversations(user_id, created_at)`
+3. ✏️ הוספת intent COMPLAINT
+4. ✏️ Auto-timeout ל-live chat sessions
+5. ✏️ Rate limit על login endpoint
+6. 📝 טסטים ל-`handlers.py` ו-`live_chat_service.py`
 
 ### עדיפות בינונית (ספרינט הבא)
 6. 📦 פיצול `database.py` ל-sub-modules
