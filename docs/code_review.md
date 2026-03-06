@@ -58,6 +58,9 @@
 | H4 | 🟢 קל | שורות 1000-1021 | `_check_high_engagement_referral` — שאילתות SQL ישירות בתוך handler. עדיף להעביר ל-`database.py` |
 | H5 | 🟡 בינוני | שורה 917 | `cancel_appointment_callback` — חסר `@rate_limit_guard`. לפי CLAUDE.md כל נתיב LLM צריך rate limit. אמנם כאן אין LLM, אבל עדיף consistency |
 | H6 | 🟢 קל | שורות 142-158 | `_cleanup_stale_follow_ups` — iterating over dict keys while potentially modifying. בטוח כי קודם אוסף ואז מוחק, אבל כדאי הערה |
+| H7 | 🟡 בינוני | שורות 208-213, 646-662 | Owner notification — `send_message` לבעל העסק עוטף ב-`try/except` ומלוג, אבל אין retry. שגיאת רשת חולפת = בעל העסק מפסיד התראה על תור |
+| H8 | 🟡 בינוני | שורות 276 vs 553 | חוסר עקביות ב-HTML escaping — `_html.escape()` במקום אחד ו-`sanitize_telegram_html()` במקום אחר. עדיף פונקציה אחת אחידה |
+| H9 | 🟢 קל | שורות 1000-1021 | `_check_high_engagement_referral` — שתי שאילתות DB נפרדות (30 דקות ויום). אפשר לאחד לשאילתה אחת עם `SUM(CASE WHEN...)` |
 
 ### 2.2 `llm.py` (474 שורות)
 
@@ -247,6 +250,8 @@
 | # | חומרה | מיקום | ממצא |
 |---|--------|-------|------|
 | BC1 | 🟢 קל | שורה 25 | `_SEND_DELAY = 0.05` — 20msg/sec. מגבלת טלגרם היא 30msg/sec. מספיק מרווח, אבל כדאי הערה |
+| BC2 | 🟡 בינוני | שורה 65 | `message_text` לא מאומת — אין בדיקת אורך (מקסימום Telegram: 4096 תווים) או פורמט HTML תקין. שידור עם HTML שבור יכשיל את כל ההודעות |
+| BC3 | 🟡 בינוני | שורות 95-99 | `db.update_broadcast_progress()` — קריאה סינכרונית בתוך לולאה async. חוסם את ה-event loop. עדיף `await asyncio.to_thread(...)` |
 
 ---
 
@@ -318,7 +323,42 @@ def cleanup_expired(max_hours: int = 4):
 ```
 **ערך:** מניעת מצב שבוט "שותק" לנצח למשתמש שנשכח ב-live chat.
 
-### 3.5 אינדקס חסר ב-conversations
+### 3.5 Retry לוגיקה להתראות בעל העסק
+```python
+# bot/handlers.py — helper עם retry exponential backoff
+async def _notify_owner(context, text: str, max_retries: int = 3) -> bool:
+    for attempt in range(max_retries):
+        try:
+            await context.bot.send_message(
+                chat_id=TELEGRAM_OWNER_CHAT_ID, text=text
+            )
+            return True
+        except (TimedOut, NetworkError) as e:
+            if attempt < max_retries - 1:
+                await asyncio.sleep(2 ** attempt)
+                logger.warning("Owner notification retry %d: %s", attempt + 1, e)
+            else:
+                logger.error("Owner notification failed after %d attempts: %s", max_retries, e)
+        except Exception as e:
+            logger.error("Owner notification unexpected error: %s", e)
+            return False
+    return False
+```
+**ערך:** מניעת אובדן התראות קריטיות (תורים, תלונות) בגלל שגיאת רשת חולפת.
+
+### 3.6 Validation להודעות שידור
+```python
+# broadcast_service.py — validation לפני שליחה
+def _validate_broadcast_message(text: str) -> str:
+    if not text or not text.strip():
+        raise ValueError("הודעת שידור לא יכולה להיות ריקה")
+    if len(text) > 4096:
+        raise ValueError(f"הודעה ארוכה מדי ({len(text)} > 4096 תווים)")
+    return text.strip()
+```
+**ערך:** מניעת שידור כושל שכל 1,000 ההודעות נכשלות בגלל פורמט לא תקין.
+
+### 3.7 אינדקס חסר ב-conversations
 ```sql
 CREATE INDEX IF NOT EXISTS idx_conversations_user_created
     ON conversations(user_id, created_at);
@@ -578,18 +618,22 @@ satisfaction_kb = InlineKeyboardMarkup([
 3. ✏️ הוספת intent COMPLAINT
 4. ✏️ Auto-timeout ל-live chat sessions
 5. ✏️ Rate limit על login endpoint
-6. 📝 טסטים ל-`handlers.py` ו-`live_chat_service.py`
+6. ✏️ Retry logic להתראות בעל העסק (H7) — מניעת אובדן התראות תורים
+7. ✏️ Validation להודעות שידור (BC2) — אורך + פורמט
+8. 📝 טסטים ל-`handlers.py` ו-`live_chat_service.py`
 
 ### עדיפות בינונית (ספרינט הבא)
-6. 📦 פיצול `database.py` ל-sub-modules
-7. 🔄 החלפת `__wrapped__` ב-inner functions
-8. 📊 Dashboard analytics מורחב
-9. ⭐ סקר שביעות רצון
-10. 📝 טסטים ל-`broadcast_service.py`, `vacation_service.py`, `admin/app.py`
+9. 📦 פיצול `database.py` ל-sub-modules
+10. 🔄 החלפת `__wrapped__` ב-inner functions
+11. ✏️ איחוד HTML escaping — פונקציה אחת אחידה (H8)
+12. ✏️ `asyncio.to_thread` ל-broadcast progress updates (BC3)
+13. 📊 Dashboard analytics מורחב
+14. ⭐ סקר שביעות רצון
+15. 📝 טסטים ל-`broadcast_service.py`, `vacation_service.py`, `admin/app.py`
 
 ### עדיפות נמוכה (roadmap)
-11. 🌐 Multi-language support
-12. 📅 Google Calendar integration
-13. 📱 Telegram Web App
-14. 🔍 חיפוש סמנטי ב-admin
-15. 📊 A/B testing לטונים
+16. 🌐 Multi-language support
+17. 📅 Google Calendar integration
+18. 📱 Telegram Web App
+19. 🔍 חיפוש סמנטי ב-admin
+20. 📊 A/B testing לטונים
