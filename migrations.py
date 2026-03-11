@@ -141,3 +141,37 @@ def run_migrations(conn) -> None:
         conn.execute("CREATE INDEX IF NOT EXISTS idx_referrals_referred ON referrals(referred_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_referrals_code ON referrals(code)")
         logger.info("Migrated referrals: UNIQUE(referrer_id, referred_id) → UNIQUE(referred_id)")
+
+    # ─── appointments: UNIQUE partial index למניעת תורים כפולים ────────────
+    existing_appt_idx = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='index' "
+        "AND tbl_name='appointments' AND name='idx_appointments_user_datetime'"
+    ).fetchone()
+    if not existing_appt_idx:
+        # מחיקת כפילויות (שומר רק את הרשומה האחרונה לכל user+date+time)
+        dup_cursor = conn.execute("""
+            SELECT COUNT(*) AS cnt FROM appointments
+            WHERE preferred_date != '' AND preferred_time != ''
+              AND id NOT IN (
+                  SELECT MAX(id) FROM appointments
+                  WHERE preferred_date != '' AND preferred_time != ''
+                  GROUP BY user_id, preferred_date, preferred_time
+              )
+        """)
+        dup_count = dup_cursor.fetchone()["cnt"]
+        if dup_count:
+            logger.warning("Removing %d duplicate appointments during migration", dup_count)
+            conn.execute("""
+                DELETE FROM appointments
+                WHERE preferred_date != '' AND preferred_time != ''
+                  AND id NOT IN (
+                      SELECT MAX(id) FROM appointments
+                      WHERE preferred_date != '' AND preferred_time != ''
+                      GROUP BY user_id, preferred_date, preferred_time
+                  )
+            """)
+        conn.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_appointments_user_datetime
+                ON appointments(user_id, preferred_date, preferred_time)
+                WHERE preferred_date != '' AND preferred_time != ''
+        """)

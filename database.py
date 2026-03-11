@@ -244,12 +244,6 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_referrals_code ON referrals(code);
             CREATE INDEX IF NOT EXISTS idx_credits_user ON credits(user_id);
             CREATE INDEX IF NOT EXISTS idx_broadcast_status ON broadcast_messages(status);
-
-            -- מניעת תורים כפולים: אותו משתמש לאותו תאריך ושעה
-            -- רק כשהשדות לא ריקים (ברירת מחדל '' לא מפעילה את האילוץ)
-            CREATE UNIQUE INDEX IF NOT EXISTS idx_appointments_user_datetime
-                ON appointments(user_id, preferred_date, preferred_time)
-                WHERE preferred_date != '' AND preferred_time != '';
         """)
 
         # מיגרציות קלות — הלוגיקה בקובץ נפרד לקריאות טובה יותר
@@ -603,15 +597,19 @@ def _status_filter_query(
     columns: str,
     status: str | None,
     limit: int | None,
-    order: str = "created_at DESC",
+    order: str | None = None,
 ) -> tuple[str, list[object]]:
-    """בניית שאילתת SELECT עם סינון סטטוס אופציונלי — helper משותף ל-get/count."""
+    """בניית שאילתת SELECT עם סינון סטטוס אופציונלי — helper משותף ל-get/count.
+
+    order=None דולג (מתאים ל-COUNT), order="created_at DESC" ממיין (מתאים ל-SELECT *).
+    """
     params: list[object] = []
     query = f"SELECT {columns} FROM {table}"
     if status:
         query += " WHERE status=?"
         params.append(status)
-    query += f" ORDER BY {order}"
+    if order:
+        query += f" ORDER BY {order}"
     if limit is not None:
         query += " LIMIT ?"
         params.append(limit)
@@ -620,7 +618,7 @@ def _status_filter_query(
 
 def get_agent_requests(status: str | None = None, limit: int | None = None) -> list[dict]:
     """Get agent requests, optionally filtered by status."""
-    query, params = _status_filter_query("agent_requests", "*", status, limit)
+    query, params = _status_filter_query("agent_requests", "*", status, limit, order="created_at DESC")
     with get_connection() as conn:
         rows = conn.execute(query, params).fetchall()
         return [dict(r) for r in rows]
@@ -674,7 +672,7 @@ def create_appointment(
 
 def get_appointments(status: str | None = None, limit: int | None = None) -> list[dict]:
     """Get appointments, optionally filtered by status."""
-    query, params = _status_filter_query("appointments", "*", status, limit)
+    query, params = _status_filter_query("appointments", "*", status, limit, order="created_at DESC")
     with get_connection() as conn:
         rows = conn.execute(query, params).fetchall()
         return [dict(r) for r in rows]
@@ -777,7 +775,7 @@ def save_unanswered_question(user_id: str, username: str, question: str):
 
 def get_unanswered_questions(status: str | None = None, limit: int | None = None) -> list[dict]:
     """Get unanswered questions, optionally filtered by status."""
-    query, params = _status_filter_query("unanswered_questions", "*", status, limit)
+    query, params = _status_filter_query("unanswered_questions", "*", status, limit, order="created_at DESC")
     with get_connection() as conn:
         rows = conn.execute(query, params).fetchall()
         return [dict(r) for r in rows]
