@@ -18,10 +18,11 @@ from ai_chatbot.config import DB_PATH, TONE_DEFINITIONS
 @contextmanager
 def get_connection():
     """Yield a SQLite connection and always close it safely."""
-    # The app can run the Telegram bot (asyncio) and the Flask admin panel in the
-    # same process. We create a fresh connection per operation, but still set a
-    # generous timeout and busy_timeout to reduce "database is locked" errors
-    # under concurrent writes, and allow cross-thread usage if needed.
+    # הבוט (asyncio) והאדמין (Flask) רצים באותו תהליך. נוצר חיבור חדש לכל
+    # פעולה, עם timeout נדיב ו-busy_timeout כדי לצמצם שגיאות "database is locked".
+    # check_same_thread=False נדרש כי Flask ו-asyncio משתמשים ב-threads שונים,
+    # אבל ה-connection עצמו *אינו* thread-safe — השימוש הבטוח מובטח ע"י
+    # context manager שפותח וסוגר חיבור בכל פעולה (ללא שיתוף בין threads).
     conn = sqlite3.connect(str(DB_PATH), timeout=30, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
@@ -231,6 +232,7 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_kb_entries_category ON kb_entries(category);
             CREATE INDEX IF NOT EXISTS idx_kb_chunks_entry ON kb_chunks(entry_id);
             CREATE INDEX IF NOT EXISTS idx_conversations_user ON conversations(user_id);
+            CREATE INDEX IF NOT EXISTS idx_conversations_user_created ON conversations(user_id, created_at);
             CREATE INDEX IF NOT EXISTS idx_agent_requests_status ON agent_requests(status);
             CREATE INDEX IF NOT EXISTS idx_conversation_summaries_user ON conversation_summaries(user_id);
             CREATE INDEX IF NOT EXISTS idx_live_chats_user_active ON live_chats(user_id, is_active);
@@ -244,129 +246,9 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_broadcast_status ON broadcast_messages(status);
         """)
 
-        # Lightweight migrations for existing databases (SQLite can only ADD COLUMN).
-        def _ensure_column(table: str, column: str, ddl_suffix: str) -> None:
-            cols = conn.execute(f"PRAGMA table_info({table})").fetchall()
-            if any(r["name"] == column for r in cols):
-                return
-            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ddl_suffix}")
-
-        _ensure_column("agent_requests", "telegram_username", "TEXT DEFAULT ''")
-        _ensure_column("appointments", "telegram_username", "TEXT DEFAULT ''")
-        _ensure_column(
-            "conversation_summaries",
-            "last_summarized_message_id",
-            "INTEGER NOT NULL DEFAULT 0",
-        )
-
-        # Back-fill last_summarized_message_id for rows migrated from the old
-        # COUNT-based offset scheme.  For each user whose summary still has
-        # last_summarized_message_id=0 *and* a positive message_count, look up
-        # the N-th conversation row (ordered by id ASC) and store its id.
-        rows = conn.execute(
-            "SELECT id, user_id, message_count FROM conversation_summaries "
-            "WHERE last_summarized_message_id = 0 AND message_count > 0"
-        ).fetchall()
-        for row in rows:
-            last_msg = conn.execute(
-                "SELECT id FROM conversations WHERE user_id = ? "
-                "ORDER BY id ASC LIMIT 1 OFFSET ?",
-                (row["user_id"], row["message_count"] - 1),
-            ).fetchone()
-            if last_msg:
-                conn.execute(
-                    "UPDATE conversation_summaries SET last_summarized_message_id = ? WHERE id = ?",
-                    (last_msg["id"], row["id"]),
-                )
-
-        # Migrate special_days: deduplicate and add UNIQUE index on date.
-        # Check if the unique index already exists.
-        existing_indexes = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='special_days' AND name='idx_special_days_date_unique'"
-        ).fetchone()
-        if not existing_indexes:
-            # Remove duplicates, keeping the most recent entry per date
-            conn.execute("""
-                DELETE FROM special_days WHERE id NOT IN (
-                    SELECT MAX(id) FROM special_days GROUP BY date
-                )
-            """)
-            # The idx_special_days_date index (non-unique) was created above;
-            # drop it and create a unique one instead.
-            conn.execute("DROP INDEX IF EXISTS idx_special_days_date")
-            conn.execute(
-                "CREATE UNIQUE INDEX IF NOT EXISTS idx_special_days_date_unique ON special_days(date)"
-            )
-
-        # מיגרציה: מעבר ממודל הפניה-בודדת (UNIQUE code, referred_id nullable)
-        # למודל ריבוי-הפניות (referral_codes לקוד קבוע, referrals לאירועי הפניה).
-        referral_cols = {
-            c["name"]: c
-            for c in conn.execute("PRAGMA table_info(referrals)").fetchall()
-        }
-        referred_id_col = referral_cols.get("referred_id")
-        if referred_id_col and not referred_id_col["notnull"]:
-            # סכימה ישנה — referred_id nullable → צריך מיגרציה
-            conn.execute("""
-                INSERT OR IGNORE INTO referral_codes (user_id, code, created_at)
-                SELECT referrer_id, code, MIN(created_at)
-                FROM referrals GROUP BY referrer_id
-            """)
-            conn.execute("ALTER TABLE referrals RENAME TO _referrals_old")
-            conn.execute("""
-                CREATE TABLE referrals (
-                    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-                    referrer_id     TEXT NOT NULL,
-                    referred_id     TEXT NOT NULL UNIQUE,
-                    code            TEXT NOT NULL,
-                    status          TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'completed')),
-                    created_at      TEXT DEFAULT (datetime('now')),
-                    completed_at    TEXT
-                )
-            """)
-            conn.execute("""
-                INSERT OR IGNORE INTO referrals
-                    (referrer_id, referred_id, code, status, created_at, completed_at)
-                SELECT referrer_id, referred_id, code, status, created_at, completed_at
-                FROM _referrals_old WHERE referred_id IS NOT NULL
-            """)
-            conn.execute("DROP TABLE _referrals_old")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referrals(referrer_id)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_referrals_referred ON referrals(referred_id)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_referrals_code ON referrals(code)")
-            logger.info("Migrated referrals table to multi-referral schema")
-
-        _ensure_column("referral_codes", "sent", "INTEGER DEFAULT 0")
-
-        # מיגרציה: UNIQUE(referrer_id, referred_id) → UNIQUE(referred_id)
-        # כל משתמש יכול להיות מופנה פעם אחת בלבד (ע"י כל מפנה שהוא).
-        create_sql = conn.execute(
-            "SELECT sql FROM sqlite_master WHERE type='table' AND name='referrals'"
-        ).fetchone()
-        if create_sql and "UNIQUE(referrer_id, referred_id)" in (create_sql["sql"] or ""):
-            conn.execute("ALTER TABLE referrals RENAME TO _referrals_old2")
-            conn.execute("""
-                CREATE TABLE referrals (
-                    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-                    referrer_id     TEXT NOT NULL,
-                    referred_id     TEXT NOT NULL UNIQUE,
-                    code            TEXT NOT NULL,
-                    status          TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'completed')),
-                    created_at      TEXT DEFAULT (datetime('now')),
-                    completed_at    TEXT
-                )
-            """)
-            conn.execute("""
-                INSERT OR IGNORE INTO referrals
-                    (referrer_id, referred_id, code, status, created_at, completed_at)
-                SELECT referrer_id, referred_id, code, status, created_at, completed_at
-                FROM _referrals_old2
-            """)
-            conn.execute("DROP TABLE _referrals_old2")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referrals(referrer_id)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_referrals_referred ON referrals(referred_id)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_referrals_code ON referrals(code)")
-            logger.info("Migrated referrals: UNIQUE(referrer_id, referred_id) → UNIQUE(referred_id)")
+        # מיגרציות קלות — הלוגיקה בקובץ נפרד לקריאות טובה יותר
+        from migrations import run_migrations
+        run_migrations(conn)
 
 
 def cleanup_stale_live_chats():
@@ -482,11 +364,10 @@ def save_chunks(entry_id: int, chunks: list[dict]):
     """Save chunks for a KB entry (replaces existing chunks)."""
     with get_connection() as conn:
         conn.execute("DELETE FROM kb_chunks WHERE entry_id=?", (entry_id,))
-        for chunk in chunks:
-            conn.execute(
-                "INSERT INTO kb_chunks (entry_id, chunk_index, chunk_text, embedding) VALUES (?, ?, ?, ?)",
-                (entry_id, chunk["index"], chunk["text"], chunk.get("embedding"))
-            )
+        conn.executemany(
+            "INSERT INTO kb_chunks (entry_id, chunk_index, chunk_text, embedding) VALUES (?, ?, ?, ?)",
+            [(entry_id, c["index"], c["text"], c.get("embedding")) for c in chunks],
+        )
 
 
 def get_all_chunks() -> list[dict]:
@@ -711,34 +592,43 @@ def create_agent_request(
         return cursor.lastrowid
 
 
+def _status_filter_query(
+    table: str,
+    columns: str,
+    status: str | None,
+    limit: int | None,
+    order: str | None = None,
+) -> tuple[str, list[object]]:
+    """בניית שאילתת SELECT עם סינון סטטוס אופציונלי — helper משותף ל-get/count.
+
+    order=None דולג (מתאים ל-COUNT), order="created_at DESC" ממיין (מתאים ל-SELECT *).
+    """
+    params: list[object] = []
+    query = f"SELECT {columns} FROM {table}"
+    if status:
+        query += " WHERE status=?"
+        params.append(status)
+    if order:
+        query += f" ORDER BY {order}"
+    if limit is not None:
+        query += " LIMIT ?"
+        params.append(limit)
+    return query, params
+
+
 def get_agent_requests(status: str | None = None, limit: int | None = None) -> list[dict]:
     """Get agent requests, optionally filtered by status."""
+    query, params = _status_filter_query("agent_requests", "*", status, limit, order="created_at DESC")
     with get_connection() as conn:
-        params: list[object] = []
-        if status:
-            query = "SELECT * FROM agent_requests WHERE status=? ORDER BY created_at DESC"
-            params.append(status)
-        else:
-            query = "SELECT * FROM agent_requests ORDER BY created_at DESC"
-        if limit is not None:
-            query += " LIMIT ?"
-            params.append(limit)
         rows = conn.execute(query, params).fetchall()
         return [dict(r) for r in rows]
 
 
 def count_agent_requests(status: str | None = None) -> int:
     """Count agent requests, optionally filtered by status."""
+    query, params = _status_filter_query("agent_requests", "COUNT(*) AS count", status, limit=None)
     with get_connection() as conn:
-        if status:
-            row = conn.execute(
-                "SELECT COUNT(*) AS count FROM agent_requests WHERE status=?",
-                (status,),
-            ).fetchone()
-        else:
-            row = conn.execute(
-                "SELECT COUNT(*) AS count FROM agent_requests"
-            ).fetchone()
+        row = conn.execute(query, params).fetchone()
         return int(row["count"]) if row else 0
 
 
@@ -782,32 +672,17 @@ def create_appointment(
 
 def get_appointments(status: str | None = None, limit: int | None = None) -> list[dict]:
     """Get appointments, optionally filtered by status."""
+    query, params = _status_filter_query("appointments", "*", status, limit, order="created_at DESC")
     with get_connection() as conn:
-        params: list[object] = []
-        if status:
-            query = "SELECT * FROM appointments WHERE status=? ORDER BY created_at DESC"
-            params.append(status)
-        else:
-            query = "SELECT * FROM appointments ORDER BY created_at DESC"
-        if limit is not None:
-            query += " LIMIT ?"
-            params.append(limit)
         rows = conn.execute(query, params).fetchall()
         return [dict(r) for r in rows]
 
 
 def count_appointments(status: str | None = None) -> int:
     """Count appointments, optionally filtered by status."""
+    query, params = _status_filter_query("appointments", "COUNT(*) AS count", status, limit=None)
     with get_connection() as conn:
-        if status:
-            row = conn.execute(
-                "SELECT COUNT(*) AS count FROM appointments WHERE status=?",
-                (status,),
-            ).fetchone()
-        else:
-            row = conn.execute(
-                "SELECT COUNT(*) AS count FROM appointments"
-            ).fetchone()
+        row = conn.execute(query, params).fetchone()
         return int(row["count"]) if row else 0
 
 
@@ -900,32 +775,17 @@ def save_unanswered_question(user_id: str, username: str, question: str):
 
 def get_unanswered_questions(status: str | None = None, limit: int | None = None) -> list[dict]:
     """Get unanswered questions, optionally filtered by status."""
+    query, params = _status_filter_query("unanswered_questions", "*", status, limit, order="created_at DESC")
     with get_connection() as conn:
-        params: list[object] = []
-        if status:
-            query = "SELECT * FROM unanswered_questions WHERE status=? ORDER BY created_at DESC"
-            params.append(status)
-        else:
-            query = "SELECT * FROM unanswered_questions ORDER BY created_at DESC"
-        if limit is not None:
-            query += " LIMIT ?"
-            params.append(limit)
         rows = conn.execute(query, params).fetchall()
         return [dict(r) for r in rows]
 
 
 def count_unanswered_questions(status: str | None = None) -> int:
     """Count unanswered questions, optionally filtered by status."""
+    query, params = _status_filter_query("unanswered_questions", "COUNT(*) AS count", status, limit=None)
     with get_connection() as conn:
-        if status:
-            row = conn.execute(
-                "SELECT COUNT(*) AS count FROM unanswered_questions WHERE status=?",
-                (status,),
-            ).fetchone()
-        else:
-            row = conn.execute(
-                "SELECT COUNT(*) AS count FROM unanswered_questions"
-            ).fetchone()
+        row = conn.execute(query, params).fetchone()
         return int(row["count"]) if row else 0
 
 
