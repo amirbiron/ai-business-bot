@@ -140,7 +140,11 @@ _FOLLOW_UP_TTL_SECONDS = 3600  # שעה
 
 
 def _cleanup_stale_follow_ups(bot_data: dict) -> None:
-    """ניקוי רשומות שאלות המשך ישנות מ-bot_data כדי למנוע צמיחה בלתי מוגבלת."""
+    """ניקוי רשומות שאלות המשך ישנות מ-bot_data כדי למנוע צמיחה בלתי מוגבלת.
+
+    שלב 1: אוסף מפתחות ישנים לרשימה נפרדת (stale_keys).
+    שלב 2: מוחק מ-dict — בטוח כי לא עוברים על ה-dict בזמן שינוי.
+    """
     now = int(time.time())
     stale_keys = []
     for key in bot_data:
@@ -272,6 +276,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if referral_registered:
                 logger.info("Referral registered: user %s via code %s", user_id, arg)
 
+    # _html.escape לערכי קונפיג בודדים; sanitize_telegram_html לפלט LLM שלם
     welcome_text = (
         f"👋 ברוכים הבאים ל-<b>{_html.escape(BUSINESS_NAME)}</b>!\n\n"
         f"אני העוזר הווירטואלי שלכם. אני יכול לעזור לכם עם:\n"
@@ -385,10 +390,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ─── Price List Button ───────────────────────────────────────────────────────
 
-@rate_limit_guard
-@live_chat_guard
-async def price_list_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle the Price List button — retrieve pricing info from KB."""
+async def _price_list_core(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """לוגיקה פנימית של מחירון — ללא דקורטורים."""
     user_id, display_name, telegram_username = _get_user_info(update)
 
     await update.message.reply_text("📋 תנו לי רגע לחפש את המחירון שלנו...")
@@ -404,12 +407,22 @@ async def price_list_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     )
 
 
-# ─── Send Location Button ────────────────────────────────────────────────────
-
 @rate_limit_guard
 @live_chat_guard
-async def location_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle the Send Location button — send business location info."""
+async def price_list_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle the Price List button — retrieve pricing info from KB."""
+    return await _price_list_core(update, context)
+
+# גרסה ללא rate_limit — לניתוב פנימי
+@live_chat_guard
+async def _price_list_skip_ratelimit(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    return await _price_list_core(update, context)
+
+
+# ─── Send Location Button ────────────────────────────────────────────────────
+
+async def _location_core(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """לוגיקה פנימית של מיקום — ללא דקורטורים."""
     user_id, display_name, telegram_username = _get_user_info(update)
 
     await _handle_rag_query(
@@ -421,6 +434,18 @@ async def location_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         query="מה הכתובת והמיקום של העסק? איך מגיעים?",
         handoff_reason="הלקוח ביקש לקבל מיקום/כתובת, אך אין מידע זמין במאגר.",
     )
+
+
+@rate_limit_guard
+@live_chat_guard
+async def location_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle the Send Location button — send business location info."""
+    return await _location_core(update, context)
+
+# גרסה ללא rate_limit — לניתוב פנימי
+@live_chat_guard
+async def _location_skip_ratelimit(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    return await _location_core(update, context)
 
 
 # ─── Save Contact (vCard) Button ─────────────────────────────────────────────
@@ -463,10 +488,8 @@ def _generate_vcard_text() -> str:
     return "\r\n".join(lines)
 
 
-@rate_limit_guard
-@live_chat_guard
-async def save_contact_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """שליחת כרטיס ביקור דיגיטלי (vCard) כקובץ .vcf."""
+async def _save_contact_core(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """לוגיקה פנימית של שמירת איש קשר — ללא דקורטורים."""
     user_id, display_name, _ = _get_user_info(update)
 
     vcard_content = _generate_vcard_text()
@@ -484,13 +507,22 @@ async def save_contact_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     db.save_message(user_id, display_name, "assistant", "[כרטיס ביקור נשלח]")
 
 
-# ─── Talk to Agent Button ────────────────────────────────────────────────────
-
-@vacation_guard_agent
 @rate_limit_guard
 @live_chat_guard
-async def talk_to_agent_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle the Talk to Agent button — notify the business owner."""
+async def save_contact_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """שליחת כרטיס ביקור דיגיטלי (vCard) כקובץ .vcf."""
+    return await _save_contact_core(update, context)
+
+# גרסה ללא rate_limit — לניתוב פנימי
+@live_chat_guard
+async def _save_contact_skip_ratelimit(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    return await _save_contact_core(update, context)
+
+
+# ─── Talk to Agent Button ────────────────────────────────────────────────────
+
+async def _talk_to_agent_core(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """לוגיקה פנימית של בקשת נציג — ללא דקורטורים, משמשת את שני הניתובים."""
     user_id, display_name, telegram_username = _get_user_info(update)
 
     # Create agent request in database
@@ -516,20 +548,27 @@ async def talk_to_agent_handler(update: Update, context: ContextTypes.DEFAULT_TY
         reply_markup=_get_main_keyboard()
     )
 
-# שרשרת ניתוב פנימי — מדלגת על rate_limit (הקורא כבר עבר אותו)
-# אבל שומרת על vacation_guard + live_chat_guard.
-_talk_to_agent_skip_ratelimit = vacation_guard_agent(
-    talk_to_agent_handler.__wrapped__.__wrapped__
-)
+
+# גרסה מלאה — עם כל הדקורטורים, לשימוש כ-handler ראשי
+@vacation_guard_agent
+@rate_limit_guard
+@live_chat_guard
+async def talk_to_agent_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle the Talk to Agent button — notify the business owner."""
+    return await _talk_to_agent_core(update, context)
+
+# גרסה ללא rate_limit — לניתוב פנימי מ-message_handler (שכבר עבר rate limit)
+@vacation_guard_agent
+@live_chat_guard
+async def _talk_to_agent_skip_ratelimit(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """ניתוב פנימי — מדלג על rate_limit (הקורא כבר עבר אותו)."""
+    return await _talk_to_agent_core(update, context)
 
 
 # ─── Appointment Booking Flow ────────────────────────────────────────────────
 
-@vacation_guard_booking
-@rate_limit_guard_booking
-@live_chat_guard_booking
-async def booking_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Start the appointment booking conversation."""
+async def _booking_start_core(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """לוגיקה פנימית של התחלת תור — ללא דקורטורים, משמשת את שני הניתובים."""
     user_id, display_name, telegram_username = _get_user_info(update)
 
     # Log the user's booking attempt even if we handoff to human.
@@ -561,11 +600,21 @@ async def booking_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     await _reply_html_safe(update.message, text)
     return BOOKING_SERVICE
 
-# שרשרת ניתוב פנימי — מדלגת על rate_limit (הקורא כבר עבר אותו)
-# אבל שומרת על vacation_guard + live_chat_guard.
-_booking_start_skip_ratelimit = vacation_guard_booking(
-    booking_start.__wrapped__.__wrapped__
-)
+
+# גרסה מלאה — עם כל הדקורטורים, לשימוש כ-entry point של ConversationHandler
+@vacation_guard_booking
+@rate_limit_guard_booking
+@live_chat_guard_booking
+async def booking_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Start the appointment booking conversation."""
+    return await _booking_start_core(update, context)
+
+# גרסה ללא rate_limit — לניתוב פנימי מ-booking_button_interrupt (שכבר עבר rate limit)
+@vacation_guard_booking
+@live_chat_guard_booking
+async def _booking_start_skip_ratelimit(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """ניתוב פנימי — מדלג על rate_limit (הקורא כבר עבר אותו)."""
+    return await _booking_start_core(update, context)
 
 
 @rate_limit_guard_booking
@@ -606,13 +655,13 @@ async def booking_time(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 
     service = _html.escape(context.user_data.get("booking_service", ""))
     date = _html.escape(context.user_data.get("booking_date", ""))
-    time = _html.escape(context.user_data.get("booking_time", ""))
+    preferred_time = _html.escape(context.user_data.get("booking_time", ""))
 
     confirmation_text = (
         "📋 <b>סיכום בקשת התור:</b>\n\n"
         f"• שירות: {service}\n"
         f"• תאריך: {date}\n"
-        f"• שעה: {time}\n\n"
+        f"• שעה: {preferred_time}\n\n"
         "אנא אשרו על ידי כתיבת <b>כן</b> או <b>לא</b>:"
     )
 
@@ -630,7 +679,7 @@ async def booking_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     if answer in ("yes", "y", "confirm", "כן", "אישור"):
         service = context.user_data.get("booking_service", "")
         date = context.user_data.get("booking_date", "")
-        time = context.user_data.get("booking_time", "")
+        preferred_time = context.user_data.get("booking_time", "")
 
         # Save appointment to database
         appt_id = db.create_appointment(
@@ -638,7 +687,7 @@ async def booking_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             username=display_name,
             service=service,
             preferred_date=date,
-            preferred_time=time,
+            preferred_time=preferred_time,
             telegram_username=telegram_username,
         )
 
@@ -652,7 +701,7 @@ async def booking_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     f"יוזר: {handle}\n"
                     f"שירות: {service}\n"
                     f"תאריך: {date}\n"
-                    f"שעה: {time}\n"
+                    f"שעה: {preferred_time}\n"
                 )
                 await context.bot.send_message(
                     chat_id=TELEGRAM_OWNER_CHAT_ID,
@@ -662,13 +711,13 @@ async def booking_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 logger.error("Failed to send appointment notification: %s", e)
 
         db.save_message(user_id, display_name, "assistant",
-                        f"בקשת תור: {service} בתאריך {date} בשעה {time}")
+                        f"בקשת תור: {service} בתאריך {date} בשעה {preferred_time}")
 
         await update.message.reply_text(
             f"📋 בקשת התור התקבלה!\n\n"
             f"• שירות: {service}\n"
             f"• תאריך: {date}\n"
-            f"• שעה: {time}\n\n"
+            f"• שעה: {preferred_time}\n\n"
             f"העברנו את הפרטים לבית העסק. "
             f"ניצור איתכם קשר בהקדם לאישור סופי של השעה.",
             reply_markup=_get_main_keyboard()
@@ -706,17 +755,16 @@ async def booking_button_interrupt(update: Update, context: ContextTypes.DEFAULT
     user_message = update.message.text
 
     # מדלגים על rate_limit (הקורא כבר עבר אותו) אבל שומרים על
-    # vacation_guard + live_chat_guard דרך ה-_skip_ratelimit references.
-    # handlers ללא vacation guard (price_list, location) משתמשים ב-__wrapped__.
+    # live_chat_guard (ו-vacation_guard היכן שרלוונטי) דרך גרסאות _skip_ratelimit.
     if user_message == BUTTON_BOOKING:
         return await _booking_start_skip_ratelimit(update, context)
 
     if user_message == BUTTON_PRICE_LIST:
-        await price_list_handler.__wrapped__(update, context)
+        await _price_list_skip_ratelimit(update, context)
     elif user_message == BUTTON_LOCATION:
-        await location_handler.__wrapped__(update, context)
+        await _location_skip_ratelimit(update, context)
     elif user_message == BUTTON_SAVE_CONTACT:
-        await save_contact_handler.__wrapped__(update, context)
+        await _save_contact_skip_ratelimit(update, context)
     elif user_message == BUTTON_AGENT:
         await _talk_to_agent_skip_ratelimit(update, context)
     else:
@@ -828,13 +876,13 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     # ניתוב כפתורים — מדלגים על rate_limit (כבר נספר פעם אחת) אבל
-    # שומרים על vacation_guard + live_chat_guard דרך _skip_ratelimit.
+    # שומרים על live_chat_guard (ו-vacation_guard היכן שרלוונטי).
     if user_message == BUTTON_PRICE_LIST:
-        return await price_list_handler.__wrapped__(update, context)
+        return await _price_list_skip_ratelimit(update, context)
     elif user_message == BUTTON_LOCATION:
-        return await location_handler.__wrapped__(update, context)
+        return await _location_skip_ratelimit(update, context)
     elif user_message == BUTTON_SAVE_CONTACT:
-        return await save_contact_handler.__wrapped__(update, context)
+        return await _save_contact_skip_ratelimit(update, context)
     elif user_message == BUTTON_AGENT:
         return await _talk_to_agent_skip_ratelimit(update, context)
 
@@ -914,18 +962,13 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ─── Cancellation Confirmation Callback ──────────────────────────────────────
 
+@rate_limit_guard
+@live_chat_guard
 async def cancel_appointment_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle the inline-button response to the cancellation confirmation prompt."""
     query = update.callback_query
-    # Always answer the callback query first to dismiss Telegram's loading
-    # indicator — the live chat guard cannot do this because it returns
-    # before the handler body runs.
+    # תמיד לענות ל-callback query כדי לבטל את אינדיקטור הטעינה של טלגרם
     await query.answer()
-
-    from ai_chatbot.live_chat_service import LiveChatService
-    user = update.effective_user
-    if LiveChatService.is_active(str(user.id)):
-        return
 
     user_id, display_name, telegram_username = _get_user_info(update)
 
@@ -997,30 +1040,7 @@ async def _check_high_engagement_referral(update: Update, user_id: str):
     if db.is_referral_code_sent(user_id):
         return
 
-    from datetime import datetime, timedelta, timezone
-    now = datetime.now(timezone.utc)
-    should_send = False
-    with db.get_connection() as conn:
-        thirty_min_ago = (now - timedelta(minutes=30)).strftime("%Y-%m-%d %H:%M:%S")
-        one_day_ago = (now - timedelta(days=1)).strftime("%Y-%m-%d %H:%M:%S")
-
-        # תנאי 1: 10+ הודעות ב-30 דקות
-        row_30m = conn.execute(
-            "SELECT COUNT(*) AS cnt FROM conversations WHERE user_id = ? AND role = 'user' AND created_at >= ?",
-            (user_id, thirty_min_ago),
-        ).fetchone()
-        engaged_30m = row_30m and int(row_30m["cnt"]) >= 10
-
-        # תנאי 2: 20+ הודעות ביום אחד
-        row_1d = conn.execute(
-            "SELECT COUNT(*) AS cnt FROM conversations WHERE user_id = ? AND role = 'user' AND created_at >= ?",
-            (user_id, one_day_ago),
-        ).fetchone()
-        engaged_1d = row_1d and int(row_1d["cnt"]) >= 20
-
-        should_send = engaged_30m or engaged_1d
-
-    if should_send:
+    if db.check_high_engagement(user_id):
         await _maybe_send_referral_code(update, user_id)
 
 
