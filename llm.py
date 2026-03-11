@@ -143,10 +143,20 @@ def _quality_check(response_text: str, known_sources: list[str] | None = None) -
     """
     match = re.search(SOURCE_CITATION_PATTERN, response_text)
     if match:
-        # אם יש רשימת מקורות ידועים — לוודא שהציטוט מתייחס למקור אמיתי
+        # אם יש רשימת מקורות ידועים — לוודא שהציטוט מתייחס למקור אמיתי.
+        # sources מגיעים בפורמט "category — title" אבל ה-LLM עשוי לצטט
+        # רק את הקטגוריה או רק את הכותרת, לכן בודקים כל חלק בנפרד.
         if known_sources:
             cited = match.group(0)
-            if not any(src in cited for src in known_sources):
+            source_parts = []
+            for src in known_sources:
+                source_parts.append(src)
+                # פירוק "category — title" לחלקים
+                for part in src.split("—"):
+                    stripped = part.strip()
+                    if stripped:
+                        source_parts.append(stripped)
+            if not any(part in cited for part in source_parts):
                 logger.warning(
                     "Quality check failed — cited source not in known sources. "
                     "Cited: '%s', Known: %s",

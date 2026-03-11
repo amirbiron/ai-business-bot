@@ -48,10 +48,20 @@ class TestQualityCheck:
         text = "התשובה היא X.\nמקור: מחירון שירותים"
         assert _quality_check(text, known_sources=["מחירון שירותים"]) == text
 
+    def test_passes_with_compound_source_citing_title(self):
+        """sources בפורמט 'category — title', LLM מצטט רק את ה-title — עובר."""
+        text = "התשובה היא X.\nמקור: מחירון שירותים"
+        assert _quality_check(text, known_sources=["שירותים — מחירון שירותים"]) == text
+
+    def test_passes_with_compound_source_citing_category(self):
+        """sources בפורמט 'category — title', LLM מצטט רק את ה-category — עובר."""
+        text = "התשובה היא X.\nמקור: שירותים"
+        assert _quality_check(text, known_sources=["שירותים — מחירון שירותים"]) == text
+
     def test_fails_with_fabricated_source(self):
         """ציטוט מקור שלא מופיע ברשימת המקורות — נכשל."""
         text = "התשובה היא X.\nמקור: לפי הידע שלי"
-        assert _quality_check(text, known_sources=["מחירון שירותים"]) == FALLBACK_RESPONSE
+        assert _quality_check(text, known_sources=["שירותים — מחירון שירותים"]) == FALLBACK_RESPONSE
 
     def test_no_known_sources_skips_validation(self):
         """ללא רשימת מקורות — לא מבצע ולידציה נוספת."""
