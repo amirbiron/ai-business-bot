@@ -170,6 +170,25 @@ class TestAppointments:
         assert db.count_appointments() == 2
         assert db.count_appointments("pending") == 2
 
+    def test_duplicate_datetime_blocked(self, db):
+        """אותו משתמש לא יכול לקבוע שני תורים לאותו תאריך ושעה."""
+        import sqlite3
+        db.create_appointment("u1", "א", preferred_date="2026-04-01", preferred_time="10:00")
+        with pytest.raises(sqlite3.IntegrityError):
+            db.create_appointment("u1", "א", preferred_date="2026-04-01", preferred_time="10:00")
+
+    def test_duplicate_datetime_allowed_different_user(self, db):
+        """משתמשים שונים יכולים לקבוע תור לאותו תאריך ושעה."""
+        db.create_appointment("u1", "א", preferred_date="2026-04-01", preferred_time="10:00")
+        db.create_appointment("u2", "ב", preferred_date="2026-04-01", preferred_time="10:00")
+        assert db.count_appointments() == 2
+
+    def test_empty_datetime_not_constrained(self, db):
+        """תורים ללא תאריך/שעה (ברירת מחדל) לא חוסמים אחד את השני."""
+        db.create_appointment("u1", "א")
+        db.create_appointment("u1", "ב")
+        assert db.count_appointments() == 2
+
 
 class TestBusinessHours:
     def test_upsert_and_get(self, db):
