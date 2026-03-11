@@ -1580,3 +1580,27 @@ def count_broadcast_recipients(audience: str) -> int:
             WHERE {where}
         """).fetchone()
         return int(row["cnt"]) if row else 0
+
+
+# ─── Engagement Queries ──────────────────────────────────────────────────────
+
+def check_high_engagement(user_id: str) -> bool:
+    """בדיקת מעורבות גבוהה — האם למשתמש יש 10+ הודעות ב-30 דקות או 20+ ביום.
+
+    שאילתה אחת עם SUM(CASE WHEN ...) למניעת שני סריקות נפרדות.
+    """
+    with get_connection() as conn:
+        row = conn.execute(
+            """
+            SELECT
+                SUM(CASE WHEN created_at >= datetime('now', '-30 minutes') THEN 1 ELSE 0 END) AS cnt_30m,
+                SUM(CASE WHEN created_at >= datetime('now', '-1 day') THEN 1 ELSE 0 END) AS cnt_1d
+            FROM conversations
+            WHERE user_id = ? AND role = 'user'
+              AND created_at >= datetime('now', '-1 day')
+            """,
+            (user_id,),
+        ).fetchone()
+        if not row:
+            return False
+        return (int(row["cnt_30m"] or 0) >= 10) or (int(row["cnt_1d"] or 0) >= 20)
