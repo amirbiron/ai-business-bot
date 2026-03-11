@@ -962,13 +962,21 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ─── Cancellation Confirmation Callback ──────────────────────────────────────
 
-@rate_limit_guard
-@live_chat_guard
 async def cancel_appointment_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle the inline-button response to the cancellation confirmation prompt."""
+    """Handle the inline-button response to the cancellation confirmation prompt.
+
+    callback query handler — חייבים לקרוא ל-query.answer() לפני כל בדיקה
+    אחרת, כי דקורטורים (rate_limit_guard, live_chat_guard) יכולים לחזור מוקדם
+    ולהשאיר את אינדיקטור הטעינה של טלגרם תקוע. לכן הבדיקות נעשות ידנית.
+    """
     query = update.callback_query
     # תמיד לענות ל-callback query כדי לבטל את אינדיקטור הטעינה של טלגרם
     await query.answer()
+
+    from ai_chatbot.live_chat_service import LiveChatService
+    user = update.effective_user
+    if LiveChatService.is_active(str(user.id)):
+        return
 
     user_id, display_name, telegram_username = _get_user_info(update)
 
