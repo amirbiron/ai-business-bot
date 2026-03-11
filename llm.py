@@ -272,7 +272,7 @@ def sanitize_telegram_html(text: str) -> str:
 # מסירים אותן כדי שמשתמש לא יוכל להזריק הוראות דרך היסטוריית שיחה.
 _INJECTION_PATTERNS = [
     re.compile(r"(system|מערכת)\s*:", re.IGNORECASE),
-    re.compile(r"(ignore|התעלם מ|שנה את)\s+(previous|all|כל|ההוראות)", re.IGNORECASE),
+    re.compile(r"(ignore|התעלם מ|שנה את)\s*(previous|all|כל|ההוראות)", re.IGNORECASE),
     re.compile(r"(you are|אתה)\s+(now|עכשיו|מעכשיו)", re.IGNORECASE),
     re.compile(r"(new instructions|הוראות חדשות)", re.IGNORECASE),
 ]
