@@ -204,7 +204,8 @@ def _telegram_html(text: str) -> str:
             # תגית מותרת עם מאפיינים — חוסמים הכל חוץ מ-href בטוח על <a>
             if tag_name == "a" and not slash and _SAFE_HREF_RE.match(attrs):
                 href = _SAFE_HREF_RE.match(attrs).group(1)
-                parts.append(f'<a href="{href}">')
+                # escape לשמירת & כ-&amp; — מונע פענוח לא רצוי של HTML entities בכתובת
+                parts.append(f'<a href="{escape(href)}">')
             else:
                 # תגית עם מאפיינים לא בטוחים — escape
                 parts.append(str(escape(match.group(0))))
