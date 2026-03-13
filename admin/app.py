@@ -167,16 +167,22 @@ def _safe_redirect_back(default_url: str) -> str:
     return default_url
 
 
-# תגיות HTML שטלגרם תומך בהן — מותרות לתצוגה בפאנל
+# תגיות HTML שטלגרם תומך בהן — מותרות לתצוגה בפאנל (ללא מאפיינים)
 _ALLOWED_TAGS = {"b", "i", "u", "s", "code", "pre", "a", "em", "strong"}
 _ALLOWED_TAG_RE = re.compile(
     r"<(/?)(\w+)(\s[^>]*)?>",
     re.IGNORECASE,
 )
+# מאפשר רק href עם http/https בתגית <a>
+_SAFE_HREF_RE = re.compile(r'^\s*href\s*=\s*"(https?://[^"]*)"\s*$', re.IGNORECASE)
 
 
 def _telegram_html(text: str) -> str:
-    """פילטר Jinja2: מציג תגיות עיצוב של טלגרם כ-HTML, ומסנן את השאר."""
+    """פילטר Jinja2: מציג תגיות עיצוב של טלגרם כ-HTML, ומסנן את השאר.
+
+    תגיות עם מאפיינים נחסמות (מניעת XSS דרך onclick, javascript: וכו'),
+    למעט <a href="https://..."> שמותר עם כתובת http/https בלבד.
+    """
     from markupsafe import Markup, escape
 
     if not text:
@@ -187,14 +193,24 @@ def _telegram_html(text: str) -> str:
 
     for match in _ALLOWED_TAG_RE.finditer(text):
         tag_name = match.group(2).lower()
+        slash = match.group(1)  # "/" לתגית סגירה, "" לפתיחה
+        attrs = match.group(3)  # מאפיינים (כולל רווח מוביל) או None
         # טקסט לפני התגית — escape
         parts.append(str(escape(text[last_end:match.start()])))
-        if tag_name in _ALLOWED_TAGS:
-            # תגית מותרת — להשאיר כפי שהיא
-            parts.append(match.group(0))
-        else:
+        if tag_name not in _ALLOWED_TAGS:
             # תגית לא מותרת — escape
             parts.append(str(escape(match.group(0))))
+        elif attrs and attrs.strip():
+            # תגית מותרת עם מאפיינים — חוסמים הכל חוץ מ-href בטוח על <a>
+            if tag_name == "a" and not slash and _SAFE_HREF_RE.match(attrs):
+                href = _SAFE_HREF_RE.match(attrs).group(1)
+                parts.append(f'<a href="{href}">')
+            else:
+                # תגית עם מאפיינים לא בטוחים — escape
+                parts.append(str(escape(match.group(0))))
+        else:
+            # תגית מותרת ללא מאפיינים — להשאיר
+            parts.append(f"<{slash}{tag_name}>")
         last_end = match.end()
 
     # טקסט שנשאר אחרי התגית האחרונה
