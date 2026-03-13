@@ -12,7 +12,7 @@
         </span>
         <span class="time">{{ msg.created_at|il_datetime }}</span>
     </div>
-    <div class="message-content">{{ msg.message }}</div>
+    <div class="message-content">{{ msg.message|telegram_html }}</div>
 </div>
 {% endfor %}
 {% else %}
