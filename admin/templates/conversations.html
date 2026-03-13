@@ -108,7 +108,7 @@
                     </span>
                     <span class="time">{{ msg.created_at|il_datetime }}</span>
                 </div>
-                <div class="message-content">{{ msg.message }}</div>
+                <div class="message-content">{{ msg.message|telegram_html }}</div>
                 {% if msg.sources %}
                 <div class="message-sources">
                     <i class="bi bi-link-45deg"></i> מקורות: {{ msg.sources }}
