@@ -165,6 +165,24 @@
         var _liveChatLastSeen = {};  // {user_id: last_message_at}
         var _liveChatFirstPoll = true;
         var _notificationPermission = (typeof Notification !== 'undefined') ? Notification.permission : 'denied';
+        // AudioContext יחיד למניעת דליפת משאבים
+        var _audioCtx = null;
+
+        // escape למניעת XSS בתוכן שמגיע מהשרת
+        function _escapeHtml(str) {
+            var div = document.createElement('div');
+            div.appendChild(document.createTextNode(str));
+            return div.innerHTML;
+        }
+
+        // חילוץ user_id מנתיב דף שיחה חיה (או null אם לא בדף שיחה חיה)
+        function _getLiveChatPageUserId() {
+            var match = window.location.pathname.match(/^\/live-chat\/([^/]+)/);
+            if (match && document.getElementById('live-chat-messages')) {
+                return match[1];
+            }
+            return null;
+        }
 
         // בקשת הרשאת התראות בדפדפן
         function requestNotificationPermission() {
@@ -177,17 +195,19 @@
 
         // הצגת התראת דפדפן + צפצוף
         function showLiveChatNotification(username, message) {
-            // צפצוף קצר דרך Web Audio API
+            // צפצוף קצר דרך Web Audio API — שימוש חוזר ב-AudioContext יחיד
             try {
-                var ctx = new (window.AudioContext || window.webkitAudioContext)();
-                var osc = ctx.createOscillator();
-                var gain = ctx.createGain();
+                if (!_audioCtx) {
+                    _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                var osc = _audioCtx.createOscillator();
+                var gain = _audioCtx.createGain();
                 osc.connect(gain);
-                gain.connect(ctx.destination);
+                gain.connect(_audioCtx.destination);
                 osc.frequency.value = 880;
                 gain.gain.value = 0.15;
                 osc.start();
-                osc.stop(ctx.currentTime + 0.15);
+                osc.stop(_audioCtx.currentTime + 0.15);
             } catch (e) {}
 
             // התראת דפדפן (אם יש הרשאה)
@@ -221,7 +241,15 @@
             }
             var toast = document.createElement('div');
             toast.style.cssText = 'background:var(--brand-blue,#2563eb);color:#fff;padding:0.75rem 1rem;border-radius:0.5rem;box-shadow:0 4px 12px rgba(0,0,0,0.15);cursor:pointer;animation:slideIn 0.3s ease;font-size:0.9rem;';
-            toast.innerHTML = '<strong><i class="bi bi-headset"></i> ' + username + '</strong><br>' + ((message || '').substring(0, 80));
+            // שימוש ב-textContent למניעת XSS — בניית DOM בטוחה
+            var icon = document.createElement('i');
+            icon.className = 'bi bi-headset';
+            var strong = document.createElement('strong');
+            strong.appendChild(icon);
+            strong.appendChild(document.createTextNode(' ' + username));
+            toast.appendChild(strong);
+            toast.appendChild(document.createElement('br'));
+            toast.appendChild(document.createTextNode((message || '').substring(0, 80)));
             toast.onclick = function() { toast.remove(); };
             container.appendChild(toast);
             setTimeout(function() {
@@ -271,15 +299,16 @@
                     }
                 }
 
-                // בדיקת הודעות חדשות בשיחות חיות (לא בדף השיחה החיה עצמו)
-                var isOnLiveChatPage = window.location.pathname.indexOf('/live-chat/') === 0
-                    && document.getElementById('live-chat-messages');
+                // בדיקת הודעות חדשות בשיחות חיות — דילוג רק על המשתמש שהדף שלו פתוח
+                var currentLiveChatUserId = _getLiveChatPageUserId();
                 if (data.live_chat_updates && data.live_chat_updates.length > 0) {
                     for (var i = 0; i < data.live_chat_updates.length; i++) {
                         var upd = data.live_chat_updates[i];
                         if (!upd.last_message_at) continue;
                         var prev = _liveChatLastSeen[upd.user_id];
-                        if (prev && upd.last_message_at > prev && !_liveChatFirstPoll && !isOnLiveChatPage) {
+                        // דילוג על התראה רק אם הדף הנוכחי הוא בדיוק השיחה של המשתמש הזה
+                        var isViewingThisChat = currentLiveChatUserId === upd.user_id;
+                        if (prev && upd.last_message_at > prev && !_liveChatFirstPoll && !isViewingThisChat) {
                             showLiveChatNotification(upd.username || upd.user_id, upd.last_message);
                         }
                         _liveChatLastSeen[upd.user_id] = upd.last_message_at;
