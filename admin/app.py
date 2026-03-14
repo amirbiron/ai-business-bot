@@ -566,10 +566,13 @@ def create_admin_app() -> Flask:
     @login_required
     def agent_requests():
         requests_list = db.get_agent_requests()
+        # שיחות חיות פעילות — כדי להציג סטטוס נכון בבקשות נציג
+        active_live_chats = {lc["user_id"] for lc in LiveChatService.get_all_active()}
         return render_template(
             "requests.html",
             business_name=BUSINESS_NAME,
             requests=requests_list,
+            active_live_chats=active_live_chats,
         )
     
     @app.route("/requests/<int:request_id>/handle", methods=["POST"])
@@ -1004,12 +1007,15 @@ def create_admin_app() -> Flask:
     @login_required
     def api_stats():
         vacation = db.get_vacation_mode()
+        # הודעות אחרונות בשיחות חיות — לצורך התראות בזמן אמת
+        live_chat_updates = db.get_live_chat_latest_user_messages()
         return jsonify({
             "pending_requests": db.count_agent_requests(status="pending"),
             "pending_appointments": db.count_appointments(status="pending"),
             "active_live_chats": LiveChatService.count_active(),
             "open_knowledge_gaps": db.count_unanswered_questions(status="open"),
             "vacation_active": bool(vacation["is_active"]),
+            "live_chat_updates": live_chat_updates,
         })
 
     return app

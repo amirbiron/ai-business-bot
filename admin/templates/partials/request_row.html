@@ -15,7 +15,9 @@
     </td>
     <td data-label="הודעה">{{ req.message }}</td>
     <td data-label="סטטוס">
-        {% if req.status == 'pending' %}
+        {% if req.status == 'pending' and active_live_chats is defined and req.user_id in active_live_chats %}
+        <span class="badge badge-success">בשיחה חיה</span>
+        {% elif req.status == 'pending' %}
         <span class="badge badge-warning">ממתין</span>
         {% elif req.status == 'handled' %}
         <span class="badge badge-success">טופל</span>
@@ -27,7 +29,13 @@
     </td>
     <td data-label="נוצר" class="text-small text-muted">{{ req.created_at|il_datetime }}</td>
     <td data-label="פעולות">
-        {% if req.status == 'pending' %}
+        {% if req.status == 'pending' and active_live_chats is defined and req.user_id in active_live_chats %}
+        <div class="actions-cell">
+            <a href="/live-chat/{{ req.user_id }}" class="btn btn-primary btn-sm">
+                <i class="bi bi-headset"></i> חזרה לשיחה חיה
+            </a>
+        </div>
+        {% elif req.status == 'pending' %}
         <div class="actions-cell">
             <a href="/live-chat/{{ req.user_id }}" class="btn btn-primary btn-sm">
                 <i class="bi bi-headset"></i> כנס לשיחה
