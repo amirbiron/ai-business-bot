@@ -5,10 +5,11 @@
     <h1><i class="bi bi-chat-dots"></i> יומן שיחות</h1>
 </div>
 
-<!-- Transfer Notifications (pending agent requests) -->
+<!-- Transfer Notifications (pending agent requests — רק כאלה שלא בשיחה חיה) -->
 {% if pending_requests %}
 <div class="transfer-alerts animate-slide-up">
     {% for req in pending_requests %}
+    {% if req.user_id not in active_live_chats %}
     <div class="alert alert-warning transfer-alert">
         <div class="transfer-alert-content">
             <i class="bi bi-bell-fill"></i>
@@ -24,6 +25,7 @@
             <i class="bi bi-headset"></i> כנס לשיחה
         </a>
     </div>
+    {% endif %}
     {% endfor %}
 </div>
 {% endif %}
@@ -76,7 +78,7 @@
                 <a href="/live-chat/{{ selected_user }}" class="btn btn-primary btn-sm">
                     <i class="bi bi-headset"></i>
                     {% if selected_user in active_live_chats %}
-                    כנס לשיחה חיה
+                    חזרה לשיחה חיה
                     {% else %}
                     התחל שיחה חיה
                     {% endif %}

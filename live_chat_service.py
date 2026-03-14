@@ -98,10 +98,14 @@ class LiveChatService:
             "already_active", "started", "telegram_failed".
         """
         if db.is_live_chat_active(user_id):
+            # גם אם השיחה כבר פעילה — לסגור בקשות נציג ממתינות (edge case)
+            db.handle_pending_requests_for_user(user_id)
             return True, "already_active"
 
         username = _get_customer_username(user_id)
         db.start_live_chat(user_id, username)
+        # סגירת בקשות נציג ממתינות — הנציג כבר נכנס לשיחה
+        db.handle_pending_requests_for_user(user_id)
 
         notify_msg = "👤 נציג אנושי הצטרף לשיחה. כעת תקבלו מענה ישיר."
         sent = send_telegram_message(user_id, notify_msg)

@@ -648,6 +648,17 @@ def get_agent_request(request_id: int) -> Optional[dict]:
         return dict(row) if row else None
 
 
+def handle_pending_requests_for_user(user_id: str) -> int:
+    """סגירת כל בקשות הנציג הממתינות עבור משתמש — נקרא כשנכנסים לשיחה חיה."""
+    with get_connection() as conn:
+        cursor = conn.execute(
+            "UPDATE agent_requests SET status='handled', handled_at=datetime('now') "
+            "WHERE user_id=? AND status='pending'",
+            (user_id,),
+        )
+        return cursor.rowcount
+
+
 # ─── Appointments ────────────────────────────────────────────────────────────
 
 def create_appointment(
@@ -760,6 +771,24 @@ def count_active_live_chats() -> int:
             "SELECT COUNT(*) AS count FROM live_chats WHERE is_active=1"
         ).fetchone()
         return int(row["count"]) if row else 0
+
+
+def get_live_chat_latest_user_messages() -> list[dict]:
+    """החזרת ההודעה האחרונה מכל לקוח בשיחה חיה פעילה — לצורך התראות באדמין."""
+    with get_connection() as conn:
+        rows = conn.execute(
+            """SELECT lc.user_id, lc.username,
+                      c.message AS last_message, c.created_at AS last_message_at
+               FROM live_chats lc
+               LEFT JOIN conversations c ON c.id = (
+                   SELECT id FROM conversations
+                   WHERE user_id = lc.user_id AND role = 'user'
+                   ORDER BY id DESC LIMIT 1
+               )
+               WHERE lc.is_active = 1
+               ORDER BY c.created_at DESC"""
+        ).fetchall()
+        return [dict(r) for r in rows]
 
 
 # ─── Unanswered Questions (Knowledge Gaps) ──────────────────────────────────

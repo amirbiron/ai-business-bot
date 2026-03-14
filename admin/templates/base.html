@@ -161,6 +161,76 @@
             });
         });
 
+        // ── התראות שיחה חיה — מעקב אחר הודעות חדשות ──
+        var _liveChatLastSeen = {};  // {user_id: last_message_at}
+        var _liveChatFirstPoll = true;
+        var _notificationPermission = (typeof Notification !== 'undefined') ? Notification.permission : 'denied';
+
+        // בקשת הרשאת התראות בדפדפן
+        function requestNotificationPermission() {
+            if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+                Notification.requestPermission().then(function(perm) {
+                    _notificationPermission = perm;
+                });
+            }
+        }
+
+        // הצגת התראת דפדפן + צפצוף
+        function showLiveChatNotification(username, message) {
+            // צפצוף קצר דרך Web Audio API
+            try {
+                var ctx = new (window.AudioContext || window.webkitAudioContext)();
+                var osc = ctx.createOscillator();
+                var gain = ctx.createGain();
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.frequency.value = 880;
+                gain.gain.value = 0.15;
+                osc.start();
+                osc.stop(ctx.currentTime + 0.15);
+            } catch (e) {}
+
+            // התראת דפדפן (אם יש הרשאה)
+            if (_notificationPermission === 'granted') {
+                try {
+                    var n = new Notification('הודעה חדשה בשיחה חיה', {
+                        body: username + ': ' + (message || '').substring(0, 100),
+                        icon: '/static/favicon.ico',
+                        tag: 'live-chat-' + Date.now(),
+                    });
+                    n.onclick = function() {
+                        window.focus();
+                        n.close();
+                    };
+                    setTimeout(function() { n.close(); }, 8000);
+                } catch (e) {}
+            }
+
+            // טוסט בתוך הדף
+            _showInPageToast(username, message);
+        }
+
+        // התראה ויזואלית בתוך הדף — טוסט שנעלם אחרי 6 שניות
+        function _showInPageToast(username, message) {
+            var container = document.getElementById('live-chat-toast-container');
+            if (!container) {
+                container = document.createElement('div');
+                container.id = 'live-chat-toast-container';
+                container.style.cssText = 'position:fixed;top:1rem;left:1rem;z-index:9999;display:flex;flex-direction:column;gap:0.5rem;max-width:360px;';
+                document.body.appendChild(container);
+            }
+            var toast = document.createElement('div');
+            toast.style.cssText = 'background:var(--brand-blue,#2563eb);color:#fff;padding:0.75rem 1rem;border-radius:0.5rem;box-shadow:0 4px 12px rgba(0,0,0,0.15);cursor:pointer;animation:slideIn 0.3s ease;font-size:0.9rem;';
+            toast.innerHTML = '<strong><i class="bi bi-headset"></i> ' + username + '</strong><br>' + ((message || '').substring(0, 80));
+            toast.onclick = function() { toast.remove(); };
+            container.appendChild(toast);
+            setTimeout(function() {
+                toast.style.opacity = '0';
+                toast.style.transition = 'opacity 0.3s ease';
+                setTimeout(function() { toast.remove(); }, 300);
+            }, 6000);
+        }
+
         // Auto-update notification badges
         async function updateBadge() {
             try {
@@ -200,10 +270,28 @@
                         vacationBadge.style.display = 'none';
                     }
                 }
+
+                // בדיקת הודעות חדשות בשיחות חיות (לא בדף השיחה החיה עצמו)
+                var isOnLiveChatPage = window.location.pathname.indexOf('/live-chat/') === 0
+                    && document.getElementById('live-chat-messages');
+                if (data.live_chat_updates && data.live_chat_updates.length > 0) {
+                    for (var i = 0; i < data.live_chat_updates.length; i++) {
+                        var upd = data.live_chat_updates[i];
+                        if (!upd.last_message_at) continue;
+                        var prev = _liveChatLastSeen[upd.user_id];
+                        if (prev && upd.last_message_at > prev && !_liveChatFirstPoll && !isOnLiveChatPage) {
+                            showLiveChatNotification(upd.username || upd.user_id, upd.last_message);
+                        }
+                        _liveChatLastSeen[upd.user_id] = upd.last_message_at;
+                    }
+                    _liveChatFirstPoll = false;
+                }
             } catch (e) {}
         }
+        requestNotificationPermission();
         updateBadge();
-        setInterval(updateBadge, 30000);
+        // פולינג כל 5 שניות כדי לתפוס הודעות מהר
+        setInterval(updateBadge, 5000);
 
         // Auto-dismiss flash messages after 5s
         setTimeout(function() {
