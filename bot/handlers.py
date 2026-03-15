@@ -545,9 +545,9 @@ async def _talk_to_agent_core(update: Update, context: ContextTypes.DEFAULT_TYPE
     """לוגיקה פנימית של בקשת נציג — ללא דקורטורים, משמשת את שני הניתובים."""
     user_id, display_name, telegram_username = _get_user_info(update)
 
-    # אם הגענו מזיהוי intent — שומרים את ההודעה האמיתית במקום טקסט גנרי
-    real_message = context.user_data.pop("_agent_real_message", None)
-    user_log_message = real_message or "👤 שיחה עם נציג"
+    # אם הגענו מזיהוי intent — ההודעה כבר נשמרה ב-message_handler, לא שומרים שוב
+    real_message = context.user_data.get("_agent_real_message")
+    skip_user_save = real_message is not None
 
     # Create agent request in database
     await _create_request_and_notify_owner(
@@ -564,7 +564,8 @@ async def _talk_to_agent_core(update: Update, context: ContextTypes.DEFAULT_TYPE
         "בינתיים, אתם מוזמנים לשאול אותי כל שאלה נוספת!"
     )
 
-    db.save_message(user_id, display_name, "user", user_log_message)
+    if not skip_user_save:
+        db.save_message(user_id, display_name, "user", "👤 שיחה עם נציג")
     db.save_message(user_id, display_name, "assistant", response_text)
 
     await update.message.reply_text(
@@ -935,6 +936,11 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ── Intent Detection ──────────────────────────────────────────────────
     intent = detect_intent(user_message)
 
+    # איפוס מונה fallbacks רצופים בכל intent שאינו GENERAL/PRICING (שעוברים RAG).
+    # ה-RAG path מאפס בעצמו בתוך _handle_rag_query כשהתשובה מוצלחת.
+    if intent not in (Intent.GENERAL, Intent.PRICING, Intent.LOCATION):
+        context.user_data["consecutive_fallbacks"] = 0
+
     # Greeting / Farewell — respond directly, no RAG needed
     if intent in (Intent.GREETING, Intent.FAREWELL):
         db.save_message(user_id, display_name, "user", user_message)
@@ -990,10 +996,15 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # Human agent — בקשה מפורשת לנציג, עובר דרך vacation guard כמו כפתור הנציג.
-    # מעבירים את ההודעה האמיתית כדי שתישמר בהיסטוריה במקום טקסט גנרי.
+    # שומרים את ההודעה האמיתית לפני הקריאה, ומנקים מיד אחריה כדי
+    # למנוע דליפה אם vacation/live-chat guard חוסמים את הקריאה.
     if intent == Intent.HUMAN_AGENT:
+        db.save_message(user_id, display_name, "user", user_message)
         context.user_data["_agent_real_message"] = user_message
-        return await _talk_to_agent_skip_ratelimit(update, context)
+        try:
+            return await _talk_to_agent_skip_ratelimit(update, context)
+        finally:
+            context.user_data.pop("_agent_real_message", None)
 
     # Complaint — לקוח מתוסכל, מציעים נציג אנושי (I1)
     if intent == Intent.COMPLAINT:
