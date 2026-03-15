@@ -40,6 +40,7 @@ from ai_chatbot.config import (
     CONTEXT_WINDOW_SIZE,
     FOLLOW_UP_ENABLED,
 )
+from ai_chatbot.entity_extraction import extract_dates
 from ai_chatbot.live_chat_service import live_chat_guard, live_chat_guard_booking
 from ai_chatbot.rate_limiter import rate_limit_guard, rate_limit_guard_booking, check_rate_limit, record_message
 from ai_chatbot.vacation_service import (
@@ -661,13 +662,21 @@ async def booking_service(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 @live_chat_guard_booking
 async def booking_date(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Receive the preferred date."""
-    context.user_data["booking_date"] = update.message.text
+    user_text = update.message.text
+    context.user_data["booking_date"] = user_text
 
-    await update.message.reply_text(
+    # אימות רך — אם לא זוהה תאריך מובנה, מוסיפים רמז (לא חוסמים)
+    dates = extract_dates(user_text)
+    hint = ""
+    if not dates:
+        hint = "\n\n💡 <i>טיפ: ניתן לכתוב תאריך כמו 15/03 או '14 במרץ'.</i>"
+
+    await _reply_html_safe(
+        update.message,
         "🕐 איזו <b>שעה</b> מתאימה לכם?\n"
         "(לדוגמה, '10:00', 'אחר הצהריים', '14:00')\n\n"
-        "הקלידו /cancel כדי לחזור.",
-        parse_mode="HTML"
+        "הקלידו /cancel כדי לחזור."
+        + hint,
     )
     return BOOKING_TIME
 
@@ -995,11 +1004,16 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(confirm_text, reply_markup=confirm_kb)
         return
 
-    # Human agent — בקשה מפורשת לנציג, עובר דרך vacation guard כמו כפתור הנציג.
-    # שומרים את ההודעה האמיתית לפני הקריאה, ומנקים מיד אחריה כדי
-    # למנוע דליפה אם vacation/live-chat guard חוסמים את הקריאה.
+    # Human agent — בקשה מפורשת לנציג.
+    # בזמן חופשה — הודעת חופשה (כמו APPOINTMENT_BOOKING), כולל שמירה ב-DB.
+    # אחרת — מפעיל את לוגיקת הנציג עם ההודעה האמיתית.
     if intent == Intent.HUMAN_AGENT:
         db.save_message(user_id, display_name, "user", user_message)
+        if VacationService.is_active():
+            response = VacationService.get_agent_message()
+            db.save_message(user_id, display_name, "assistant", response)
+            await update.message.reply_text(response, reply_markup=_get_main_keyboard())
+            return
         context.user_data["_agent_real_message"] = user_message
         try:
             return await _talk_to_agent_skip_ratelimit(update, context)
