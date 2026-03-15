@@ -11,6 +11,7 @@ to local embeddings and logs a warning.
 
 import hashlib
 import logging
+import re
 import numpy as np
 from ai_chatbot.openai_client import get_openai_client
 
@@ -24,6 +25,14 @@ LOCAL_EMBEDDING_DIM = 1536
 # Track whether we've already warned about fallback mode
 _warned_fallback = False
 
+# דפוס לזיהוי API keys בהודעות שגיאה — מונע דליפה ללוג
+_API_KEY_RE = re.compile(r"sk-[A-Za-z0-9_-]{10,}")
+
+
+def _sanitize_error(err: Exception) -> str:
+    """מסיר API keys מהודעות שגיאה לפני רישום ללוג."""
+    return _API_KEY_RE.sub("sk-***REDACTED***", str(err))
+
 
 def _local_embedding(text: str) -> np.ndarray:
     """
@@ -34,8 +43,9 @@ def _local_embedding(text: str) -> np.ndarray:
     global _warned_fallback
     if not _warned_fallback:
         logger.warning(
-            "Using LOCAL fallback embeddings. These are NOT semantically meaningful. "
-            "For production use, ensure OPENAI_API_KEY is set and the API is reachable."
+            "⚠ FALLBACK EMBEDDINGS ACTIVE — חיפוש RAG יחזיר תוצאות חסרות משמעות סמנטית! "
+            "Embeddings מבוססי hash אינם סמנטיים ומיועדים לטסטים בלבד. "
+            "לשימוש בפרודקשן — לוודא ש-OPENAI_API_KEY מוגדר וה-API זמין."
         )
         _warned_fallback = True
     
@@ -80,7 +90,7 @@ def get_embedding(text: str) -> np.ndarray:
         )
         return np.array(response.data[0].embedding, dtype=np.float32)
     except Exception as e:
-        logger.debug("OpenAI embedding API failed: %s. Using local fallback.", e)
+        logger.warning("OpenAI embedding API failed: %s. Using local fallback.", _sanitize_error(e))
         return _local_embedding(text)
 
 
@@ -116,6 +126,6 @@ def get_embeddings_batch(texts: list[str]) -> np.ndarray:
         return np.array(all_embeddings, dtype=np.float32)
     
     except Exception as e:
-        logger.debug("OpenAI batch embedding API failed: %s. Using local fallback.", e)
+        logger.warning("OpenAI batch embedding API failed: %s. Using local fallback.", _sanitize_error(e))
         embeddings = [_local_embedding(t) for t in cleaned]
         return np.array(embeddings, dtype=np.float32)

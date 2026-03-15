@@ -47,20 +47,28 @@ class VectorStore:
         
         if len(embeddings) == 0:
             logger.warning("No embeddings provided. Creating empty index.")
-            self.dimension = 1536  # default for text-embedding-3-small
+            from ai_chatbot.rag.embeddings import LOCAL_EMBEDDING_DIM
+            self.dimension = LOCAL_EMBEDDING_DIM
             self.index = faiss.IndexFlatIP(self.dimension)
             self.metadata = []
             return
-        
+
+        # ולידציה — מספר embeddings חייב להתאים למספר metadata (E7)
+        if len(metadata) != len(embeddings):
+            raise ValueError(
+                f"Embeddings count ({len(embeddings)}) != metadata count ({len(metadata)})"
+            )
+
         self.dimension = embeddings.shape[1]
         self.metadata = metadata
-        
-        # Normalize embeddings for cosine similarity (using inner product on normalized vectors)
-        faiss.normalize_L2(embeddings)
-        
+
+        # נרמול ל-cosine similarity — על עותק כדי לא לשנות את המערך המקורי (E3)
+        normed = embeddings.copy()
+        faiss.normalize_L2(normed)
+
         # Use IndexFlatIP (inner product) on normalized vectors = cosine similarity
         self.index = faiss.IndexFlatIP(self.dimension)
-        self.index.add(embeddings)
+        self.index.add(normed)
         
         logger.info(
             "Built FAISS index with %s vectors of dimension %s",
@@ -86,8 +94,12 @@ class VectorStore:
         if top_k is None:
             top_k = RAG_TOP_K
         
-        # Ensure proper shape and normalize
+        # ולידציה — dimension של ה-query חייב להתאים לאינדקס (E8)
         query = query_embedding.reshape(1, -1).astype(np.float32)
+        if query.shape[1] != self.dimension:
+            raise ValueError(
+                f"Query embedding dimension ({query.shape[1]}) != index dimension ({self.dimension})"
+            )
         faiss.normalize_L2(query)
         
         # Search
