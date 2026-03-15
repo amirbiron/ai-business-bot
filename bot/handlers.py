@@ -23,7 +23,7 @@ from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
 )
-from telegram.error import BadRequest
+from telegram.error import BadRequest, TimedOut, NetworkError
 from telegram.ext import ContextTypes, ConversationHandler
 
 from ai_chatbot import database as db
@@ -185,6 +185,33 @@ def _build_follow_up_keyboard(questions: list[str], bot_data: dict, user_id: str
     return InlineKeyboardMarkup(buttons)
 
 
+async def _notify_owner(context: ContextTypes.DEFAULT_TYPE, text: str, max_retries: int = 3) -> bool:
+    """שליחת התראה לבעל העסק עם retry ו-exponential backoff.
+
+    מנסה עד max_retries פעמים במקרה של שגיאות רשת זמניות (TimedOut, NetworkError).
+    שגיאות אחרות (למשל chat_id לא תקין) גורמות לכשלון מיידי — אין טעם לנסות שוב.
+    """
+    if not TELEGRAM_OWNER_CHAT_ID:
+        return False
+
+    for attempt in range(max_retries):
+        try:
+            await context.bot.send_message(
+                chat_id=TELEGRAM_OWNER_CHAT_ID, text=text,
+            )
+            return True
+        except (TimedOut, NetworkError) as e:
+            if attempt < max_retries - 1:
+                await asyncio.sleep(2 ** attempt)
+                logger.warning("Owner notification retry %d/%d: %s", attempt + 1, max_retries, e)
+            else:
+                logger.error("Owner notification failed after %d attempts: %s", max_retries, e)
+        except Exception as e:
+            logger.error("Owner notification unexpected error: %s", e)
+            return False
+    return False
+
+
 async def _create_request_and_notify_owner(
     context: ContextTypes.DEFAULT_TYPE,
     user_id: str,
@@ -199,22 +226,15 @@ async def _create_request_and_notify_owner(
         telegram_username=telegram_username,
     )
 
-    if TELEGRAM_OWNER_CHAT_ID:
-        try:
-            handle = _tg_handle(telegram_username) or "(ללא שם משתמש)"
-            notification = (
-                f"🔔 בקשת נציג #{request_id}\n\n"
-                f"לקוח: {display_name}\n"
-                f"יוזר: {handle}\n"
-                f"זמן: עכשיו\n\n"
-                f"{message}"
-            )
-            await context.bot.send_message(
-                chat_id=TELEGRAM_OWNER_CHAT_ID,
-                text=notification,
-            )
-        except Exception as e:
-            logger.error("Failed to send owner notification: %s", e)
+    handle = _tg_handle(telegram_username) or "(ללא שם משתמש)"
+    notification = (
+        f"🔔 בקשת נציג #{request_id}\n\n"
+        f"לקוח: {display_name}\n"
+        f"יוזר: {handle}\n"
+        f"זמן: עכשיו\n\n"
+        f"{message}"
+    )
+    await _notify_owner(context, notification)
 
     return request_id
 
@@ -692,23 +712,16 @@ async def booking_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         )
 
         # Notify business owner
-        if TELEGRAM_OWNER_CHAT_ID:
-            try:
-                handle = _tg_handle(telegram_username) or "(ללא שם משתמש)"
-                notification = (
-                    f"📅 בקשת תור חדשה לאישור #{appt_id}\n\n"
-                    f"לקוח: {display_name}\n"
-                    f"יוזר: {handle}\n"
-                    f"שירות: {service}\n"
-                    f"תאריך: {date}\n"
-                    f"שעה: {preferred_time}\n"
-                )
-                await context.bot.send_message(
-                    chat_id=TELEGRAM_OWNER_CHAT_ID,
-                    text=notification,
-                )
-            except Exception as e:
-                logger.error("Failed to send appointment notification: %s", e)
+        handle = _tg_handle(telegram_username) or "(ללא שם משתמש)"
+        notification = (
+            f"📅 בקשת תור חדשה לאישור #{appt_id}\n\n"
+            f"לקוח: {display_name}\n"
+            f"יוזר: {handle}\n"
+            f"שירות: {service}\n"
+            f"תאריך: {date}\n"
+            f"שעה: {preferred_time}\n"
+        )
+        await _notify_owner(context, notification)
 
         db.save_message(user_id, display_name, "assistant",
                         f"בקשת תור: {service} בתאריך {date} בשעה {preferred_time}")
