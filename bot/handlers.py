@@ -551,12 +551,18 @@ async def _talk_to_agent_core(update: Update, context: ContextTypes.DEFAULT_TYPE
     skip_user_save = real_message is not None
 
     # Create agent request in database
+    # אם הגענו מ-intent detection — נעביר לבעל העסק את ההודעה המקורית של הלקוח
+    agent_msg = (
+        f"הלקוח ביקש נציג: {real_message}"
+        if real_message
+        else "הלקוח מבקש לדבר עם נציג אנושי."
+    )
     await _create_request_and_notify_owner(
         context,
         user_id=user_id,
         display_name=display_name,
         telegram_username=telegram_username,
-        message="הלקוח מבקש לדבר עם נציג אנושי.",
+        message=agent_msg,
     )
 
     response_text = (
@@ -933,6 +939,9 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # ניתוב כפתורים — מדלגים על rate_limit (כבר נספר פעם אחת) אבל
     # שומרים על live_chat_guard (ו-vacation_guard היכן שרלוונטי).
+    # איפוס מונה fallbacks — לחיצת כפתור = המשתמש התקדם, לא צריך לספור fallback
+    context.user_data["consecutive_fallbacks"] = 0
+
     if user_message == BUTTON_PRICE_LIST:
         return await _price_list_skip_ratelimit(update, context)
     elif user_message == BUTTON_LOCATION:
