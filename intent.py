@@ -27,6 +27,8 @@ class Intent(Enum):
     APPOINTMENT_BOOKING = "appointment_booking"
     APPOINTMENT_CANCEL = "appointment_cancel"
     PRICING = "pricing"
+    COMPLAINT = "complaint"
+    LOCATION = "location"
     GENERAL = "general"
 
 
@@ -113,6 +115,45 @@ _INTENT_PATTERNS: list[tuple[Intent, re.Pattern]] = [
             r"|i\s*want\s*to\s*cancel\s*(my\s*)?(appointment|booking|the\s*appointment)"
             r"|לבטל\s*(את\s*)?ה?תור|ביטול\s*(ה)?תור|רוצה\s*לבטל\s*(את\s*)?ה?תור|אני\s*מבטל\s*(את\s*)?ה?תור"
             r"|אני\s*רוצה\s*לבטל\s*את\s*התור|אני\s*צריך\s*לבטל\s*(את\s*)?ה?תור"
+            r")",
+            re.IGNORECASE,
+        ),
+    ),
+    # Complaint — לקוח מתוסכל, ינותב לנציג אנושי (I1)
+    (
+        Intent.COMPLAINT,
+        re.compile(
+            r"("
+            # אנגלית — תלונות כלליות
+            r"i\s*(want\s*to\s*)?complain|complaint|not\s*happy|not\s*satisfied|terrible\s*service"
+            r"|bad\s*service|worst\s*service|awful|disgusting|unacceptable|ridiculous|rip\s*off"
+            r"|i\s*want\s*a\s*refund|give\s*me\s*my\s*money\s*back|waste\s*of\s*(time|money)"
+            # עברית — תלונות ותסכול כללי
+            r"|אני\s*לא\s*מרוצה|לא\s*מרוצה|יש\s*לי\s*בעיה|רוצה\s*להתלונן|תלונה"
+            r"|שירות\s*גרוע|שירות\s*נוראי|מאוכזב|מאוכזבת|אני\s*כועס|אני\s*כועסת"
+            r"|לא\s*בסדר|חוויה\s*רעה|חוויה\s*גרועה"
+            # עברית — ביטויי תסכול וסלנג
+            r"|אוי\s*נו|באסה|דבילי|שירות\s*על\s*הפנים|לא\s*עונה\s*על\s*השאלה"
+            r"|בושה|בושה\s*וחרפה|איזה\s*זלזול|שירות\s*פח"
+            r"|עושים\s*צחוק|עושה\s*צחוק"
+            # עברית — בקשות זיכוי/ביטול/נטישה
+            r"|תבטלו\s*את\s*ההזמנה|רוצה\s*זיכוי|תחזירו\s*לי\s*את\s*הכסף"
+            r"|אני\s*עוזב|לא\s*קונה\s*(אצלכם|פה)\s*יותר"
+            # עברית — המתנה ואי-מענה
+            r"|מחכה\s*כבר\s*שעות|אף\s*אחד\s*לא\s*עונה|לא\s*מגיבים"
+            r"|כבר\s*שעה\s*שאני\s*מחכה|מתי\s*כבר\s*תענו"
+            r")",
+            re.IGNORECASE,
+        ),
+    ),
+    # Location — שאלות על כתובת ומיקום (I3)
+    (
+        Intent.LOCATION,
+        re.compile(
+            r"("
+            r"where\s*are\s*you|what.*address|how\s*(do\s*i\s*)?get\s*there|your\s*location|directions"
+            r"|איפה\s*אתם|מה\s*הכתובת|כתובת|איך\s*מגיעים|איך\s*אפשר\s*להגיע|מיקום|היכן\s*אתם"
+            r"|איפה\s*(ה)?(חנות|סלון|עסק|מקום)|הגעה"
             r")",
             re.IGNORECASE,
         ),

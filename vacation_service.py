@@ -10,6 +10,7 @@ VacationService — שירות מצב חופשה / חירום.
 """
 
 import logging
+import time
 from functools import wraps
 
 from telegram import Update
@@ -24,11 +25,20 @@ logger = logging.getLogger(__name__)
 class VacationService:
     """שירות מרכזי לבדיקת מצב חופשה."""
 
+    # Cache קצר — מונע קריאת DB בכל הודעה (מתעדכן כל 30 שניות)
+    _cache: tuple[float, bool] = (0.0, False)
+    _CACHE_TTL = 30
+
     @staticmethod
     def is_active() -> bool:
-        """בדיקה האם מצב חופשה פעיל."""
+        """בדיקה האם מצב חופשה פעיל (עם cache של 30 שניות)."""
+        now = time.time()
+        if now - VacationService._cache[0] < VacationService._CACHE_TTL:
+            return VacationService._cache[1]
         vacation = db.get_vacation_mode()
-        return bool(vacation["is_active"])
+        result = bool(vacation["is_active"])
+        VacationService._cache = (now, result)
+        return result
 
     @staticmethod
     def get_booking_message() -> str:

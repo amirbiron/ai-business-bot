@@ -23,7 +23,7 @@ from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
 )
-from telegram.error import BadRequest
+from telegram.error import BadRequest, TimedOut, NetworkError
 from telegram.ext import ContextTypes, ConversationHandler
 
 from ai_chatbot import database as db
@@ -185,6 +185,33 @@ def _build_follow_up_keyboard(questions: list[str], bot_data: dict, user_id: str
     return InlineKeyboardMarkup(buttons)
 
 
+async def _notify_owner(context: ContextTypes.DEFAULT_TYPE, text: str, max_retries: int = 3) -> bool:
+    """שליחת התראה לבעל העסק עם retry ו-exponential backoff.
+
+    מנסה עד max_retries פעמים במקרה של שגיאות רשת זמניות (TimedOut, NetworkError).
+    שגיאות אחרות (למשל chat_id לא תקין) גורמות לכשלון מיידי — אין טעם לנסות שוב.
+    """
+    if not TELEGRAM_OWNER_CHAT_ID:
+        return False
+
+    for attempt in range(max_retries):
+        try:
+            await context.bot.send_message(
+                chat_id=TELEGRAM_OWNER_CHAT_ID, text=text,
+            )
+            return True
+        except (TimedOut, NetworkError) as e:
+            if attempt < max_retries - 1:
+                await asyncio.sleep(2 ** attempt)
+                logger.warning("Owner notification retry %d/%d: %s", attempt + 1, max_retries, e)
+            else:
+                logger.error("Owner notification failed after %d attempts: %s", max_retries, e)
+        except Exception as e:
+            logger.error("Owner notification unexpected error: %s", e)
+            return False
+    return False
+
+
 async def _create_request_and_notify_owner(
     context: ContextTypes.DEFAULT_TYPE,
     user_id: str,
@@ -199,22 +226,15 @@ async def _create_request_and_notify_owner(
         telegram_username=telegram_username,
     )
 
-    if TELEGRAM_OWNER_CHAT_ID:
-        try:
-            handle = _tg_handle(telegram_username) or "(ללא שם משתמש)"
-            notification = (
-                f"🔔 בקשת נציג #{request_id}\n\n"
-                f"לקוח: {display_name}\n"
-                f"יוזר: {handle}\n"
-                f"זמן: עכשיו\n\n"
-                f"{message}"
-            )
-            await context.bot.send_message(
-                chat_id=TELEGRAM_OWNER_CHAT_ID,
-                text=notification,
-            )
-        except Exception as e:
-            logger.error("Failed to send owner notification: %s", e)
+    handle = _tg_handle(telegram_username) or "(ללא שם משתמש)"
+    notification = (
+        f"🔔 בקשת נציג #{request_id}\n\n"
+        f"לקוח: {display_name}\n"
+        f"יוזר: {handle}\n"
+        f"זמן: עכשיו\n\n"
+        f"{message}"
+    )
+    await _notify_owner(context, notification)
 
     return request_id
 
@@ -692,23 +712,16 @@ async def booking_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         )
 
         # Notify business owner
-        if TELEGRAM_OWNER_CHAT_ID:
-            try:
-                handle = _tg_handle(telegram_username) or "(ללא שם משתמש)"
-                notification = (
-                    f"📅 בקשת תור חדשה לאישור #{appt_id}\n\n"
-                    f"לקוח: {display_name}\n"
-                    f"יוזר: {handle}\n"
-                    f"שירות: {service}\n"
-                    f"תאריך: {date}\n"
-                    f"שעה: {preferred_time}\n"
-                )
-                await context.bot.send_message(
-                    chat_id=TELEGRAM_OWNER_CHAT_ID,
-                    text=notification,
-                )
-            except Exception as e:
-                logger.error("Failed to send appointment notification: %s", e)
+        handle = _tg_handle(telegram_username) or "(ללא שם משתמש)"
+        notification = (
+            f"📅 בקשת תור חדשה לאישור #{appt_id}\n\n"
+            f"לקוח: {display_name}\n"
+            f"יוזר: {handle}\n"
+            f"שירות: {service}\n"
+            f"תאריך: {date}\n"
+            f"שעה: {preferred_time}\n"
+        )
+        await _notify_owner(context, notification)
 
         db.save_message(user_id, display_name, "assistant",
                         f"בקשת תור: {service} בתאריך {date} בשעה {preferred_time}")
@@ -941,6 +954,34 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         confirm_text = "האם אתם בטוחים שתרצו לבטל את התור?"
         db.save_message(user_id, display_name, "assistant", confirm_text)
         await update.message.reply_text(confirm_text, reply_markup=confirm_kb)
+        return
+
+    # Complaint — לקוח מתוסכל, מציעים נציג אנושי (I1)
+    if intent == Intent.COMPLAINT:
+        db.save_message(user_id, display_name, "user", user_message)
+        response = (
+            "אנחנו מצטערים לשמוע שהחוויה לא הייתה טובה. 😔\n"
+            "נשמח לטפל בפנייתכם באופן אישי.\n\n"
+            'לחצו על <b>👤 דברו עם נציג</b> למטה כדי שנציג אנושי יחזור אליכם בהקדם.'
+        )
+        db.save_message(user_id, display_name, "assistant", response)
+        await _reply_html_safe(
+            update.message, response, reply_markup=_get_main_keyboard()
+        )
+        return
+
+    # Location — שאלות על מיקום וכתובת, ממוקד דרך RAG (I3)
+    if intent == Intent.LOCATION:
+        db.save_message(user_id, display_name, "user", user_message)
+        await _handle_rag_query(
+            update, context,
+            user_id=user_id,
+            display_name=display_name,
+            telegram_username=telegram_username,
+            user_message=user_message,
+            query="מיקום כתובת הגעה: " + user_message,
+            handoff_reason=f"הלקוח שאל על מיקום: {user_message}",
+        )
         return
 
     # ── Pricing / General — both go through the RAG pipeline ────────────

@@ -17,6 +17,7 @@ from telegram.ext import (
 
 from ai_chatbot.config import TELEGRAM_BOT_TOKEN
 from ai_chatbot.bot_state import set_bot
+from ai_chatbot.live_chat_service import LiveChatService
 from ai_chatbot.bot.handlers import (
     start_command,
     help_command,
@@ -64,6 +65,22 @@ def create_bot_application():
     async def _post_init(application: Application) -> None:
         loop = asyncio.get_running_loop()
         set_bot(application.bot, loop)
+
+        # סגירת sessions ישנים באופן תקופתי — כל 30 דקות
+        async def _cleanup_expired_job(context) -> None:
+            try:
+                closed = LiveChatService.cleanup_expired()
+                if closed:
+                    logger.info("Periodic cleanup: closed %d expired live chat session(s)", closed)
+            except Exception as e:
+                logger.error("Periodic live chat cleanup failed: %s", e)
+
+        application.job_queue.run_repeating(
+            _cleanup_expired_job,
+            interval=1800,  # 30 דקות
+            first=60,       # ריצה ראשונה אחרי דקה (לא מיד ב-startup)
+            name="live_chat_cleanup",
+        )
 
     # Build the application
     app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).post_init(_post_init).build()

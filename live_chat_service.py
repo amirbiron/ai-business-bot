@@ -57,12 +57,34 @@ class LiveChatService:
     are handled in a single place.
     """
 
+    # Timeout — שיחה חיה שלא עודכנה במשך שעתיים נסגרת אוטומטית (LC2)
+    SESSION_TIMEOUT_MINUTES = 120
+
     # ── State Queries ────────────────────────────────────────────────
 
     @staticmethod
     def is_active(user_id: str) -> bool:
-        """Check whether the user is currently in a live chat session."""
-        return db.is_live_chat_active(user_id)
+        """Check whether the user is currently in a live chat session.
+
+        סוגר אוטומטית sessions שחרגו מה-timeout (לפי פעילות אחרונה, לא תחילת השיחה).
+        """
+        session = db.get_active_live_chat(user_id)
+        if not session:
+            return False
+        # בדיקת timeout — אם עברו יותר מ-SESSION_TIMEOUT_MINUTES מאז הפעילות האחרונה
+        try:
+            from datetime import datetime, timezone, timedelta
+            # עדיפות ל-updated_at (פעילות אחרונה); fallback ל-started_at (DB ישן ללא מיגרציה)
+            last_activity_str = session.get("updated_at") or session["started_at"]
+            last_activity = datetime.strptime(last_activity_str, "%Y-%m-%d %H:%M:%S")
+            last_activity = last_activity.replace(tzinfo=timezone.utc)
+            if datetime.now(timezone.utc) - last_activity > timedelta(minutes=LiveChatService.SESSION_TIMEOUT_MINUTES):
+                logger.info("Live chat session for user %s timed out after %d minutes of inactivity", user_id, LiveChatService.SESSION_TIMEOUT_MINUTES)
+                db.end_live_chat(user_id)
+                return False
+        except (KeyError, ValueError, TypeError):
+            pass
+        return True
 
     @staticmethod
     def get_session(user_id: str) -> Optional[dict]:
@@ -165,10 +187,20 @@ class LiveChatService:
 
         username = _get_customer_username(user_id)
         db.save_message(user_id, username, "assistant", message_text)
+        # עדכון פעילות אחרונה — גם תשובת נציג מאריכה את ה-session
+        db.touch_live_chat(user_id)
 
         return True, "sent"
 
     # ── Lifecycle ────────────────────────────────────────────────────
+
+    @staticmethod
+    def cleanup_expired(max_hours: int = 4) -> int:
+        """סגירת sessions שפתוחים יותר מ-max_hours ללא פעילות.
+
+        נקרא מ-job_queue בצורה תקופתית — סוגר sessions שנשכחו פתוחים.
+        """
+        return db.end_expired_live_chats(max_hours)
 
     @staticmethod
     def cleanup_stale():
@@ -203,6 +235,8 @@ def live_chat_guard(handler):
             # Save the user's message for the human agent's context
             if update.message and update.message.text:
                 db.save_message(user_id, display_name, "user", update.message.text)
+            # עדכון פעילות אחרונה — מונע timeout בזמן שהלקוח פעיל
+            db.touch_live_chat(user_id)
             return
         return await handler(update, context)
 
@@ -222,6 +256,8 @@ def live_chat_guard_booking(handler):
         if LiveChatService.is_active(user_id):
             if update.message and update.message.text:
                 db.save_message(user_id, display_name, "user", update.message.text)
+            # עדכון פעילות אחרונה — מונע timeout בזמן שהלקוח פעיל
+            db.touch_live_chat(user_id)
             context.user_data.clear()
             return ConversationHandler.END
         return await handler(update, context)

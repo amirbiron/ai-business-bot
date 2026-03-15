@@ -120,6 +120,7 @@ def init_db():
                 username    TEXT DEFAULT '',
                 is_active   INTEGER DEFAULT 1,
                 started_at  TEXT DEFAULT (datetime('now')),
+                updated_at  TEXT DEFAULT (datetime('now')),
                 ended_at    TEXT
             );
 
@@ -249,6 +250,29 @@ def init_db():
         # מיגרציות קלות — הלוגיקה בקובץ נפרד לקריאות טובה יותר
         from migrations import run_migrations
         run_migrations(conn)
+
+
+def end_expired_live_chats(max_hours: int = 4) -> int:
+    """סגירת sessions שלא עודכנו במשך max_hours שעות.
+
+    מחזיר את מספר ה-sessions שנסגרו.
+    """
+    with get_connection() as conn:
+        expired = conn.execute(
+            """SELECT COUNT(*) AS cnt FROM live_chats
+               WHERE is_active = 1
+                 AND datetime(COALESCE(updated_at, started_at), '+' || ? || ' hours') < datetime('now')""",
+            (max_hours,),
+        ).fetchone()["cnt"]
+        if expired:
+            conn.execute(
+                """UPDATE live_chats SET is_active = 0, ended_at = datetime('now')
+                   WHERE is_active = 1
+                     AND datetime(COALESCE(updated_at, started_at), '+' || ? || ' hours') < datetime('now')""",
+                (max_hours,),
+            )
+            logger.info("Auto-closed %d expired live chat session(s) (inactive > %d hours).", expired, max_hours)
+        return expired
 
 
 def cleanup_stale_live_chats():
@@ -731,6 +755,15 @@ def start_live_chat(user_id: str, username: str = "") -> int:
         return cursor.lastrowid
 
 
+def touch_live_chat(user_id: str) -> None:
+    """עדכון זמן הפעילות האחרונה של שיחה חיה — למניעת timeout על שיחות פעילות."""
+    with get_connection() as conn:
+        conn.execute(
+            "UPDATE live_chats SET updated_at = datetime('now') WHERE user_id = ? AND is_active = 1",
+            (user_id,),
+        )
+
+
 def end_live_chat(user_id: str):
     """End the active live chat session for a user."""
     with get_connection() as conn:
@@ -835,6 +868,24 @@ def get_unanswered_question(question_id: int) -> Optional[dict]:
             "SELECT * FROM unanswered_questions WHERE id=?", (question_id,)
         ).fetchone()
         return dict(row) if row else None
+
+
+# ─── Dashboard Batch Query ─────────────────────────────────────────────────
+
+def get_dashboard_counts() -> dict[str, int]:
+    """שאילתה מאוחדת לכל מוני הדשבורד — מצמצם 6 שאילתות נפרדות לאחת."""
+    query = """
+        SELECT
+            (SELECT COUNT(*) FROM kb_entries WHERE is_active = 1) AS kb_entries,
+            (SELECT COUNT(DISTINCT category) FROM kb_entries WHERE is_active = 1) AS categories,
+            (SELECT COUNT(DISTINCT user_id) FROM conversations) AS users,
+            (SELECT COUNT(*) FROM agent_requests WHERE status = 'pending') AS pending_requests,
+            (SELECT COUNT(*) FROM appointments WHERE status = 'pending') AS pending_appointments,
+            (SELECT COUNT(*) FROM unanswered_questions WHERE status = 'open') AS open_knowledge_gaps
+    """
+    with get_connection() as conn:
+        row = conn.execute(query).fetchone()
+        return dict(row) if row else {}
 
 
 # ─── Business Hours ─────────────────────────────────────────────────────────

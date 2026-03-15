@@ -11,9 +11,10 @@ restart.  This is acceptable for a small-business bot — no persistence
 overhead and abuse windows are naturally bounded.
 """
 
+import bisect
 import logging
 import time
-from collections import defaultdict, deque
+from collections import OrderedDict, deque
 from functools import wraps
 
 from telegram import Update
@@ -30,7 +31,9 @@ logger = logging.getLogger(__name__)
 
 # Per-user deque of message timestamps (epoch seconds).
 # Using deque for efficient left-pops when pruning old entries.
-_user_timestamps: dict[str, deque[float]] = defaultdict(deque)
+# OrderedDict — LRU eviction: כשנגמר מקום, מוחקים את המשתמשים הכי ישנים.
+_MAX_TRACKED_USERS = 10_000
+_user_timestamps: OrderedDict[str, deque[float]] = OrderedDict()
 
 # Sliding window definitions: (window_seconds, max_messages, response_message)
 _WINDOWS = [
@@ -70,12 +73,23 @@ def check_rate_limit(user_id: str) -> str | None:
     :func:`record_message` after confirming the message will be processed.
     """
     now = time.time()
+    if user_id not in _user_timestamps:
+        _user_timestamps[user_id] = deque()
+        # LRU eviction — גם ב-check, לא רק ב-record, כדי שמשתמשים rate-limited לא יגדילו את ה-dict ללא גבול
+        while len(_user_timestamps) > _MAX_TRACKED_USERS:
+            _user_timestamps.popitem(last=False)
+    else:
+        # LRU — מזיז את המשתמש לסוף (הכי אחרון)
+        _user_timestamps.move_to_end(user_id)
     timestamps = _user_timestamps[user_id]
     _prune(timestamps, now)
 
+    # bisect על רשימה ממוינת (deque ממוינת כי תמיד מוסיפים timestamp עולה)
+    ts_list = list(timestamps)
     for window_seconds, max_messages, message in _WINDOWS:
         cutoff = now - window_seconds
-        count = sum(1 for ts in timestamps if ts >= cutoff)
+        idx = bisect.bisect_left(ts_list, cutoff)
+        count = len(ts_list) - idx
         if count >= max_messages:
             logger.info(
                 "Rate limit hit for user %s: %d msgs in %ds (limit %d)",
@@ -88,6 +102,11 @@ def check_rate_limit(user_id: str) -> str | None:
 
 def record_message(user_id: str) -> None:
     """Record a new message timestamp for *user_id*."""
+    if user_id not in _user_timestamps:
+        _user_timestamps[user_id] = deque()
+        # LRU eviction — מוחקים את המשתמש הכי ישן אם חרגנו מהמגבלה
+        while len(_user_timestamps) > _MAX_TRACKED_USERS:
+            _user_timestamps.popitem(last=False)
     _user_timestamps[user_id].append(time.time())
 
 

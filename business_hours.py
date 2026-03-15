@@ -48,13 +48,26 @@ def _today_israel() -> date:
     return _now_israel().date()
 
 
+# Cache יומי לחגים — מונע קריאה חוזרת לספריית holidays בכל בדיקת שעות
+_holidays_cache: dict[tuple[int, ...], tuple[date, dict[date, str]]] = {}
+
+
 def _get_israeli_holidays(*years: int) -> dict[date, str]:
     """Get Israeli holidays for one or more years.
 
     Returns a dict mapping date -> holiday name (in Hebrew where available).
+    Cache ברמת יום — מתחדש כשהתאריך משתנה.
     """
+    key = tuple(sorted(years))
+    today = _today_israel()
+    cached = _holidays_cache.get(key)
+    if cached and cached[0] == today:
+        return cached[1]
+
     il_holidays = holidays_lib.Israel(years=list(years), language="he")
-    return dict(il_holidays)
+    result = dict(il_holidays)
+    _holidays_cache[key] = (today, result)
+    return result
 
 
 def get_status_for_date(target_date: date = None) -> dict:

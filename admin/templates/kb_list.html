@@ -17,6 +17,24 @@
     </div>
 </div>
 
+<!-- Semantic Search -->
+<div class="card animate-fade-in" style="margin-bottom: var(--space-md);">
+    <div class="card-body" style="padding: var(--space-sm) var(--space-md);">
+        <form hx-get="/kb/search" hx-target="#kb-search-results" hx-swap="innerHTML"
+              hx-indicator="#search-spinner" style="display: flex; gap: var(--space-sm); align-items: center;">
+            <i class="bi bi-search" style="color: var(--text-muted);"></i>
+            <input type="text" name="q" placeholder="חיפוש חכם — מה הבוט יודע על...?"
+                   style="flex: 1; border: none; background: transparent; outline: none; font-size: 0.95rem; color: var(--text-primary);"
+                   autocomplete="off">
+            <button type="submit" class="btn btn-primary btn-sm">
+                <i class="bi bi-search"></i> חיפוש
+            </button>
+            <span id="search-spinner" class="htmx-indicator text-small text-muted">מחפש...</span>
+        </form>
+    </div>
+</div>
+<div id="kb-search-results" class="animate-fade-in" style="margin-bottom: var(--space-md);"></div>
+
 <!-- Category Filter -->
 <div class="filter-pills animate-fade-in">
     <a href="/kb" class="filter-pill {% if not current_category %}active{% endif %}">הכל</a>
