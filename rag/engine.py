@@ -12,9 +12,16 @@ Unchanged entries reuse their stored embeddings from the database.
 
 import logging
 import threading
+import time
 from pathlib import Path
 from contextlib import contextmanager
 import numpy as np
+
+# fcntl זמין רק ב-Linux/Unix — fallback שקט ב-Windows
+try:
+    import fcntl as _fcntl
+except ImportError:
+    _fcntl = None
 
 from ai_chatbot import database as db
 from ai_chatbot.config import FAISS_INDEX_PATH
@@ -28,6 +35,12 @@ _INDEX_STALE_FLAG: Path = FAISS_INDEX_PATH / ".stale"
 _INDEX_STATE_LOCK_FILE: Path = FAISS_INDEX_PATH / ".index_state.lock"
 _REBUILD_LOCK = threading.RLock()
 
+# Query cache — מונע embedding + FAISS search חוזרים לאותה שאלה בדיוק.
+# TTL של 5 דקות; מתרוקן אוטומטית ב-rebuild.
+_QUERY_CACHE_TTL = 300  # שניות
+_query_cache: dict[tuple[str, int], tuple[float, list[dict]]] = {}
+_query_cache_lock = threading.Lock()
+
 
 @contextmanager
 def _index_state_lock():
@@ -37,19 +50,18 @@ def _index_state_lock():
     FAISS_INDEX_PATH.mkdir(parents=True, exist_ok=True)
     f = _INDEX_STATE_LOCK_FILE.open("a+", encoding="utf-8")
     try:
-        try:
-            import fcntl  # Linux/Unix only
-            fcntl.flock(f.fileno(), fcntl.LOCK_EX)
-        except Exception:
-            # Best-effort: if flock isn't available, keep going with in-process lock only.
-            pass
+        if _fcntl:
+            try:
+                _fcntl.flock(f.fileno(), _fcntl.LOCK_EX)
+            except OSError:
+                pass
         yield
     finally:
-        try:
-            import fcntl  # Linux/Unix only
-            fcntl.flock(f.fileno(), fcntl.LOCK_UN)
-        except Exception:
-            pass
+        if _fcntl:
+            try:
+                _fcntl.flock(f.fileno(), _fcntl.LOCK_UN)
+            except OSError:
+                pass
         f.close()
 
 
@@ -200,17 +212,22 @@ def rebuild_index():
         new_embed_indices: list[int] = []  # positions in all_chunks
         new_embed_texts: list[str] = []
 
+        # מיפוי מהיר של chunks ישנים לפי (entry_id, chunk_index) — O(1) lookup במקום O(n²)
+        _old_chunk_map: dict[tuple[int, int], dict] = {}
+        for eid, chunks_list in stored_chunks.items():
+            for c in chunks_list:
+                _old_chunk_map[(eid, c["chunk_index"])] = c
+
         for i, chunk in enumerate(all_chunks):
             eid = chunk["entry_id"]
             if eid in unchanged_entry_ids:
-                # Reuse stored embedding
-                old_chunks = stored_chunks[eid]
-                matching = [c for c in old_chunks if c["chunk_index"] == chunk["index"]]
-                if matching and matching[0]["embedding"]:
-                    emb = np.frombuffer(matching[0]["embedding"], dtype=np.float32).copy()
+                # שימוש חוזר ב-embedding רק אם גם הטקסט זהה (R4)
+                old = _old_chunk_map.get((eid, chunk["index"]))
+                if old and old["embedding"] and old["chunk_text"] == chunk["text"]:
+                    emb = np.frombuffer(old["embedding"], dtype=np.float32).copy()
                     all_embeddings.append(emb)
                     continue
-                # Fallback: if stored embedding is missing, re-generate
+                # Fallback: embedding חסר או טקסט השתנה — יצירה מחדש
                 changed_entry_ids.add(eid)
                 unchanged_entry_ids.discard(eid)
 
@@ -253,6 +270,9 @@ def rebuild_index():
             db.save_chunks(entry_id, entry_chunks)
 
         _maybe_clear_stale(start_stale_token)
+        # ניקוי query cache אחרי rebuild — תוצאות ישנות כבר לא רלוונטיות
+        with _query_cache_lock:
+            _query_cache.clear()
         logger.info("RAG index rebuild complete!")
 
 
@@ -271,26 +291,50 @@ def retrieve(query: str, top_k: int = None) -> list[dict]:
         with _REBUILD_LOCK:
             if is_index_stale():
                 logger.info("RAG index marked stale. Rebuilding before retrieval...")
+                rebuild_start = time.time()
                 try:
                     rebuild_index()
                 except Exception:
                     logger.exception("Failed rebuilding stale RAG index; continuing with existing index.")
+                elapsed = time.time() - rebuild_start
+                if elapsed > 2.0:
+                    logger.warning(
+                        "Rebuild-during-retrieve took %.1fs — latency spike for this request",
+                        elapsed,
+                    )
+
+    from ai_chatbot.config import RAG_TOP_K
+    effective_top_k = top_k if top_k is not None else RAG_TOP_K
+    cache_key = (query, effective_top_k)
+
+    # בדיקת cache — אם אותה שאלה כבר נשאלה לאחרונה
+    with _query_cache_lock:
+        cached = _query_cache.get(cache_key)
+        if cached:
+            ts, results = cached
+            if time.time() - ts < _QUERY_CACHE_TTL:
+                logger.info("Query cache hit for: '%s...'", query[:50])
+                return results
 
     store = get_vector_store()
-    
+
     if store.index is None or store.index.ntotal == 0:
         logger.warning("Index is empty. Attempting to rebuild...")
         rebuild_index()
         store = get_vector_store()
         if store.index is None or store.index.ntotal == 0:
             return []
-    
+
     # Embed the query
     query_embedding = get_embedding(query)
-    
+
     # Search
     results = store.search(query_embedding, top_k=top_k)
-    
+
+    # שמירה ב-cache
+    with _query_cache_lock:
+        _query_cache[cache_key] = (time.time(), results)
+
     logger.info("Retrieved %s chunks for query: '%s...'", len(results), query[:50])
     return results
 
