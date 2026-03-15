@@ -124,10 +124,24 @@ _INTENT_PATTERNS: list[tuple[Intent, re.Pattern]] = [
         Intent.COMPLAINT,
         re.compile(
             r"("
+            # אנגלית — תלונות כלליות
             r"i\s*(want\s*to\s*)?complain|complaint|not\s*happy|not\s*satisfied|terrible\s*service"
+            r"|bad\s*service|worst\s*service|awful|disgusting|unacceptable|ridiculous|rip\s*off"
+            r"|i\s*want\s*a\s*refund|give\s*me\s*my\s*money\s*back|waste\s*of\s*(time|money)"
+            # עברית — תלונות ותסכול כללי
             r"|אני\s*לא\s*מרוצה|לא\s*מרוצה|יש\s*לי\s*בעיה|רוצה\s*להתלונן|תלונה"
             r"|שירות\s*גרוע|שירות\s*נוראי|מאוכזב|מאוכזבת|אני\s*כועס|אני\s*כועסת"
             r"|לא\s*בסדר|חוויה\s*רעה|חוויה\s*גרועה"
+            # עברית — ביטויי תסכול וסלנג
+            r"|אוי\s*נו|באסה|דבילי|שירות\s*על\s*הפנים|לא\s*עונה\s*על\s*השאלה"
+            r"|בושה|בושה\s*וחרפה|איזה\s*זלזול|שירות\s*פח"
+            r"|עושים\s*צחוק|עושה\s*צחוק"
+            # עברית — בקשות זיכוי/ביטול/נטישה
+            r"|תבטלו\s*את\s*ההזמנה|רוצה\s*זיכוי|תחזירו\s*לי\s*את\s*הכסף"
+            r"|אני\s*עוזב|לא\s*קונה\s*(אצלכם|פה)\s*יותר"
+            # עברית — המתנה ואי-מענה
+            r"|מחכה\s*כבר\s*שעות|אף\s*אחד\s*לא\s*עונה|לא\s*מגיבים"
+            r"|כבר\s*שעה\s*שאני\s*מחכה|מתי\s*כבר\s*תענו"
             r")",
             re.IGNORECASE,
         ),

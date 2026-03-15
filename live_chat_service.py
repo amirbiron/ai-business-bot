@@ -66,18 +66,20 @@ class LiveChatService:
     def is_active(user_id: str) -> bool:
         """Check whether the user is currently in a live chat session.
 
-        סוגר אוטומטית sessions שחרגו מה-timeout.
+        סוגר אוטומטית sessions שחרגו מה-timeout (לפי פעילות אחרונה, לא תחילת השיחה).
         """
         session = db.get_active_live_chat(user_id)
         if not session:
             return False
-        # בדיקת timeout — אם עברו יותר מ-SESSION_TIMEOUT_MINUTES מאז תחילת השיחה
+        # בדיקת timeout — אם עברו יותר מ-SESSION_TIMEOUT_MINUTES מאז הפעילות האחרונה
         try:
             from datetime import datetime, timezone, timedelta
-            started = datetime.strptime(session["started_at"], "%Y-%m-%d %H:%M:%S")
-            started = started.replace(tzinfo=timezone.utc)
-            if datetime.now(timezone.utc) - started > timedelta(minutes=LiveChatService.SESSION_TIMEOUT_MINUTES):
-                logger.info("Live chat session for user %s timed out after %d minutes", user_id, LiveChatService.SESSION_TIMEOUT_MINUTES)
+            # עדיפות ל-updated_at (פעילות אחרונה); fallback ל-started_at (DB ישן ללא מיגרציה)
+            last_activity_str = session.get("updated_at") or session["started_at"]
+            last_activity = datetime.strptime(last_activity_str, "%Y-%m-%d %H:%M:%S")
+            last_activity = last_activity.replace(tzinfo=timezone.utc)
+            if datetime.now(timezone.utc) - last_activity > timedelta(minutes=LiveChatService.SESSION_TIMEOUT_MINUTES):
+                logger.info("Live chat session for user %s timed out after %d minutes of inactivity", user_id, LiveChatService.SESSION_TIMEOUT_MINUTES)
                 db.end_live_chat(user_id)
                 return False
         except (KeyError, ValueError, TypeError):
@@ -185,6 +187,8 @@ class LiveChatService:
 
         username = _get_customer_username(user_id)
         db.save_message(user_id, username, "assistant", message_text)
+        # עדכון פעילות אחרונה — גם תשובת נציג מאריכה את ה-session
+        db.touch_live_chat(user_id)
 
         return True, "sent"
 
@@ -223,6 +227,8 @@ def live_chat_guard(handler):
             # Save the user's message for the human agent's context
             if update.message and update.message.text:
                 db.save_message(user_id, display_name, "user", update.message.text)
+            # עדכון פעילות אחרונה — מונע timeout בזמן שהלקוח פעיל
+            db.touch_live_chat(user_id)
             return
         return await handler(update, context)
 
@@ -242,6 +248,8 @@ def live_chat_guard_booking(handler):
         if LiveChatService.is_active(user_id):
             if update.message and update.message.text:
                 db.save_message(user_id, display_name, "user", update.message.text)
+            # עדכון פעילות אחרונה — מונע timeout בזמן שהלקוח פעיל
+            db.touch_live_chat(user_id)
             context.user_data.clear()
             return ConversationHandler.END
         return await handler(update, context)

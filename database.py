@@ -120,6 +120,7 @@ def init_db():
                 username    TEXT DEFAULT '',
                 is_active   INTEGER DEFAULT 1,
                 started_at  TEXT DEFAULT (datetime('now')),
+                updated_at  TEXT DEFAULT (datetime('now')),
                 ended_at    TEXT
             );
 
@@ -729,6 +730,15 @@ def start_live_chat(user_id: str, username: str = "") -> int:
             (user_id, username)
         )
         return cursor.lastrowid
+
+
+def touch_live_chat(user_id: str) -> None:
+    """עדכון זמן הפעילות האחרונה של שיחה חיה — למניעת timeout על שיחות פעילות."""
+    with get_connection() as conn:
+        conn.execute(
+            "UPDATE live_chats SET updated_at = datetime('now') WHERE user_id = ? AND is_active = 1",
+            (user_id,),
+        )
 
 
 def end_live_chat(user_id: str):

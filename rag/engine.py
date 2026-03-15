@@ -37,7 +37,9 @@ _REBUILD_LOCK = threading.RLock()
 
 # Query cache — מונע embedding + FAISS search חוזרים לאותה שאלה בדיוק.
 # TTL של 5 דקות; מתרוקן אוטומטית ב-rebuild.
+# מוגבל ל-_QUERY_CACHE_MAX_SIZE כדי למנוע גדילת זיכרון בלתי מוגבלת.
 _QUERY_CACHE_TTL = 300  # שניות
+_QUERY_CACHE_MAX_SIZE = 256
 _query_cache: dict[tuple[str, int], tuple[float, list[dict]]] = {}
 _query_cache_lock = threading.Lock()
 
@@ -331,9 +333,12 @@ def retrieve(query: str, top_k: int = None) -> list[dict]:
     # Search
     results = store.search(query_embedding, top_k=top_k)
 
-    # שמירה ב-cache
+    # שמירה ב-cache עם הגבלת גודל — פינוי הערך הישן ביותר אם חרגנו
     with _query_cache_lock:
         _query_cache[cache_key] = (time.time(), results)
+        if len(_query_cache) > _QUERY_CACHE_MAX_SIZE:
+            oldest_key = min(_query_cache, key=lambda k: _query_cache[k][0])
+            del _query_cache[oldest_key]
 
     logger.info("Retrieved %s chunks for query: '%s...'", len(results), query[:50])
     return results
