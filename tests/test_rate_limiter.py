@@ -15,14 +15,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
-# מוק ל-telegram לפני ייבוא rate_limiter — מונע בעיות תלויות
+# מוק ל-telegram לפני ייבוא rate_limiter — מונע בעיות תלויות.
+# conftest.py כבר מוסיף את המוקים הגלובליים ל-telegram — כאן רק fallback
+# למקרה שהקובץ רץ בבידוד מחוץ ל-suite המלא.
 _telegram_mock = MagicMock()
 sys.modules.setdefault("telegram", _telegram_mock)
 sys.modules.setdefault("telegram.ext", _telegram_mock)
-
-# מוק ל-live_chat_service שתלוי אף הוא ב-telegram
-_lcs_mock = MagicMock()
-sys.modules.setdefault("ai_chatbot.live_chat_service", _lcs_mock)
 
 import rate_limiter
 from rate_limiter import check_rate_limit, record_message, _prune, _user_timestamps
