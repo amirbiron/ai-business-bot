@@ -114,7 +114,7 @@ def run_migrations(conn) -> None:
     _ensure_column(conn, "referral_codes", "sent", "INTEGER DEFAULT 0")
 
     # ─── live_chats: עמודת updated_at למעקב אחר פעילות אחרונה ─────────────
-    _ensure_column(conn, "live_chats", "updated_at", "TEXT DEFAULT (datetime('now'))")
+    _ensure_column(conn, "live_chats", "updated_at", "TEXT DEFAULT ''")
     # Back-fill: שורות קיימות מקבלות את started_at כ-updated_at
     conn.execute(
         "UPDATE live_chats SET updated_at = started_at WHERE updated_at IS NULL"
