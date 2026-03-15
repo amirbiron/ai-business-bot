@@ -68,6 +68,9 @@ class TestDates:
         ("14 במרץ", ["14 במרץ"]),
         ("3 בינואר", ["3 בינואר"]),
         ("14 מרץ", ["14 מרץ"]),
+        # DD/MM בלי שנה
+        ("15/03", ["15/03"]),
+        ("3.7", ["3.7"]),
     ])
     def test_date_detected(self, text, expected):
         result = extract_dates(text)

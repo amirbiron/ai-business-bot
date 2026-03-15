@@ -56,6 +56,9 @@ _HEBREW_MONTHS = (
 _DATE_PATTERNS = [
     # DD/MM/YYYY, DD.MM.YYYY, DD-MM-YYYY (שנה מלאה או קצרה)
     re.compile(r'\d{1,2}[/.\-]\d{1,2}[/.\-]\d{2,4}'),
+    # DD/MM, DD.MM (בלי שנה — נפוץ בשיחות: "15/03", "3.7")
+    # lookbehind מונע תפיסת "03/26" מתוך "15/03/26"
+    re.compile(r'(?<!\d[/.\-])(?<!\d)\d{1,2}[/.\-]\d{1,2}(?![/.\-\d])'),
     # "14 במרץ", "3 בינואר", "14 מרץ"
     re.compile(rf'\d{{1,2}}\s*ב?(?:{_HEBREW_MONTHS})'),
 ]
