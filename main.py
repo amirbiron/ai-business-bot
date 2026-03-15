@@ -14,7 +14,7 @@ import threading
 import sys
 
 from ai_chatbot import database as db
-from ai_chatbot.config import TELEGRAM_BOT_TOKEN, ADMIN_HOST, ADMIN_PORT
+from ai_chatbot.config import TELEGRAM_BOT_TOKEN, ADMIN_HOST, ADMIN_PORT, validate_config
 
 logging.basicConfig(
     level=logging.INFO,
@@ -75,6 +75,13 @@ def main():
     if args.seed:
         run_seed()
         return
+
+    # ולידציה של משתני סביבה קריטיים בהתאם למצב ההרצה
+    require_bot = args.bot or (not args.bot and not args.admin)
+    require_admin = args.admin or (not args.bot and not args.admin)
+    config_errors = validate_config(require_bot=require_bot, require_admin=require_admin)
+    for err in config_errors:
+        logger.warning("⚠ תצורה: %s", err)
 
     # Auto-seed on first run: if the knowledge base is empty, populate it with
     # demo data and build the FAISS index so the bot can answer questions
