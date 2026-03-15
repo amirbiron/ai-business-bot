@@ -252,6 +252,29 @@ def init_db():
         run_migrations(conn)
 
 
+def end_expired_live_chats(max_hours: int = 4) -> int:
+    """סגירת sessions שלא עודכנו במשך max_hours שעות.
+
+    מחזיר את מספר ה-sessions שנסגרו.
+    """
+    with get_connection() as conn:
+        expired = conn.execute(
+            """SELECT COUNT(*) AS cnt FROM live_chats
+               WHERE is_active = 1
+                 AND datetime(COALESCE(updated_at, started_at), '+' || ? || ' hours') < datetime('now')""",
+            (max_hours,),
+        ).fetchone()["cnt"]
+        if expired:
+            conn.execute(
+                """UPDATE live_chats SET is_active = 0, ended_at = datetime('now')
+                   WHERE is_active = 1
+                     AND datetime(COALESCE(updated_at, started_at), '+' || ? || ' hours') < datetime('now')""",
+                (max_hours,),
+            )
+            logger.info("Auto-closed %d expired live chat session(s) (inactive > %d hours).", expired, max_hours)
+        return expired
+
+
 def cleanup_stale_live_chats():
     """Deactivate live chat sessions left over from a previous bot run.
 

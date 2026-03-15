@@ -195,6 +195,14 @@ class LiveChatService:
     # ── Lifecycle ────────────────────────────────────────────────────
 
     @staticmethod
+    def cleanup_expired(max_hours: int = 4) -> int:
+        """סגירת sessions שפתוחים יותר מ-max_hours ללא פעילות.
+
+        נקרא מ-job_queue בצורה תקופתית — סוגר sessions שנשכחו פתוחים.
+        """
+        return db.end_expired_live_chats(max_hours)
+
+    @staticmethod
     def cleanup_stale():
         """Deactivate sessions left over from a previous bot run."""
         db.cleanup_stale_live_chats()
