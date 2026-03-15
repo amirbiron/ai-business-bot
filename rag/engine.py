@@ -258,6 +258,11 @@ def rebuild_index():
         store.build_index(embeddings_array, all_metadata)
         store.save()
 
+        # נרמול ל-DB — שומרים embeddings מנורמלים כדי שיהיו עקביים עם FAISS index.
+        # build_index מנרמל על עותק פנימי, כך ש-embeddings_array עדיין raw — מנרמלים כאן.
+        import faiss as _faiss
+        _faiss.normalize_L2(embeddings_array)
+
         # Step 6: Save chunks to DB only for changed entries
         for i, chunk in enumerate(all_chunks):
             eid = chunk["entry_id"]

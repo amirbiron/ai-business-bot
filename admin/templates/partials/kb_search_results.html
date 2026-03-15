@@ -1,0 +1,36 @@
+{% if chunks %}
+<div class="table-wrapper">
+    <table>
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>קטגוריה</th>
+                <th>כותרת</th>
+                <th>קטע רלוונטי</th>
+                <th>רלוונטיות</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for chunk in chunks %}
+            <tr>
+                <td data-label="#">{{ loop.index }}</td>
+                <td data-label="קטגוריה"><span class="badge badge-category">{{ chunk.category|translate_category }}</span></td>
+                <td data-label="כותרת" class="fw-semibold" style="color: var(--text-primary);">{{ chunk.title }}</td>
+                <td data-label="קטע רלוונטי">{{ chunk.text[:200] }}{% if chunk.text|length > 200 %}...{% endif %}</td>
+                <td data-label="רלוונטיות">
+                    <span class="badge {% if chunk.score >= 0.7 %}badge-success{% elif chunk.score >= 0.5 %}badge-warning{% else %}badge-muted{% endif %}">
+                        {{ "%.0f"|format(chunk.score * 100) }}%
+                    </span>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="empty-state">
+    <i class="bi bi-search"></i>
+    <p>לא נמצאו תוצאות עבור "{{ query }}"</p>
+    <span class="text-small text-muted">נסו ניסוח אחר, או וודאו שאינדקס ה-RAG עדכני.</span>
+</div>
+{% endif %}

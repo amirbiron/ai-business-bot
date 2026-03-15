@@ -15,7 +15,6 @@ import io
 import json
 import logging
 import re
-from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from functools import wraps
 from urllib.parse import urlparse
@@ -55,7 +54,7 @@ from ai_chatbot.config import (
     FOLLOW_UP_ENABLED,
     build_system_prompt,
 )
-from ai_chatbot.rag.engine import rebuild_index, mark_index_stale, is_index_stale
+from ai_chatbot.rag.engine import rebuild_index, mark_index_stale, is_index_stale, retrieve
 from ai_chatbot.live_chat_service import LiveChatService, send_telegram_message
 from ai_chatbot.referral_service import try_send_referral_code
 from ai_chatbot.appointment_notifications import notify_appointment_status
@@ -225,23 +224,39 @@ def _telegram_html(text: str) -> str:
 # הגבלת ניסיונות התחברות — 5 ניסיונות כושלים לכל IP בחלון של 15 דקות
 _LOGIN_MAX_ATTEMPTS = 5
 _LOGIN_WINDOW_SECONDS = 15 * 60
-_login_attempts: dict[str, list[float]] = defaultdict(list)
+_LOGIN_MAX_TRACKED_IPS = 1_000
+# dict רגיל (לא defaultdict) — מונע יצירת רשומות ריקות ב-check
+_login_attempts: dict[str, list[float]] = {}
 
 
 def _check_login_rate_limit(ip: str) -> bool:
     """בודק אם ה-IP חרג ממגבלת ניסיונות ההתחברות. מחזיר True אם חסום."""
     import time
+    attempts = _login_attempts.get(ip)
+    if not attempts:
+        return False
     now = time.time()
     cutoff = now - _LOGIN_WINDOW_SECONDS
-    attempts = _login_attempts[ip]
     # ניקוי ניסיונות ישנים
-    _login_attempts[ip] = [ts for ts in attempts if ts > cutoff]
-    return len(_login_attempts[ip]) >= _LOGIN_MAX_ATTEMPTS
+    fresh = [ts for ts in attempts if ts > cutoff]
+    if fresh:
+        _login_attempts[ip] = fresh
+    else:
+        # אין ניסיונות רלוונטיים — מוחקים את ה-IP לחלוטין
+        del _login_attempts[ip]
+        return False
+    return len(fresh) >= _LOGIN_MAX_ATTEMPTS
 
 
 def _record_login_attempt(ip: str) -> None:
     """רושם ניסיון התחברות כושל."""
     import time
+    if ip not in _login_attempts:
+        _login_attempts[ip] = []
+        # LRU eviction — מוחקים את ה-IP הישן ביותר אם חרגנו
+        if len(_login_attempts) > _LOGIN_MAX_TRACKED_IPS:
+            oldest_ip = next(iter(_login_attempts))
+            del _login_attempts[oldest_ip]
     _login_attempts[ip].append(time.time())
 
 
@@ -492,7 +507,29 @@ def create_admin_app() -> Flask:
             logger.error("Index rebuild failed: %s", e)
             flash(f"בניית האינדקס נכשלה: {str(e)}", "danger")
         return redirect(url_for("kb_list"))
-    
+
+    @app.route("/kb/search")
+    @login_required
+    def kb_search():
+        """חיפוש סמנטי ב-Knowledge Base — מחזיר את הקטעים הרלוונטיים ביותר לשאילתה."""
+        query = request.args.get("q", "").strip()
+        if not query:
+            if request.headers.get("HX-Request"):
+                return ""
+            return redirect(url_for("kb_list"))
+
+        try:
+            chunks = retrieve(query, top_k=10)
+        except Exception as e:
+            logger.error("KB search failed: %s", e)
+            chunks = []
+
+        if request.headers.get("HX-Request"):
+            return render_template("partials/kb_search_results.html", chunks=chunks, query=query)
+
+        # Fallback — redirect ל-KB list (החיפוש עובד רק דרך HTMX)
+        return redirect(url_for("kb_list"))
+
     # ─── Conversations ────────────────────────────────────────────────────
     
     @app.route("/conversations")
