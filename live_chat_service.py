@@ -57,12 +57,32 @@ class LiveChatService:
     are handled in a single place.
     """
 
+    # Timeout — שיחה חיה שלא עודכנה במשך שעתיים נסגרת אוטומטית (LC2)
+    SESSION_TIMEOUT_MINUTES = 120
+
     # ── State Queries ────────────────────────────────────────────────
 
     @staticmethod
     def is_active(user_id: str) -> bool:
-        """Check whether the user is currently in a live chat session."""
-        return db.is_live_chat_active(user_id)
+        """Check whether the user is currently in a live chat session.
+
+        סוגר אוטומטית sessions שחרגו מה-timeout.
+        """
+        session = db.get_active_live_chat(user_id)
+        if not session:
+            return False
+        # בדיקת timeout — אם עברו יותר מ-SESSION_TIMEOUT_MINUTES מאז תחילת השיחה
+        try:
+            from datetime import datetime, timezone, timedelta
+            started = datetime.strptime(session["started_at"], "%Y-%m-%d %H:%M:%S")
+            started = started.replace(tzinfo=timezone.utc)
+            if datetime.now(timezone.utc) - started > timedelta(minutes=LiveChatService.SESSION_TIMEOUT_MINUTES):
+                logger.info("Live chat session for user %s timed out after %d minutes", user_id, LiveChatService.SESSION_TIMEOUT_MINUTES)
+                db.end_live_chat(user_id)
+                return False
+        except (KeyError, ValueError, TypeError):
+            pass
+        return True
 
     @staticmethod
     def get_session(user_id: str) -> Optional[dict]:

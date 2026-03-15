@@ -27,6 +27,8 @@ class Intent(Enum):
     APPOINTMENT_BOOKING = "appointment_booking"
     APPOINTMENT_CANCEL = "appointment_cancel"
     PRICING = "pricing"
+    COMPLAINT = "complaint"
+    LOCATION = "location"
     GENERAL = "general"
 
 
@@ -113,6 +115,31 @@ _INTENT_PATTERNS: list[tuple[Intent, re.Pattern]] = [
             r"|i\s*want\s*to\s*cancel\s*(my\s*)?(appointment|booking|the\s*appointment)"
             r"|לבטל\s*(את\s*)?ה?תור|ביטול\s*(ה)?תור|רוצה\s*לבטל\s*(את\s*)?ה?תור|אני\s*מבטל\s*(את\s*)?ה?תור"
             r"|אני\s*רוצה\s*לבטל\s*את\s*התור|אני\s*צריך\s*לבטל\s*(את\s*)?ה?תור"
+            r")",
+            re.IGNORECASE,
+        ),
+    ),
+    # Complaint — לקוח מתוסכל, ינותב לנציג אנושי (I1)
+    (
+        Intent.COMPLAINT,
+        re.compile(
+            r"("
+            r"i\s*(want\s*to\s*)?complain|complaint|not\s*happy|not\s*satisfied|terrible\s*service"
+            r"|אני\s*לא\s*מרוצה|לא\s*מרוצה|יש\s*לי\s*בעיה|רוצה\s*להתלונן|תלונה"
+            r"|שירות\s*גרוע|שירות\s*נוראי|מאוכזב|מאוכזבת|אני\s*כועס|אני\s*כועסת"
+            r"|לא\s*בסדר|חוויה\s*רעה|חוויה\s*גרועה"
+            r")",
+            re.IGNORECASE,
+        ),
+    ),
+    # Location — שאלות על כתובת ומיקום (I3)
+    (
+        Intent.LOCATION,
+        re.compile(
+            r"("
+            r"where\s*are\s*you|what.*address|how\s*(do\s*i\s*)?get\s*there|your\s*location|directions"
+            r"|איפה\s*אתם|מה\s*הכתובת|כתובת|איך\s*מגיעים|איך\s*אפשר\s*להגיע|מיקום|היכן\s*אתם"
+            r"|איפה\s*(ה)?(חנות|סלון|עסק|מקום)|הגעה"
             r")",
             re.IGNORECASE,
         ),

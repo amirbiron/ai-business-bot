@@ -943,6 +943,34 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(confirm_text, reply_markup=confirm_kb)
         return
 
+    # Complaint — לקוח מתוסכל, מציעים נציג אנושי (I1)
+    if intent == Intent.COMPLAINT:
+        db.save_message(user_id, display_name, "user", user_message)
+        response = (
+            "אנחנו מצטערים לשמוע שהחוויה לא הייתה טובה. 😔\n"
+            "נשמח לטפל בפנייתכם באופן אישי.\n\n"
+            'לחצו על <b>👤 דברו עם נציג</b> למטה כדי שנציג אנושי יחזור אליכם בהקדם.'
+        )
+        db.save_message(user_id, display_name, "assistant", response)
+        await _reply_html_safe(
+            update.message, response, reply_markup=_get_main_keyboard()
+        )
+        return
+
+    # Location — שאלות על מיקום וכתובת, ממוקד דרך RAG (I3)
+    if intent == Intent.LOCATION:
+        db.save_message(user_id, display_name, "user", user_message)
+        await _handle_rag_query(
+            update, context,
+            user_id=user_id,
+            display_name=display_name,
+            telegram_username=telegram_username,
+            user_message=user_message,
+            query="מיקום כתובת הגעה: " + user_message,
+            handoff_reason=f"הלקוח שאל על מיקום: {user_message}",
+        )
+        return
+
     # ── Pricing / General — both go through the RAG pipeline ────────────
     query = ("מחירון: " + user_message) if intent == Intent.PRICING else user_message
     handoff_reason = (

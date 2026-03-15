@@ -21,8 +21,12 @@ from ai_chatbot import database as db
 
 logger = logging.getLogger(__name__)
 
-# השהייה בין הודעות — 0.05 שניות (20 הודעות בשנייה, מתחת למגבלת טלגרם)
+# השהייה בין הודעות — 0.05 שניות (20 הודעות/שנייה).
+# מגבלת טלגרם: 30 הודעות/שנייה לבוטים רגילים, כך שיש מרווח של ~33%.
 _SEND_DELAY = 0.05
+
+# אורך מקסימלי של הודעת טלגרם
+_MAX_MESSAGE_LENGTH = 4096
 
 # עדכון התקדמות ב-DB כל N הודעות (לא כל הודעה — חוסך עומס על ה-DB)
 _PROGRESS_UPDATE_INTERVAL = 10
@@ -49,6 +53,15 @@ async def send_broadcast(
     מעדכן את ה-DB בהתקדמות ובסיום. מטפל ב-RetryAfter (429) ו-Forbidden (חסום).
     אם needs_init=True (admin-only mode), מאתחל את ה-Bot לפני השליחה וסוגר בסוף.
     """
+    # ולידציה — אורך הודעה (BC2)
+    if len(message_text) > _MAX_MESSAGE_LENGTH:
+        logger.error(
+            "Broadcast %d: message too long (%d chars, max %d)",
+            broadcast_id, len(message_text), _MAX_MESSAGE_LENGTH,
+        )
+        db.fail_broadcast(broadcast_id)
+        return
+
     # אתחול Bot שנוצר מחוץ ל-Application (admin-only mode)
     if needs_init:
         await bot.initialize()
@@ -91,10 +104,10 @@ async def send_broadcast(
                 logger.error("Broadcast %d: unexpected error for user %s: %s", broadcast_id, user_id, e)
                 failed += 1
 
-            # עדכון התקדמות ב-DB מדי פעם — כשל כאן לא עוצר את השליחה
+            # עדכון התקדמות ב-DB מדי פעם — async כדי לא לחסום את ה-event loop (BC3)
             if (i + 1) % _PROGRESS_UPDATE_INTERVAL == 0:
                 try:
-                    db.update_broadcast_progress(broadcast_id, sent, failed)
+                    await asyncio.to_thread(db.update_broadcast_progress, broadcast_id, sent, failed)
                 except Exception as e:
                     logger.error("Broadcast %d: progress update failed: %s", broadcast_id, e)
 

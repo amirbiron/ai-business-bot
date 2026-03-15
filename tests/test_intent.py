@@ -109,7 +109,6 @@ class TestAppointmentCancel:
 
 class TestGeneral:
     @pytest.mark.parametrize("msg", [
-        "מה הכתובת שלכם?",
         "ספרו לי על השירותים",
         "what services do you offer?",
         "",
@@ -120,3 +119,39 @@ class TestGeneral:
 
     def test_general_no_direct_response(self):
         assert get_direct_response(Intent.GENERAL) is None
+
+
+# ── תלונה ──────────────────────────────────────────────────────────────────
+
+class TestComplaint:
+    @pytest.mark.parametrize("msg", [
+        "אני לא מרוצה",
+        "רוצה להתלונן",
+        "שירות גרוע",
+        "יש לי בעיה",
+        "i want to complain",
+    ])
+    def test_complaint_detected(self, msg):
+        assert detect_intent(msg) == Intent.COMPLAINT
+
+    def test_complaint_no_direct_response(self):
+        """תלונות עוברות ל-handler ייעודי, לא תגובה ישירה."""
+        assert get_direct_response(Intent.COMPLAINT) is None
+
+
+# ── מיקום ──────────────────────────────────────────────────────────────────
+
+class TestLocation:
+    @pytest.mark.parametrize("msg", [
+        "מה הכתובת שלכם?",
+        "איפה אתם?",
+        "איך מגיעים אליכם?",
+        "where are you?",
+        "what is your address?",
+    ])
+    def test_location_detected(self, msg):
+        assert detect_intent(msg) == Intent.LOCATION
+
+    def test_location_no_direct_response(self):
+        """שאלות מיקום עוברות דרך RAG, לא תגובה ישירה."""
+        assert get_direct_response(Intent.LOCATION) is None
