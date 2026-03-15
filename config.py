@@ -193,10 +193,11 @@ _CONVERSATION_GUIDELINES: dict[str, str] = {k: v["guidelines"] for k, v in TONE_
 _RESPONSE_STRUCTURE: dict[str, str] = {k: v["response_structure"] for k, v in TONE_PROFILES.items()}
 
 
-# תווים מותרים בביטויים מותאמים אישית — אותיות (כל שפה), ספרות, רווחים וסימני פיסוק בסיסיים.
+# תווים מותרים בביטויים מותאמים אישית — אותיות (כל שפה), ספרות, רווחים,
+# סימני פיסוק בסיסיים, ותווים עסקיים נפוצים (מטבעות, אחוזים, לוכסן וכו').
 # חוסם תווים שעלולים לשמש ל-prompt injection (כמו מפרידי סקשנים ── או הנחיות מערכת).
 _CUSTOM_PHRASES_PATTERN = re.compile(
-    r"[^\w\s\u0590-\u05FF\u0600-\u06FF.,!?;:'\"\-()•·–—\n]",
+    r"[^\w\s\u0590-\u05FF\u0600-\u06FF.,!?;:'\"\-()•·–—\n%₪$€/+#&@]",
     re.UNICODE,
 )
 # אורך מקסימלי לביטויים מותאמים — הגנה מפני הצפת פרומפט
