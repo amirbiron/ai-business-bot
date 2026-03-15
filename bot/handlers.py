@@ -40,6 +40,7 @@ from ai_chatbot.config import (
     CONTEXT_WINDOW_SIZE,
     FOLLOW_UP_ENABLED,
 )
+from ai_chatbot.entity_extraction import extract_dates
 from ai_chatbot.live_chat_service import live_chat_guard, live_chat_guard_booking
 from ai_chatbot.rate_limiter import rate_limit_guard, rate_limit_guard_booking, check_rate_limit, record_message
 from ai_chatbot.vacation_service import (
@@ -545,13 +546,23 @@ async def _talk_to_agent_core(update: Update, context: ContextTypes.DEFAULT_TYPE
     """לוגיקה פנימית של בקשת נציג — ללא דקורטורים, משמשת את שני הניתובים."""
     user_id, display_name, telegram_username = _get_user_info(update)
 
+    # אם הגענו מזיהוי intent — ההודעה כבר נשמרה ב-message_handler, לא שומרים שוב
+    real_message = context.user_data.get("_agent_real_message")
+    skip_user_save = real_message is not None
+
     # Create agent request in database
+    # אם הגענו מ-intent detection — נעביר לבעל העסק את ההודעה המקורית של הלקוח
+    agent_msg = (
+        f"הלקוח ביקש נציג: {real_message}"
+        if real_message
+        else "הלקוח מבקש לדבר עם נציג אנושי."
+    )
     await _create_request_and_notify_owner(
         context,
         user_id=user_id,
         display_name=display_name,
         telegram_username=telegram_username,
-        message="הלקוח מבקש לדבר עם נציג אנושי.",
+        message=agent_msg,
     )
 
     response_text = (
@@ -560,7 +571,8 @@ async def _talk_to_agent_core(update: Update, context: ContextTypes.DEFAULT_TYPE
         "בינתיים, אתם מוזמנים לשאול אותי כל שאלה נוספת!"
     )
 
-    db.save_message(user_id, display_name, "user", "👤 שיחה עם נציג")
+    if not skip_user_save:
+        db.save_message(user_id, display_name, "user", "👤 שיחה עם נציג")
     db.save_message(user_id, display_name, "assistant", response_text)
 
     await update.message.reply_text(
@@ -656,13 +668,21 @@ async def booking_service(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 @live_chat_guard_booking
 async def booking_date(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Receive the preferred date."""
-    context.user_data["booking_date"] = update.message.text
+    user_text = update.message.text
+    context.user_data["booking_date"] = user_text
 
-    await update.message.reply_text(
+    # אימות רך — אם לא זוהה תאריך מובנה, מוסיפים רמז (לא חוסמים)
+    dates = extract_dates(user_text)
+    hint = ""
+    if not dates:
+        hint = "\n\n💡 <i>טיפ: ניתן לכתוב תאריך כמו 15/03 או '14 במרץ'.</i>"
+
+    await _reply_html_safe(
+        update.message,
         "🕐 איזו <b>שעה</b> מתאימה לכם?\n"
         "(לדוגמה, '10:00', 'אחר הצהריים', '14:00')\n\n"
-        "הקלידו /cancel כדי לחזור.",
-        parse_mode="HTML"
+        "הקלידו /cancel כדי לחזור."
+        + hint,
     )
     return BOOKING_TIME
 
@@ -827,15 +847,44 @@ async def _handle_rag_query(
 
     stripped = strip_source_citation(result["answer"])
     if _should_handoff_to_human(stripped):
-        await _handoff_to_human(
-            update, context,
-            user_id=user_id,
-            display_name=display_name,
-            telegram_username=telegram_username,
-            reason=handoff_reason,
-            chat_id=effective_chat_id,
-        )
+        # אסקלציה הדרגתית — לא מעבירים לנציג מיד בכישלון ראשון
+        fallback_count = context.user_data.get("consecutive_fallbacks", 0) + 1
+        context.user_data["consecutive_fallbacks"] = fallback_count
+
+        if fallback_count == 1:
+            # ניסיון ראשון — הצעה לנסח מחדש, בלי agent request
+            soft_msg = "לא הצלחתי למצוא תשובה מדויקת. אפשר לנסח את השאלה אחרת?"
+            db.save_message(user_id, display_name, "assistant", soft_msg)
+            if use_direct_send:
+                await _send_html_safe(context.bot, effective_chat_id, soft_msg)
+            else:
+                await _reply_html_safe(update.message, soft_msg)
+        elif fallback_count == 2:
+            # ניסיון שני — תפריט ראשי + הצעת נציג
+            menu_msg = (
+                "עדיין לא מצאתי תשובה מתאימה.\n"
+                "הנה כמה אפשרויות שאולי יעזרו, "
+                "או לחצו על <b>👤 דברו עם נציג</b>:"
+            )
+            db.save_message(user_id, display_name, "assistant", menu_msg)
+            if use_direct_send:
+                await _send_html_safe(context.bot, effective_chat_id, menu_msg, reply_markup=_get_main_keyboard())
+            else:
+                await _reply_html_safe(update.message, menu_msg, reply_markup=_get_main_keyboard())
+        else:
+            # ניסיון שלישי+ — העברה לנציג (התנהגות קיימת)
+            context.user_data["consecutive_fallbacks"] = 0
+            await _handoff_to_human(
+                update, context,
+                user_id=user_id,
+                display_name=display_name,
+                telegram_username=telegram_username,
+                reason=handoff_reason,
+                chat_id=effective_chat_id,
+            )
     else:
+        # תשובה מוצלחת — איפוס מונה fallbacks רצופים
+        context.user_data["consecutive_fallbacks"] = 0
         db.save_message(user_id, display_name, "assistant", result["answer"], ", ".join(result["sources"]))
         sanitized = sanitize_telegram_html(stripped)
         if use_direct_send:
@@ -890,17 +939,27 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # ניתוב כפתורים — מדלגים על rate_limit (כבר נספר פעם אחת) אבל
     # שומרים על live_chat_guard (ו-vacation_guard היכן שרלוונטי).
+    # איפוס מונה fallbacks — לחיצת כפתור = המשתמש התקדם, לא צריך לספור fallback
     if user_message == BUTTON_PRICE_LIST:
+        context.user_data["consecutive_fallbacks"] = 0
         return await _price_list_skip_ratelimit(update, context)
     elif user_message == BUTTON_LOCATION:
+        context.user_data["consecutive_fallbacks"] = 0
         return await _location_skip_ratelimit(update, context)
     elif user_message == BUTTON_SAVE_CONTACT:
+        context.user_data["consecutive_fallbacks"] = 0
         return await _save_contact_skip_ratelimit(update, context)
     elif user_message == BUTTON_AGENT:
+        context.user_data["consecutive_fallbacks"] = 0
         return await _talk_to_agent_skip_ratelimit(update, context)
 
     # ── Intent Detection ──────────────────────────────────────────────────
     intent = detect_intent(user_message)
+
+    # איפוס מונה fallbacks רצופים בכל intent שאינו GENERAL/PRICING (שעוברים RAG).
+    # ה-RAG path מאפס בעצמו בתוך _handle_rag_query כשהתשובה מוצלחת.
+    if intent not in (Intent.GENERAL, Intent.PRICING, Intent.LOCATION):
+        context.user_data["consecutive_fallbacks"] = 0
 
     # Greeting / Farewell — respond directly, no RAG needed
     if intent in (Intent.GREETING, Intent.FAREWELL):
@@ -955,6 +1014,22 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         db.save_message(user_id, display_name, "assistant", confirm_text)
         await update.message.reply_text(confirm_text, reply_markup=confirm_kb)
         return
+
+    # Human agent — בקשה מפורשת לנציג.
+    # בזמן חופשה — הודעת חופשה (כמו APPOINTMENT_BOOKING), כולל שמירה ב-DB.
+    # אחרת — מפעיל את לוגיקת הנציג עם ההודעה האמיתית.
+    if intent == Intent.HUMAN_AGENT:
+        db.save_message(user_id, display_name, "user", user_message)
+        if VacationService.is_active():
+            response = VacationService.get_agent_message()
+            db.save_message(user_id, display_name, "assistant", response)
+            await update.message.reply_text(response, reply_markup=_get_main_keyboard())
+            return
+        context.user_data["_agent_real_message"] = user_message
+        try:
+            return await _talk_to_agent_skip_ratelimit(update, context)
+        finally:
+            context.user_data.pop("_agent_real_message", None)
 
     # Complaint — לקוח מתוסכל, מציעים נציג אנושי (I1)
     if intent == Intent.COMPLAINT:

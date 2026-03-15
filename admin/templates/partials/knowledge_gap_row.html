@@ -11,7 +11,7 @@
         <span class="badge badge-success">טופל</span>
         {% endif %}
     </td>
-    <td data-label="נוצר" class="text-small text-muted">{{ q.created_at|il_datetime }}</td>
+    <td data-label="נוצר" class="text-small text-muted" title="{{ q.created_at|il_datetime }}">{{ q.created_at|relative_time }}</td>
     <td data-label="פעולות">
         {% if q.status == 'open' %}
         <div class="actions-cell">

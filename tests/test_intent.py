@@ -121,6 +121,42 @@ class TestGeneral:
         assert get_direct_response(Intent.GENERAL) is None
 
 
+# ── בקשת נציג ────────────────────────────────────────────────────────────
+
+class TestHumanAgent:
+    @pytest.mark.parametrize("msg", [
+        # עברית
+        "נציג",
+        "תעביר אותי לנציג",
+        "תעבירו אותי לנציג",
+        "אני רוצה לדבר עם בנאדם",
+        "אפשר נציג",
+        "אפשר לדבר עם מישהו",
+        "לדבר עם מישהו",
+        "רוצה נציג",
+        "תן לי נציג",
+        "תני לי נציג",
+        "אדם אמיתי",
+        "אני רוצה נציג",
+        # אנגלית
+        "talk to a human",
+        "I need an agent",
+        "transfer me to a representative",
+        "can I speak to a person",
+    ])
+    def test_human_agent_detected(self, msg):
+        assert detect_intent(msg) == Intent.HUMAN_AGENT
+
+    def test_human_agent_no_direct_response(self):
+        """בקשת נציג מטופלת ב-handler ייעודי, לא תגובה ישירה."""
+        assert get_direct_response(Intent.HUMAN_AGENT) is None
+
+    def test_complaint_not_triggered_by_agent_request(self):
+        """ביטוי של בקשת נציג לא צריך להיתפס כתלונה."""
+        assert detect_intent("תעביר לנציג") != Intent.COMPLAINT
+        assert detect_intent("רוצה נציג") != Intent.COMPLAINT
+
+
 # ── תלונה ──────────────────────────────────────────────────────────────────
 
 class TestComplaint:

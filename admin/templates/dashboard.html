@@ -62,7 +62,7 @@
                 <div class="d-flex justify-between align-center">
                     <div>
                         <span class="fw-semibold">{{ lc.username or lc.user_id }}</span>
-                        <br><span class="text-small text-muted">התחילה: {{ lc.started_at|il_datetime }}</span>
+                        <br><span class="text-small text-muted" title="{{ lc.started_at|il_datetime }}">התחילה: {{ lc.started_at|relative_time }}</span>
                     </div>
                     <div class="d-flex gap-sm align-center">
                         <a href="/live-chat/{{ lc.user_id }}" class="btn btn-primary btn-sm">
@@ -106,7 +106,7 @@
                                 @{{ req.telegram_username }}
                             </a>
                             {% endif %}
-                            <br><span class="text-small text-muted">{{ req.created_at|il_datetime }}</span>
+                            <br><span class="text-small text-muted" title="{{ req.created_at|il_datetime }}">{{ req.created_at|relative_time }}</span>
                         </div>
                         <div class="d-flex gap-sm align-center">
                             <a href="/live-chat/{{ req.user_id }}" class="btn btn-primary btn-sm">
@@ -177,7 +177,7 @@
                     <div>
                         <span class="fw-semibold">{{ gap.username or gap.user_id }}</span>
                         <br><span style="color: var(--text-secondary);">{{ gap.question }}</span>
-                        <br><span class="text-small text-muted">{{ gap.created_at|il_datetime }}</span>
+                        <br><span class="text-small text-muted" title="{{ gap.created_at|il_datetime }}">{{ gap.created_at|relative_time }}</span>
                     </div>
                     <a href="/kb/add?question={{ gap.question|urlencode }}&gap_id={{ gap.id }}"
                        class="btn btn-primary btn-sm">
