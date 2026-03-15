@@ -837,6 +837,24 @@ def get_unanswered_question(question_id: int) -> Optional[dict]:
         return dict(row) if row else None
 
 
+# ─── Dashboard Batch Query ─────────────────────────────────────────────────
+
+def get_dashboard_counts() -> dict[str, int]:
+    """שאילתה מאוחדת לכל מוני הדשבורד — מצמצם 6 שאילתות נפרדות לאחת."""
+    query = """
+        SELECT
+            (SELECT COUNT(*) FROM kb_entries WHERE is_active = 1) AS kb_entries,
+            (SELECT COUNT(DISTINCT category) FROM kb_entries WHERE is_active = 1) AS categories,
+            (SELECT COUNT(DISTINCT user_id) FROM conversations) AS users,
+            (SELECT COUNT(*) FROM agent_requests WHERE status = 'pending') AS pending_requests,
+            (SELECT COUNT(*) FROM appointments WHERE status = 'pending') AS pending_appointments,
+            (SELECT COUNT(*) FROM unanswered_questions WHERE status = 'open') AS open_knowledge_gaps
+    """
+    with get_connection() as conn:
+        row = conn.execute(query).fetchone()
+        return dict(row) if row else {}
+
+
 # ─── Business Hours ─────────────────────────────────────────────────────────
 
 def get_all_business_hours() -> list[dict]:

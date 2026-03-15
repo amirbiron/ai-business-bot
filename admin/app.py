@@ -15,6 +15,7 @@ import io
 import json
 import logging
 import re
+from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from functools import wraps
 from urllib.parse import urlparse
@@ -220,6 +221,44 @@ def _telegram_html(text: str) -> str:
     return Markup("".join(parts))
 
 
+# ─── Login Rate Limiting ───────────────────────────────────────────────────
+# הגבלת ניסיונות התחברות — 5 ניסיונות כושלים לכל IP בחלון של 15 דקות
+_LOGIN_MAX_ATTEMPTS = 5
+_LOGIN_WINDOW_SECONDS = 15 * 60
+_login_attempts: dict[str, list[float]] = defaultdict(list)
+
+
+def _check_login_rate_limit(ip: str) -> bool:
+    """בודק אם ה-IP חרג ממגבלת ניסיונות ההתחברות. מחזיר True אם חסום."""
+    import time
+    now = time.time()
+    cutoff = now - _LOGIN_WINDOW_SECONDS
+    attempts = _login_attempts[ip]
+    # ניקוי ניסיונות ישנים
+    _login_attempts[ip] = [ts for ts in attempts if ts > cutoff]
+    return len(_login_attempts[ip]) >= _LOGIN_MAX_ATTEMPTS
+
+
+def _record_login_attempt(ip: str) -> None:
+    """רושם ניסיון התחברות כושל."""
+    import time
+    _login_attempts[ip].append(time.time())
+
+
+# ─── Audit Log ─────────────────────────────────────────────────────────────
+# רישום פעולות admin חשובות ללוג (אבטחה וביקורת)
+def _audit_log(action: str, details: str = "") -> None:
+    """רושם פעולת admin ללוג — IP, נתיב ופרטים."""
+    ip = request.remote_addr or "unknown"
+    path = request.path
+    logger.info("AUDIT | ip=%s | path=%s | action=%s | %s", ip, path, action, details)
+
+
+# ─── User ID Validation ───────────────────────────────────────────────────
+# מזהה Telegram תקין — מספר חיובי (עד 15 ספרות)
+_TELEGRAM_USER_ID_RE = re.compile(r"^\d{1,15}$")
+
+
 def create_admin_app() -> Flask:
     """Create and configure the Flask admin application."""
     _validate_admin_security_config()
@@ -245,6 +284,10 @@ def create_admin_app() -> Flask:
 
     @app.errorhandler(CSRFError)
     def _handle_csrf_error(e):
+        logger.warning(
+            "CSRF error | ip=%s | path=%s | method=%s | reason=%s",
+            request.remote_addr, request.path, request.method, e.description,
+        )
         if request.headers.get("HX-Request"):
             # Return a lightweight 403 so HTMX doesn't replace content with
             # a full redirect page.  The csrfExpired trigger tells client JS
@@ -278,6 +321,12 @@ def create_admin_app() -> Flask:
     @app.route("/login", methods=["GET", "POST"])
     def login():
         if request.method == "POST":
+            client_ip = request.remote_addr or "unknown"
+            if _check_login_rate_limit(client_ip):
+                logger.warning("Login rate limit exceeded for IP %s", client_ip)
+                flash("יותר מדי ניסיונות התחברות. נסו שוב בעוד מספר דקות.", "danger")
+                return render_template("login.html", business_name=BUSINESS_NAME)
+
             username = request.form.get("username", "")
             password = request.form.get("password", "")
             if _verify_admin_credentials(username, password):
@@ -285,7 +334,10 @@ def create_admin_app() -> Flask:
                     session.permanent = True
                 session["logged_in"] = True
                 flash("ברוכים השבים!", "success")
+                _audit_log("login_success", f"user={username}")
                 return redirect(url_for("dashboard"))
+            _record_login_attempt(client_ip)
+            logger.warning("Failed login attempt from IP %s", client_ip)
             flash("פרטי התחברות שגויים.", "danger")
         return render_template("login.html", business_name=BUSINESS_NAME)
     
@@ -301,14 +353,11 @@ def create_admin_app() -> Flask:
     @login_required
     def dashboard():
         referral_stats = db.get_referral_stats()
+        # שאילתה מאוחדת — 6 מוני DB בשאילתה אחת במקום 6 נפרדות
+        counts = db.get_dashboard_counts()
         stats = {
-            "kb_entries": db.count_kb_entries(active_only=True),
-            "categories": db.count_kb_categories(active_only=True),
-            "users": db.count_unique_users(),
-            "pending_requests": db.count_agent_requests(status="pending"),
-            "pending_appointments": db.count_appointments(status="pending"),
+            **counts,
             "active_live_chats": LiveChatService.count_active(),
-            "open_knowledge_gaps": db.count_unanswered_questions(status="open"),
             "completed_referrals": referral_stats["completed_referrals"],
         }
 
@@ -357,6 +406,7 @@ def create_admin_app() -> Flask:
             else:
                 db.add_kb_entry(category, title, content)
                 mark_index_stale()
+                _audit_log("kb_add", f"category={category} title={title}")
                 # Auto-resolve the knowledge gap if this entry was added from one
                 if gap_id:
                     try:
@@ -399,6 +449,7 @@ def create_admin_app() -> Flask:
             else:
                 db.update_kb_entry(entry_id, category, title, content)
                 mark_index_stale()
+                _audit_log("kb_edit", f"entry_id={entry_id} title={title}")
                 flash(f"הרשומה '{title}' עודכנה בהצלחה!", "success")
                 return redirect(url_for("kb_list"))
         
@@ -416,6 +467,7 @@ def create_admin_app() -> Flask:
     def kb_delete(entry_id):
         db.delete_kb_entry(entry_id)
         mark_index_stale()
+        _audit_log("kb_delete", f"entry_id={entry_id}")
         if request.headers.get("HX-Request"):
             if db.count_kb_entries(active_only=False) == 0:
                 resp = app.make_response(
@@ -487,8 +539,21 @@ def create_admin_app() -> Flask:
             return f(user_id, *args, **kwargs)
         return decorated
 
+    def _validate_user_id(f):
+        """דקורטור: מוודא ש-user_id הוא מספר Telegram תקין."""
+        @wraps(f)
+        def decorated(user_id, *args, **kwargs):
+            if not _TELEGRAM_USER_ID_RE.match(str(user_id)):
+                if request.headers.get("HX-Request"):
+                    return app.make_response(("", 400))
+                flash("מזהה משתמש לא תקין.", "danger")
+                return redirect(url_for("conversations"))
+            return f(user_id, *args, **kwargs)
+        return decorated
+
     @app.route("/live-chat/<user_id>")
     @login_required
+    @_validate_user_id
     def live_chat(user_id):
         live_session = LiveChatService.get_session(user_id)
         messages = db.get_conversation_history(user_id, limit=100)
@@ -504,6 +569,7 @@ def create_admin_app() -> Flask:
 
     @app.route("/live-chat/<user_id>/start", methods=["POST"])
     @login_required
+    @_validate_user_id
     def live_chat_start(user_id):
         sent, status = LiveChatService.start(user_id)
         if status == "already_active":
@@ -514,6 +580,7 @@ def create_admin_app() -> Flask:
 
     @app.route("/live-chat/<user_id>/end", methods=["POST"])
     @login_required
+    @_validate_user_id
     def live_chat_end(user_id):
         back = _safe_redirect_back(url_for("conversations"))
         sent, status = LiveChatService.end(user_id)
@@ -525,6 +592,7 @@ def create_admin_app() -> Flask:
 
     @app.route("/live-chat/<user_id>/send", methods=["POST"])
     @login_required
+    @_validate_user_id
     @require_active_live_chat
     def live_chat_send(user_id):
         message_text = request.form.get("message", "").strip()
@@ -555,6 +623,7 @@ def create_admin_app() -> Flask:
 
     @app.route("/api/live-chat/<user_id>/messages")
     @login_required
+    @_validate_user_id
     def api_live_chat_messages(user_id):
         """Polling endpoint for live chat messages (HTMX)."""
         messages = db.get_conversation_history(user_id, limit=100)
@@ -787,6 +856,7 @@ def create_admin_app() -> Flask:
             vacation_end_date = request.form.get("vacation_end_date", "").strip()
             vacation_message = request.form.get("vacation_message", "").strip()
             db.update_vacation_mode(is_active, vacation_end_date, vacation_message)
+            _audit_log("vacation_mode", f"is_active={is_active}")
             if is_active:
                 flash("מצב חופשה הופעל!", "success")
             else:
@@ -817,6 +887,7 @@ def create_admin_app() -> Flask:
                 flash("טון לא חוקי.", "danger")
             else:
                 db.update_bot_settings(tone, custom_phrases)
+                _audit_log("bot_settings", f"tone={tone}")
                 flash("הגדרות הבוט עודכנו בהצלחה!", "success")
             return redirect(url_for("bot_settings"))
 
