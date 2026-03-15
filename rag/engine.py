@@ -316,7 +316,7 @@ def retrieve(query: str, top_k: int = None) -> list[dict]:
             ts, results = cached
             if time.time() - ts < _QUERY_CACHE_TTL:
                 logger.info("Query cache hit for: '%s...'", query[:50])
-                return results
+                return list(results)
 
     store = get_vector_store()
 
@@ -330,12 +330,13 @@ def retrieve(query: str, top_k: int = None) -> list[dict]:
     # Embed the query
     query_embedding = get_embedding(query)
 
-    # Search
-    results = store.search(query_embedding, top_k=top_k)
+    # Search — שימוש ב-effective_top_k (מותאם ל-None) לעקביות עם cache key
+    results = store.search(query_embedding, top_k=effective_top_k)
 
     # שמירה ב-cache עם הגבלת גודל — פינוי הערך הישן ביותר אם חרגנו
+    # שומר עותק כדי למנוע שיתוף מצב — אם הקורא ישנה את הרשימה, ה-cache לא ייפגע
     with _query_cache_lock:
-        _query_cache[cache_key] = (time.time(), results)
+        _query_cache[cache_key] = (time.time(), list(results))
         if len(_query_cache) > _QUERY_CACHE_MAX_SIZE:
             oldest_key = min(_query_cache, key=lambda k: _query_cache[k][0])
             del _query_cache[oldest_key]

@@ -75,6 +75,9 @@ def check_rate_limit(user_id: str) -> str | None:
     now = time.time()
     if user_id not in _user_timestamps:
         _user_timestamps[user_id] = deque()
+        # LRU eviction — גם ב-check, לא רק ב-record, כדי שמשתמשים rate-limited לא יגדילו את ה-dict ללא גבול
+        while len(_user_timestamps) > _MAX_TRACKED_USERS:
+            _user_timestamps.popitem(last=False)
     else:
         # LRU — מזיז את המשתמש לסוף (הכי אחרון)
         _user_timestamps.move_to_end(user_id)
