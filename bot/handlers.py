@@ -940,15 +940,17 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ניתוב כפתורים — מדלגים על rate_limit (כבר נספר פעם אחת) אבל
     # שומרים על live_chat_guard (ו-vacation_guard היכן שרלוונטי).
     # איפוס מונה fallbacks — לחיצת כפתור = המשתמש התקדם, לא צריך לספור fallback
-    context.user_data["consecutive_fallbacks"] = 0
-
     if user_message == BUTTON_PRICE_LIST:
+        context.user_data["consecutive_fallbacks"] = 0
         return await _price_list_skip_ratelimit(update, context)
     elif user_message == BUTTON_LOCATION:
+        context.user_data["consecutive_fallbacks"] = 0
         return await _location_skip_ratelimit(update, context)
     elif user_message == BUTTON_SAVE_CONTACT:
+        context.user_data["consecutive_fallbacks"] = 0
         return await _save_contact_skip_ratelimit(update, context)
     elif user_message == BUTTON_AGENT:
+        context.user_data["consecutive_fallbacks"] = 0
         return await _talk_to_agent_skip_ratelimit(update, context)
 
     # ── Intent Detection ──────────────────────────────────────────────────
