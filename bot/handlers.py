@@ -545,6 +545,10 @@ async def _talk_to_agent_core(update: Update, context: ContextTypes.DEFAULT_TYPE
     """לוגיקה פנימית של בקשת נציג — ללא דקורטורים, משמשת את שני הניתובים."""
     user_id, display_name, telegram_username = _get_user_info(update)
 
+    # אם הגענו מזיהוי intent — שומרים את ההודעה האמיתית במקום טקסט גנרי
+    real_message = context.user_data.pop("_agent_real_message", None)
+    user_log_message = real_message or "👤 שיחה עם נציג"
+
     # Create agent request in database
     await _create_request_and_notify_owner(
         context,
@@ -560,7 +564,7 @@ async def _talk_to_agent_core(update: Update, context: ContextTypes.DEFAULT_TYPE
         "בינתיים, אתם מוזמנים לשאול אותי כל שאלה נוספת!"
     )
 
-    db.save_message(user_id, display_name, "user", "👤 שיחה עם נציג")
+    db.save_message(user_id, display_name, "user", user_log_message)
     db.save_message(user_id, display_name, "assistant", response_text)
 
     await update.message.reply_text(
@@ -985,9 +989,11 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(confirm_text, reply_markup=confirm_kb)
         return
 
-    # Human agent — בקשה מפורשת לנציג, מפעיל את אותה לוגיקה כמו כפתור הנציג
+    # Human agent — בקשה מפורשת לנציג, עובר דרך vacation guard כמו כפתור הנציג.
+    # מעבירים את ההודעה האמיתית כדי שתישמר בהיסטוריה במקום טקסט גנרי.
     if intent == Intent.HUMAN_AGENT:
-        return await _talk_to_agent_core(update, context)
+        context.user_data["_agent_real_message"] = user_message
+        return await _talk_to_agent_skip_ratelimit(update, context)
 
     # Complaint — לקוח מתוסכל, מציעים נציג אנושי (I1)
     if intent == Intent.COMPLAINT:
