@@ -104,6 +104,48 @@ def _format_il_datetime(value: str) -> str:
         return value
 
 
+def _format_relative_time(value: str) -> str:
+    """המרת timestamp לזמן יחסי בעברית (לפני X דקות, אתמול, וכו').
+
+    עד שבוע — זמן יחסי. מעל שבוע — פורמט מלא DD-MM-YYYY HH:MM.
+    """
+    if not value:
+        return ""
+    try:
+        dt = datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
+        dt = dt.replace(tzinfo=timezone.utc).astimezone(ISRAEL_TZ)
+    except (ValueError, TypeError):
+        return value
+
+    now = datetime.now(ISRAEL_TZ)
+    diff = now - dt
+
+    total_seconds = int(diff.total_seconds())
+    if total_seconds < 0:
+        # זמן עתידי — מציגים פורמט מלא
+        return _format_il_datetime(value)
+
+    if total_seconds < 60:
+        return "עכשיו"
+
+    minutes = total_seconds // 60
+    if minutes < 60:
+        return f"לפני {minutes} דקות" if minutes > 1 else "לפני דקה"
+
+    hours = total_seconds // 3600
+    if hours < 24:
+        return f"לפני {hours} שעות" if hours > 1 else "לפני שעה"
+
+    days = diff.days
+    if days == 1:
+        return f"אתמול בשעה {dt.strftime('%H:%M')}"
+    if days < 7:
+        return f"לפני {days} ימים"
+
+    # מעל שבוע — פורמט מלא
+    return _format_il_datetime(value)
+
+
 def _translate_category(value: str) -> str:
     """Translate an English KB category name to Hebrew."""
     return CATEGORY_TRANSLATION.get(value, value)
@@ -289,6 +331,7 @@ def create_admin_app() -> Flask:
     csrf.init_app(app)
 
     app.jinja_env.filters["il_datetime"] = _format_il_datetime
+    app.jinja_env.filters["relative_time"] = _format_relative_time
     app.jinja_env.filters["translate_category"] = _translate_category
     app.jinja_env.filters["translate_status"] = _translate_status
     app.jinja_env.filters["telegram_html"] = _telegram_html

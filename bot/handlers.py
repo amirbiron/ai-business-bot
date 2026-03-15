@@ -827,15 +827,44 @@ async def _handle_rag_query(
 
     stripped = strip_source_citation(result["answer"])
     if _should_handoff_to_human(stripped):
-        await _handoff_to_human(
-            update, context,
-            user_id=user_id,
-            display_name=display_name,
-            telegram_username=telegram_username,
-            reason=handoff_reason,
-            chat_id=effective_chat_id,
-        )
+        # אסקלציה הדרגתית — לא מעבירים לנציג מיד בכישלון ראשון
+        fallback_count = context.user_data.get("consecutive_fallbacks", 0) + 1
+        context.user_data["consecutive_fallbacks"] = fallback_count
+
+        if fallback_count == 1:
+            # ניסיון ראשון — הצעה לנסח מחדש, בלי agent request
+            soft_msg = "לא הצלחתי למצוא תשובה מדויקת. אפשר לנסח את השאלה אחרת?"
+            db.save_message(user_id, display_name, "assistant", soft_msg)
+            if use_direct_send:
+                await _send_html_safe(context.bot, effective_chat_id, soft_msg)
+            else:
+                await _reply_html_safe(update.message, soft_msg)
+        elif fallback_count == 2:
+            # ניסיון שני — תפריט ראשי + הצעת נציג
+            menu_msg = (
+                "עדיין לא מצאתי תשובה מתאימה.\n"
+                "הנה כמה אפשרויות שאולי יעזרו, "
+                "או לחצו על <b>👤 דברו עם נציג</b>:"
+            )
+            db.save_message(user_id, display_name, "assistant", menu_msg)
+            if use_direct_send:
+                await _send_html_safe(context.bot, effective_chat_id, menu_msg, reply_markup=_get_main_keyboard())
+            else:
+                await _reply_html_safe(update.message, menu_msg, reply_markup=_get_main_keyboard())
+        else:
+            # ניסיון שלישי+ — העברה לנציג (התנהגות קיימת)
+            context.user_data["consecutive_fallbacks"] = 0
+            await _handoff_to_human(
+                update, context,
+                user_id=user_id,
+                display_name=display_name,
+                telegram_username=telegram_username,
+                reason=handoff_reason,
+                chat_id=effective_chat_id,
+            )
     else:
+        # תשובה מוצלחת — איפוס מונה fallbacks רצופים
+        context.user_data["consecutive_fallbacks"] = 0
         db.save_message(user_id, display_name, "assistant", result["answer"], ", ".join(result["sources"]))
         sanitized = sanitize_telegram_html(stripped)
         if use_direct_send:
@@ -955,6 +984,10 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         db.save_message(user_id, display_name, "assistant", confirm_text)
         await update.message.reply_text(confirm_text, reply_markup=confirm_kb)
         return
+
+    # Human agent — בקשה מפורשת לנציג, מפעיל את אותה לוגיקה כמו כפתור הנציג
+    if intent == Intent.HUMAN_AGENT:
+        return await _talk_to_agent_core(update, context)
 
     # Complaint — לקוח מתוסכל, מציעים נציג אנושי (I1)
     if intent == Intent.COMPLAINT:

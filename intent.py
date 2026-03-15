@@ -8,6 +8,7 @@ Supported intents (checked in priority order):
   PRICING               — "How much?", "כמה עולה?"       → Targeted RAG (pricing)
   APPOINTMENT_BOOKING   — "Want appointment", "רוצה תור"  → Trigger booking flow
   APPOINTMENT_CANCEL    — "Want to cancel", "לבטל תור"    → Trigger cancellation flow
+  HUMAN_AGENT           — "תעביר לנציג", "talk to agent"  → Direct handoff to human
   GENERAL               — Everything else                 → Full RAG (current behavior)
 
 Uses keyword matching for speed — no LLM call needed for classification.
@@ -28,6 +29,7 @@ class Intent(Enum):
     APPOINTMENT_CANCEL = "appointment_cancel"
     PRICING = "pricing"
     COMPLAINT = "complaint"
+    HUMAN_AGENT = "human_agent"
     LOCATION = "location"
     GENERAL = "general"
 
@@ -115,6 +117,29 @@ _INTENT_PATTERNS: list[tuple[Intent, re.Pattern]] = [
             r"|i\s*want\s*to\s*cancel\s*(my\s*)?(appointment|booking|the\s*appointment)"
             r"|לבטל\s*(את\s*)?ה?תור|ביטול\s*(ה)?תור|רוצה\s*לבטל\s*(את\s*)?ה?תור|אני\s*מבטל\s*(את\s*)?ה?תור"
             r"|אני\s*רוצה\s*לבטל\s*את\s*התור|אני\s*צריך\s*לבטל\s*(את\s*)?ה?תור"
+            r")",
+            re.IGNORECASE,
+        ),
+    ),
+    # Human agent — בקשה מפורשת לדבר עם נציג אנושי
+    (
+        Intent.HUMAN_AGENT,
+        re.compile(
+            r"("
+            # אנגלית
+            r"talk\s*to\s*(an?\s*)?(human|person|agent|representative|someone)"
+            r"|i\s*need\s*(an?\s*)?(human|person|agent)"
+            r"|transfer\s*(me\s*)?(to\s*)?(an?\s*)?(human|agent|representative)"
+            r"|can\s*i\s*(speak|talk)\s*(to|with)\s*(an?\s*)?(human|person|agent|representative)"
+            # עברית — בקשות נציג מפורשות
+            r"|תעביר\s*(אותי\s*)?(ל)?נציג|אדם\s*אמיתי"
+            r"|לדבר\s*עם\s*(מישהו|בנאדם|נציג|אדם)"
+            r"|אני\s*רוצה\s*(לדבר\s*עם\s*)?(נציג|בנאדם|אדם)"
+            r"|תן\s*לי\s*נציג|תני\s*לי\s*נציג"
+            r"|אפשר\s*נציג|אפשר\s*לדבר\s*עם\s*(נציג|מישהו)"
+            r"|תעבירו\s*(אותי\s*)?(ל)?נציג"
+            r"|רוצה\s*נציג"
+            r"|^נציג[.!?\s]*$"
             r")",
             re.IGNORECASE,
         ),
