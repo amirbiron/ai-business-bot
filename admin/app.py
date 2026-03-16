@@ -388,7 +388,7 @@ def create_admin_app() -> Flask:
             checks["database"] = "ok"
         except Exception as e:
             logger.error("Health check — DB failure: %s", e)
-            checks["database"] = str(e)
+            checks["database"] = "error"
             healthy = False
 
         # בדיקת FAISS index
@@ -397,7 +397,7 @@ def create_admin_app() -> Flask:
             checks["rag_index"] = "stale" if is_index_stale() else "ok"
         except Exception as e:
             logger.error("Health check — RAG failure: %s", e)
-            checks["rag_index"] = str(e)
+            checks["rag_index"] = "error"
             healthy = False
 
         # בדיקת Telegram token (לא קריאת API — רק שהוגדר)

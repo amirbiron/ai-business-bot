@@ -27,7 +27,6 @@ if _sentry_dsn:
         traces_sample_rate=0.2,
         environment=os.getenv("SENTRY_ENVIRONMENT", "production"),
     )
-    logging.getLogger(__name__).info("Sentry initialized")
 
 logging.basicConfig(
     level=logging.INFO,
