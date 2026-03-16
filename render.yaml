@@ -10,8 +10,8 @@ services:
     # Runs the admin panel (HTTP) and, if configured, the Telegram bot (polling)
     startCommand: python -m main
 
-    # The admin panel login page returns 200 without auth
-    healthCheckPath: /login
+    # בדיקת בריאות אמיתית — DB + RAG index
+    healthCheckPath: /health
 
     # Persist SQLite + FAISS index across deploys/restarts
     disk:
@@ -44,6 +44,10 @@ services:
       - key: ADMIN_PASSWORD
         sync: false
       - key: ADMIN_SECRET_KEY
+        sync: false
+
+      # Error tracking (Sentry)
+      - key: SENTRY_DSN
         sync: false
 
       # Optional branding

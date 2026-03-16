@@ -374,8 +374,40 @@ def create_admin_app() -> Flask:
             return f(*args, **kwargs)
         return decorated
     
+    # ─── Health Check ────────────────────────────────────────────────────
+
+    @app.route("/health")
+    def health_check():
+        """בדיקת בריאות אמיתית — DB + RAG index."""
+        checks = {}
+        healthy = True
+
+        # בדיקת DB
+        try:
+            db.count_kb_entries(active_only=False)
+            checks["database"] = "ok"
+        except Exception as e:
+            logger.error("Health check — DB failure: %s", e)
+            checks["database"] = str(e)
+            healthy = False
+
+        # בדיקת FAISS index
+        try:
+            from ai_chatbot.rag.engine import is_index_stale
+            checks["rag_index"] = "stale" if is_index_stale() else "ok"
+        except Exception as e:
+            logger.error("Health check — RAG failure: %s", e)
+            checks["rag_index"] = str(e)
+            healthy = False
+
+        # בדיקת Telegram token (לא קריאת API — רק שהוגדר)
+        checks["telegram_token"] = "configured" if TELEGRAM_BOT_TOKEN else "missing"
+
+        status_code = 200 if healthy else 503
+        return jsonify({"status": "ok" if healthy else "degraded", "checks": checks}), status_code
+
     # ─── Auth Routes ──────────────────────────────────────────────────────
-    
+
     @app.route("/login", methods=["GET", "POST"])
     def login():
         if request.method == "POST":

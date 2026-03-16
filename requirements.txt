@@ -23,5 +23,8 @@ holidays
 # QR Code Generation
 segno
 
+# Error Tracking
+sentry-sdk[flask]
+
 # Configuration
 python-dotenv
