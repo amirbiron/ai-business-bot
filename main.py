@@ -10,11 +10,23 @@ Usage:
 
 import argparse
 import logging
+import os
 import threading
 import sys
 
+import sentry_sdk
+
 from ai_chatbot import database as db
 from ai_chatbot.config import TELEGRAM_BOT_TOKEN, ADMIN_HOST, ADMIN_PORT, validate_config
+
+# ─── Sentry — ניטור שגיאות בפרודקשן ──────────────────────────────────────────
+_sentry_dsn = os.getenv("SENTRY_DSN", "")
+if _sentry_dsn:
+    sentry_sdk.init(
+        dsn=_sentry_dsn,
+        traces_sample_rate=0.2,
+        environment=os.getenv("SENTRY_ENVIRONMENT", "production"),
+    )
 
 logging.basicConfig(
     level=logging.INFO,
