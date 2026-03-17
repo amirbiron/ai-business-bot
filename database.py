@@ -1602,9 +1602,10 @@ def get_daily_message_counts(days: int = 30) -> list[dict]:
     with get_connection() as conn:
         rows = conn.execute(
             """
-            SELECT created_at, role, user_id
+            SELECT created_at, user_id
             FROM conversations
-            WHERE created_at >= datetime('now', ?)
+            WHERE role = 'user'
+              AND created_at >= datetime('now', ?)
             """,
             (f"-{days} days",),
         ).fetchall()
@@ -1622,21 +1623,15 @@ def get_daily_message_counts(days: int = 30) -> list[dict]:
                 continue
 
             if local_day not in day_data:
-                day_data[local_day] = {
-                    "user_messages": 0, "bot_messages": 0, "user_ids": set()
-                }
+                day_data[local_day] = {"user_messages": 0, "user_ids": set()}
             entry = day_data[local_day]
-            if r["role"] == "user":
-                entry["user_messages"] += 1
-                entry["user_ids"].add(r["user_id"])
-            elif r["role"] == "assistant":
-                entry["bot_messages"] += 1
+            entry["user_messages"] += 1
+            entry["user_ids"].add(r["user_id"])
 
         return [
             {
                 "day": day,
                 "user_messages": d["user_messages"],
-                "bot_messages": d["bot_messages"],
                 "unique_users": len(d["user_ids"]),
             }
             for day, d in sorted(day_data.items())

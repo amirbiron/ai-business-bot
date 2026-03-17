@@ -422,7 +422,6 @@ class TestAnalytics:
         daily = db.get_daily_message_counts(30)
         assert len(daily) >= 1
         assert daily[0]["user_messages"] == 1
-        assert daily[0]["bot_messages"] == 1
         assert daily[0]["unique_users"] == 1
 
     def test_daily_message_counts_israel_timezone(self, db):
