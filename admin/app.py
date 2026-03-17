@@ -68,6 +68,14 @@ VALID_APPOINTMENT_STATUSES = {"pending", "confirmed", "cancelled"}
 
 ISRAEL_TZ = ZoneInfo("Asia/Jerusalem")
 
+# ביטוי רגולרי לפורמט שעה תקין (00:00–23:59)
+_TIME_RE = re.compile(r"^([01]\d|2[0-3]):([0-5]\d)$")
+
+
+def _is_valid_time(val: str | None) -> bool:
+    """בודק אם מחרוזת היא שעה חוקית בפורמט HH:MM (00:00–23:59)."""
+    return val is None or val == "" or bool(_TIME_RE.match(val))
+
 CATEGORY_TRANSLATION = {
     "Staff": "הצוות",
     "Services": "שירותים",
@@ -905,10 +913,19 @@ def create_admin_app() -> Flask:
     @app.route("/business-hours/update", methods=["POST"])
     @login_required
     def business_hours_update():
+        # שלב 1: קריאה וולידציה של כל הימים לפני כתיבה ל-DB
+        days_data = []
         for day in range(7):
             is_closed = request.form.get(f"closed_{day}") == "on"
             open_time = request.form.get(f"open_{day}", "").strip()
             close_time = request.form.get(f"close_{day}", "").strip()
+            if not _is_valid_time(open_time) or not _is_valid_time(close_time):
+                day_name = DAY_NAMES_HE.get(day, str(day))
+                flash(f"שעה לא תקינה ביום {day_name} — יש להזין בפורמט HH:MM (למשל 09:00).", "danger")
+                return redirect(url_for("business_hours"))
+            days_data.append((day, open_time, close_time, is_closed))
+        # שלב 2: כל הקלטים תקינים — כותבים ל-DB
+        for day, open_time, close_time, is_closed in days_data:
             db.upsert_business_hours(day, open_time, close_time, is_closed)
         flash("שעות הפעילות עודכנו בהצלחה!", "success")
         return redirect(url_for("business_hours"))
@@ -925,6 +942,9 @@ def create_admin_app() -> Flask:
 
         if not date_str or not name:
             flash("תאריך ושם הם שדות חובה.", "danger")
+            return redirect(url_for("business_hours"))
+        if not _is_valid_time(open_time) or not _is_valid_time(close_time):
+            flash("שעה לא תקינה — יש להזין בפורמט HH:MM (למשל 09:00).", "danger")
             return redirect(url_for("business_hours"))
 
         db.add_special_day(date_str, name, is_closed, open_time, close_time, notes)
@@ -943,6 +963,9 @@ def create_admin_app() -> Flask:
 
         if not date_str or not name:
             flash("תאריך ושם הם שדות חובה.", "danger")
+            return redirect(url_for("business_hours"))
+        if not _is_valid_time(open_time) or not _is_valid_time(close_time):
+            flash("שעה לא תקינה — יש להזין בפורמט HH:MM (למשל 09:00).", "danger")
             return redirect(url_for("business_hours"))
 
         db.update_special_day(sd_id, date_str, name, is_closed, open_time, close_time, notes)
@@ -1183,6 +1206,37 @@ def create_admin_app() -> Flask:
             "success",
         )
         return redirect(url_for("broadcast"))
+
+    # ─── Analytics ──────────────────────────────────────────────────────────
+
+    @app.route("/analytics")
+    @login_required
+    def analytics():
+        # תקופת סינון — ברירת מחדל 30 יום
+        days = request.args.get("days", 30, type=int)
+        if days not in (7, 30, 90):
+            days = 30
+
+        summary = db.get_analytics_summary(days)
+        daily = db.get_daily_message_counts(days)
+        hourly = db.get_hourly_distribution(days)
+        engagement = db.get_user_engagement_stats(days)
+        top_unanswered = db.get_top_unanswered_questions(days)
+        drop_offs = db.get_conversations_with_drop_off(days)
+        popular_sources = db.get_popular_kb_sources(days)
+
+        return render_template(
+            "analytics.html",
+            business_name=BUSINESS_NAME,
+            days=days,
+            summary=summary,
+            daily=daily,
+            hourly=hourly,
+            engagement=engagement,
+            top_unanswered=top_unanswered,
+            drop_offs=drop_offs,
+            popular_sources=popular_sources,
+        )
 
     # ─── API Endpoints (for AJAX) ─────────────────────────────────────────
 

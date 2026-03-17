@@ -192,9 +192,14 @@ def is_currently_open() -> dict:
     yesterday = today - timedelta(days=1)
     yesterday_status = get_status_for_date(yesterday)
     if yesterday_status["is_open"] and yesterday_status.get("open_time") and yesterday_status.get("close_time"):
-        y_open = time.fromisoformat(yesterday_status["open_time"])
-        y_close = time.fromisoformat(yesterday_status["close_time"])
-        if y_close <= y_open and current_time < y_close:
+        try:
+            y_open = time.fromisoformat(yesterday_status["open_time"])
+            y_close = time.fromisoformat(yesterday_status["close_time"])
+        except ValueError:
+            logger.error("ערך שעה לא תקין בשעות אתמול: open=%s close=%s",
+                         yesterday_status["open_time"], yesterday_status["close_time"])
+            y_open = y_close = None
+        if y_open and y_close and y_close <= y_open and current_time < y_close:
             # Still within yesterday's overnight shift
             return {
                 "is_open": True,
@@ -227,8 +232,17 @@ def is_currently_open() -> dict:
             "next_opening": None,
         }
 
-    open_time = time.fromisoformat(open_time_str)
-    close_time = time.fromisoformat(close_time_str)
+    try:
+        open_time = time.fromisoformat(open_time_str)
+        close_time = time.fromisoformat(close_time_str)
+    except ValueError:
+        logger.error("ערך שעה לא תקין: open=%s close=%s", open_time_str, close_time_str)
+        return {
+            "is_open": True,
+            "message": "אנחנו פתוחים היום!",
+            "status_emoji": "\u2705",
+            "next_opening": None,
+        }
 
     # Handle overnight hours (e.g. open_time="22:00", close_time="02:00").
     # The early-morning tail (e.g. 01:00 for a 22:00–02:00 shift) is covered

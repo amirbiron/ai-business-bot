@@ -386,3 +386,115 @@ class TestBotSettings:
         db.update_bot_settings("invalid_tone")
         settings = db.get_bot_settings()
         assert settings["tone"] == "friendly"  # נשאר ברירת מחדל
+
+
+class TestAnalytics:
+    """טסטים לפונקציות אנליטיקה."""
+
+    def test_analytics_summary_empty(self, db):
+        """סיכום על DB ריק — אפסים בלי שגיאות."""
+        summary = db.get_analytics_summary(30)
+        assert summary["total_user_messages"] == 0
+        assert summary["unique_users"] == 0
+        assert summary["fallback_rate"] == 0
+
+    def test_analytics_summary_with_data(self, db):
+        """סיכום עם הודעות, שאלות ללא מענה, ובקשות נציג."""
+        db.save_message("u1", "א", "user", "שאלה 1")
+        db.save_message("u1", "א", "assistant", "תשובה 1")
+        db.save_message("u2", "ב", "user", "שאלה 2")
+        db.save_message("u2", "ב", "assistant", "תשובה 2")
+        db.save_unanswered_question("u1", "א", "שאלה ללא מענה")
+        db.create_agent_request("u2", "ב", "צריך עזרה")
+
+        summary = db.get_analytics_summary(30)
+        assert summary["total_user_messages"] == 2
+        assert summary["total_bot_messages"] == 2
+        assert summary["unique_users"] == 2
+        assert summary["unanswered_count"] == 1
+        assert summary["agent_request_count"] == 1
+        assert summary["fallback_rate"] == 50.0  # 1/2 = 50%
+
+    def test_daily_message_counts(self, db):
+        """ספירת הודעות יומית — מקובצות לפי יום בשעון ישראל."""
+        db.save_message("u1", "א", "user", "שלום")
+        db.save_message("u1", "א", "assistant", "היי")
+        daily = db.get_daily_message_counts(30)
+        assert len(daily) >= 1
+        assert daily[0]["user_messages"] == 1
+        assert daily[0]["unique_users"] == 1
+
+    def test_daily_message_counts_israel_timezone(self, db):
+        """הודעה ב-UTC אחרי חצות — מופיעה ביום הנכון בשעון ישראל."""
+        from datetime import datetime, timezone
+        from zoneinfo import ZoneInfo
+
+        israel_tz = ZoneInfo("Asia/Jerusalem")
+        # 01:30 UTC = 03:30/04:30 שעון ישראל (תלוי בשעון קיץ) — תמיד אותו יום
+        utc_time = datetime(2026, 3, 15, 1, 30, 0, tzinfo=timezone.utc)
+        expected_day = utc_time.astimezone(israel_tz).strftime("%Y-%m-%d")
+
+        with db.get_connection() as conn:
+            conn.execute(
+                "INSERT INTO conversations (user_id, username, role, message, created_at)"
+                " VALUES (?, ?, ?, ?, ?)",
+                ("u1", "א", "user", "הודעת לילה",
+                 utc_time.strftime("%Y-%m-%d %H:%M:%S")),
+            )
+
+        daily = db.get_daily_message_counts(30)
+        days_list = [d["day"] for d in daily]
+        assert expected_day in days_list
+
+    def test_hourly_distribution(self, db):
+        """התפלגות לפי שעה — תמיד 24 שעות."""
+        db.save_message("u1", "א", "user", "שלום")
+        hourly = db.get_hourly_distribution(30)
+        assert len(hourly) == 24
+        total = sum(h["message_count"] for h in hourly)
+        assert total == 1
+
+    def test_user_engagement_stats(self, db):
+        """סטטיסטיקות מעורבות — הודעה בודדת = drop-off."""
+        db.save_message("u1", "א", "user", "שאלה יחידה")
+        db.save_message("u2", "ב", "user", "שאלה 1")
+        db.save_message("u2", "ב", "user", "שאלה 2")
+        for i in range(5):
+            db.save_message("u3", "ג", "user", f"הודעה {i}")
+
+        engagement = db.get_user_engagement_stats(30)
+        assert engagement["total_users"] == 3
+        assert engagement["single_message_users"] == 1  # u1
+        assert engagement["engaged_users"] == 1  # u3 (5+ הודעות)
+
+    def test_drop_off_conversations(self, db):
+        """זיהוי משתמשים עם הודעה בודדת."""
+        db.save_message("u1", "א", "user", "שאלה יחידה")
+        db.save_message("u2", "ב", "user", "שאלה 1")
+        db.save_message("u2", "ב", "user", "שאלה 2")
+
+        drop_offs = db.get_conversations_with_drop_off(30)
+        assert len(drop_offs) == 1
+        assert drop_offs[0]["user_id"] == "u1"
+
+    def test_top_unanswered_questions(self, db):
+        """שאלות חמות ללא מענה — ממוינות לפי כמות."""
+        db.save_unanswered_question("u1", "א", "מה המחיר?")
+        db.save_unanswered_question("u2", "ב", "מה המחיר?")
+        db.save_unanswered_question("u3", "ג", "שאלה אחרת")
+
+        top = db.get_top_unanswered_questions(30, limit=5)
+        assert len(top) == 2
+        assert top[0]["question"] == "מה המחיר?"
+        assert top[0]["ask_count"] == 2
+
+    def test_popular_kb_sources(self, db):
+        """מקורות ידע שצוטטו הכי הרבה."""
+        db.save_message("u1", "א", "assistant", "תשובה", sources="שירותים > תספורות")
+        db.save_message("u2", "ב", "assistant", "תשובה 2", sources="שירותים > תספורות")
+        db.save_message("u3", "ג", "assistant", "תשובה 3", sources="מחירים > מבצעים")
+
+        popular = db.get_popular_kb_sources(30, limit=5)
+        assert len(popular) == 2
+        assert popular[0]["sources"] == "שירותים > תספורות"
+        assert popular[0]["cite_count"] == 2

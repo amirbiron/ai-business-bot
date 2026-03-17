@@ -11,6 +11,8 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
+from admin.app import _is_valid_time
+
 from business_hours import (
     _python_weekday_to_israeli,
     get_status_for_date,
@@ -21,6 +23,27 @@ from business_hours import (
     ISRAEL_TZ,
     DAY_NAMES_HE,
 )
+
+
+class TestTimeValidation:
+    """בדיקת פונקציית ולידציית שעות בצד השרת."""
+
+    @pytest.mark.parametrize("val,expected", [
+        ("09:00", True),
+        ("00:00", True),
+        ("23:59", True),
+        ("12:30", True),
+        (None, True),
+        ("", True),
+        ("25:99", False),
+        ("24:00", False),
+        ("9:00", False),
+        ("19:60", False),
+        ("abc", False),
+        ("12:0", False),
+    ])
+    def test_is_valid_time(self, val, expected):
+        assert _is_valid_time(val) is expected
 
 
 class TestWeekdayConversion:
@@ -156,6 +179,42 @@ class TestFormatClosedMessage:
             None,
         )
         assert "סגור" in msg
+
+
+class TestIsCurrentlyOpen:
+    """בדיקת is_currently_open — כולל טיפול בשעות לא תקינות."""
+
+    @patch("business_hours._now_israel")
+    @patch("business_hours.get_status_for_date")
+    def test_invalid_time_in_db_does_not_crash(self, mock_status, mock_now):
+        """שעה לא תקינה ב-DB (למשל '25:99') לא גורמת לקריסה."""
+        mock_now.return_value = datetime(2026, 3, 17, 12, 0, tzinfo=ISRAEL_TZ)
+        # אתמול ללא שעות — לא ייכנס לבדיקת overnight
+        mock_status.side_effect = [
+            {"is_open": False, "open_time": None, "close_time": None,
+             "reason": "", "source": "regular", "day_name": "שני"},
+            {"is_open": True, "open_time": "25:99", "close_time": "19:00",
+             "reason": "", "source": "regular", "day_name": "שלישי",
+             "notes": ""},
+        ]
+        result = is_currently_open()
+        # לא קרס — החזיר תשובה תקינה
+        assert "is_open" in result
+
+    @patch("business_hours._now_israel")
+    @patch("business_hours.get_status_for_date")
+    def test_invalid_overnight_time_does_not_crash(self, mock_status, mock_now):
+        """שעה לא תקינה בבדיקת overnight של אתמול לא גורמת לקריסה."""
+        mock_now.return_value = datetime(2026, 3, 17, 1, 0, tzinfo=ISRAEL_TZ)
+        mock_status.side_effect = [
+            {"is_open": True, "open_time": "bad", "close_time": "02:00",
+             "reason": "", "source": "regular", "day_name": "שני"},
+            {"is_open": True, "open_time": "09:00", "close_time": "19:00",
+             "reason": "", "source": "regular", "day_name": "שלישי",
+             "notes": ""},
+        ]
+        result = is_currently_open()
+        assert "is_open" in result
 
 
 class TestWeeklySchedule:

@@ -1,0 +1,232 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header animate-fade-in">
+    <h1><i class="bi bi-graph-up"></i> אנליטיקות צ'אטבוט</h1>
+    <div class="d-flex gap-sm">
+        <a href="/analytics?days=7" class="btn {% if days == 7 %}btn-primary{% else %}btn-secondary{% endif %} btn-sm">7 ימים</a>
+        <a href="/analytics?days=30" class="btn {% if days == 30 %}btn-primary{% else %}btn-secondary{% endif %} btn-sm">30 יום</a>
+        <a href="/analytics?days=90" class="btn {% if days == 90 %}btn-primary{% else %}btn-secondary{% endif %} btn-sm">90 יום</a>
+    </div>
+</div>
+
+<!-- כרטיסי KPI -->
+<div class="stats-grid">
+    <div class="stat-card gradient-blue animate-slide-up stagger-1">
+        <div class="stat-icon"><i class="bi bi-chat-left-text"></i></div>
+        <div class="stat-value">{{ summary.total_user_messages }}</div>
+        <div class="stat-label">הודעות משתמשים</div>
+    </div>
+    <div class="stat-card gradient-info animate-slide-up stagger-2">
+        <div class="stat-icon"><i class="bi bi-people"></i></div>
+        <div class="stat-value">{{ summary.unique_users }}</div>
+        <div class="stat-label">משתמשים ייחודיים</div>
+    </div>
+    <div class="stat-card gradient-warning animate-slide-up stagger-3">
+        <div class="stat-icon"><i class="bi bi-exclamation-triangle"></i></div>
+        <div class="stat-value">{{ summary.fallback_rate }}%</div>
+        <div class="stat-label">אחוז ללא מענה</div>
+    </div>
+    <div class="stat-card gradient-purple animate-slide-up stagger-4">
+        <div class="stat-icon"><i class="bi bi-bell"></i></div>
+        <div class="stat-value">{{ summary.agent_request_count }}</div>
+        <div class="stat-label">בקשות נציג</div>
+    </div>
+    <div class="stat-card gradient-success animate-slide-up stagger-5">
+        <div class="stat-icon"><i class="bi bi-arrow-repeat"></i></div>
+        <div class="stat-value">{{ engagement.returning_users }}</div>
+        <div class="stat-label">משתמשים חוזרים</div>
+    </div>
+    <div class="stat-card gradient-dark animate-slide-up stagger-5">
+        <div class="stat-icon"><i class="bi bi-chat-square-text"></i></div>
+        <div class="stat-value">{{ engagement.avg_messages_per_user }}</div>
+        <div class="stat-label">ממוצע הודעות/משתמש</div>
+    </div>
+</div>
+
+<!-- מעורבות משתמשים — פירוט -->
+<div class="card animate-slide-up stagger-3" style="margin-bottom: var(--space-sm);">
+    <div class="card-header">
+        <span><i class="bi bi-people"></i> מעורבות משתמשים</span>
+    </div>
+    <div class="card-body">
+        <div class="analytics-engagement-grid">
+            <div class="engagement-item">
+                <div class="engagement-value">{{ engagement.total_users }}</div>
+                <div class="engagement-label">סה"כ משתמשים</div>
+            </div>
+            <div class="engagement-item">
+                <div class="engagement-value">{{ engagement.single_message_users }}</div>
+                <div class="engagement-label">הודעה בודדת (drop-off)</div>
+            </div>
+            <div class="engagement-item">
+                <div class="engagement-value">{{ engagement.engaged_users }}</div>
+                <div class="engagement-label">5+ הודעות (מעורבים)</div>
+            </div>
+            <div class="engagement-item">
+                {% set drop_rate = ((engagement.single_message_users / engagement.total_users * 100) | round(1)) if engagement.total_users > 0 else 0 %}
+                <div class="engagement-value {% if drop_rate > 50 %}text-danger{% endif %}">{{ drop_rate }}%</div>
+                <div class="engagement-label">שיעור נטישה</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- גרף הודעות יומי -->
+<div class="card animate-slide-up stagger-3" style="margin-bottom: var(--space-sm);">
+    <div class="card-header">
+        <span><i class="bi bi-bar-chart"></i> הודעות לפי יום</span>
+    </div>
+    <div class="card-body">
+        {% if daily %}
+        <div class="analytics-chart-container">
+            {% set max_val = daily | map(attribute='user_messages') | max %}
+            {% for d in daily %}
+            <div class="analytics-bar-group" title="{{ d.day }}: {{ d.user_messages }} הודעות, {{ d.unique_users }} משתמשים">
+                <div class="analytics-bar"
+                     style="height: {{ (d.user_messages / max_val * 100) if max_val > 0 else 0 }}%">
+                    <span class="analytics-bar-value">{{ d.user_messages }}</span>
+                </div>
+                <div class="analytics-bar-label">{{ d.day[-5:] }}</div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <i class="bi bi-bar-chart"></i>
+            <p>אין נתונים לתקופה הנבחרת.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- התפלגות לפי שעות -->
+<div class="card animate-slide-up stagger-4" style="margin-bottom: var(--space-sm);">
+    <div class="card-header">
+        <span><i class="bi bi-clock"></i> התפלגות לפי שעה ביום</span>
+    </div>
+    <div class="card-body">
+        {% set max_hourly = hourly | map(attribute='message_count') | max %}
+        {% if max_hourly > 0 %}
+        <div class="analytics-chart-container analytics-hours-chart">
+            {% for h in hourly %}
+            <div class="analytics-bar-group" title="{{ '%02d:00' | format(h.hour) }} — {{ h.message_count }} הודעות">
+                <div class="analytics-bar analytics-bar-hour"
+                     style="height: {{ (h.message_count / max_hourly * 100) }}%">
+                </div>
+                <div class="analytics-bar-label">{{ '%02d' | format(h.hour) }}</div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <i class="bi bi-clock"></i>
+            <p>אין נתונים לתקופה הנבחרת.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="content-two-col">
+    <!-- שאלות חמות ללא מענה — drill-down -->
+    <div class="card animate-slide-up stagger-4">
+        <div class="card-header">
+            <span><i class="bi bi-question-circle"></i> שאלות חמות ללא מענה</span>
+            <a href="/knowledge-gaps" class="btn btn-secondary btn-sm">כל הפערים</a>
+        </div>
+        <div class="card-body">
+            {% if top_unanswered %}
+            <div class="list-group">
+                {% for q in top_unanswered %}
+                <div class="list-group-item">
+                    <div class="d-flex justify-between align-center">
+                        <div style="flex:1;">
+                            <span style="color: var(--text-secondary);">{{ q.question }}</span>
+                            <br>
+                            <span class="text-small text-muted">
+                                נשאלה {{ q.ask_count }} פעמים · אחרונה: {{ q.last_asked|il_datetime }}
+                            </span>
+                        </div>
+                        <div class="d-flex gap-sm align-center">
+                            {% if q.status == 'open' %}
+                            <a href="/kb/add?question={{ q.question|urlencode }}"
+                               class="btn btn-primary btn-sm">
+                                <i class="bi bi-plus-circle"></i> הוסף תשובה
+                            </a>
+                            {% else %}
+                            <span class="badge badge-success">נפתר</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <i class="bi bi-check-circle"></i>
+                <p>אין שאלות ללא מענה בתקופה.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- שיחות שנגמרו בהודעה אחת (drop-off) -->
+    <div class="card animate-slide-up stagger-5">
+        <div class="card-header">
+            <span><i class="bi bi-box-arrow-left"></i> נטישות (הודעה בודדת)</span>
+        </div>
+        <div class="card-body">
+            {% if drop_offs %}
+            <div class="list-group">
+                {% for d in drop_offs %}
+                <div class="list-group-item">
+                    <div class="d-flex justify-between align-center">
+                        <div style="flex:1;">
+                            <span class="fw-semibold">{{ d.username or d.user_id }}</span>
+                            <br><span style="color: var(--text-secondary);">{{ d.message[:120] }}{% if d.message|length > 120 %}...{% endif %}</span>
+                            <br><span class="text-small text-muted">{{ d.created_at|il_datetime }}</span>
+                        </div>
+                        <a href="/conversations?user_id={{ d.user_id }}" class="btn btn-secondary btn-sm">
+                            <i class="bi bi-chat-dots"></i>
+                        </a>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <i class="bi bi-check-circle"></i>
+                <p>אין נטישות בתקופה. מצוין!</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- מקורות ידע פופולריים -->
+<div class="card animate-slide-up stagger-5" style="margin-top: var(--space-sm);">
+    <div class="card-header">
+        <span><i class="bi bi-book"></i> מקורות ידע פופולריים</span>
+        <a href="/kb" class="btn btn-secondary btn-sm">בסיס ידע</a>
+    </div>
+    <div class="card-body">
+        {% if popular_sources %}
+        <div class="list-group">
+            {% for s in popular_sources %}
+            <div class="list-group-item">
+                <div class="d-flex justify-between align-center">
+                    <span>{{ s.sources }}</span>
+                    <span class="badge badge-info">צוטט {{ s.cite_count }} פעמים</span>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <i class="bi bi-book"></i>
+            <p>אין נתוני ציטוט לתקופה הנבחרת.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

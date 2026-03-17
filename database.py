@@ -1544,3 +1544,241 @@ def check_high_engagement(user_id: str) -> bool:
         if not row:
             return False
         return (int(row["cnt_30m"] or 0) >= 10) or (int(row["cnt_1d"] or 0) >= 20)
+
+
+# ─── Analytics ──────────────────────────────────────────────────────────────
+
+
+def get_analytics_summary(days: int = 30) -> dict:
+    """נתוני סיכום אנליטיים לתקופה נתונה — שאילתה מאוחדת אחת."""
+    with get_connection() as conn:
+        row = conn.execute(
+            """
+            SELECT
+                COUNT(CASE WHEN role = 'user' THEN 1 END) AS total_user_messages,
+                COUNT(CASE WHEN role = 'assistant' THEN 1 END) AS total_bot_messages,
+                COUNT(DISTINCT CASE WHEN role = 'user' THEN user_id END) AS unique_users
+            FROM conversations
+            WHERE created_at >= datetime('now', ?)
+            """,
+            (f"-{days} days",),
+        ).fetchone()
+        summary = dict(row) if row else {
+            "total_user_messages": 0, "total_bot_messages": 0, "unique_users": 0,
+        }
+
+        # פערי ידע ובקשות נציג בתקופה
+        counts_row = conn.execute(
+            """
+            SELECT
+                (SELECT COUNT(*) FROM unanswered_questions
+                 WHERE created_at >= datetime('now', ?)) AS unanswered_count,
+                (SELECT COUNT(*) FROM agent_requests
+                 WHERE created_at >= datetime('now', ?)) AS agent_request_count
+            """,
+            (f"-{days} days", f"-{days} days"),
+        ).fetchone()
+        summary.update(dict(counts_row) if counts_row else {})
+
+        # אחוז fallback — הודעות משתמש שגרמו ל-unanswered
+        total_user = summary.get("total_user_messages", 0)
+        unanswered = summary.get("unanswered_count", 0)
+        summary["fallback_rate"] = round(
+            (unanswered / total_user * 100) if total_user > 0 else 0, 1
+        )
+        return summary
+
+
+def get_daily_message_counts(days: int = 30) -> list[dict]:
+    """מספר הודעות לפי יום בשעון ישראל — לגרף טרנד.
+
+    SQLite שומר UTC. ההמרה לשעון ישראל (כולל שעון קיץ) נעשית ב-Python
+    כדי שגבולות הימים ישקפו את הפעילות האמיתית של הלקוחות.
+    """
+    from zoneinfo import ZoneInfo
+
+    israel_tz = ZoneInfo("Asia/Jerusalem")
+
+    with get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT created_at, user_id
+            FROM conversations
+            WHERE role = 'user'
+              AND created_at >= datetime('now', ?)
+            """,
+            (f"-{days} days",),
+        ).fetchall()
+
+        # קיבוץ לפי יום בשעון ישראל
+        day_data: dict[str, dict] = {}
+        for r in rows:
+            try:
+                utc_dt = datetime.strptime(r["created_at"], "%Y-%m-%d %H:%M:%S")
+                utc_dt = utc_dt.replace(tzinfo=timezone.utc)
+                local_day = utc_dt.astimezone(israel_tz).strftime("%Y-%m-%d")
+            except (ValueError, TypeError):
+                logger.error("שגיאה בפירוש תאריך בספירה יומית: %s",
+                             r["created_at"])
+                continue
+
+            if local_day not in day_data:
+                day_data[local_day] = {"user_messages": 0, "user_ids": set()}
+            entry = day_data[local_day]
+            entry["user_messages"] += 1
+            entry["user_ids"].add(r["user_id"])
+
+        return [
+            {
+                "day": day,
+                "user_messages": d["user_messages"],
+                "unique_users": len(d["user_ids"]),
+            }
+            for day, d in sorted(day_data.items())
+        ]
+
+
+def get_hourly_distribution(days: int = 30) -> list[dict]:
+    """התפלגות הודעות לפי שעה ביום בשעון ישראל — לזיהוי שעות עומס.
+
+    SQLite שומר UTC. ההמרה לשעון ישראל (כולל שעון קיץ) נעשית ב-Python
+    כדי לשקף את השעות האמיתיות שבהן הלקוחות פעילים.
+    """
+    from zoneinfo import ZoneInfo
+
+    israel_tz = ZoneInfo("Asia/Jerusalem")
+
+    with get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT created_at
+            FROM conversations
+            WHERE role = 'user'
+              AND created_at >= datetime('now', ?)
+            """,
+            (f"-{days} days",),
+        ).fetchall()
+        # המרת כל timestamp לשעה מקומית וספירה
+        hour_counts: dict[int, int] = {}
+        for r in rows:
+            try:
+                utc_dt = datetime.strptime(r["created_at"], "%Y-%m-%d %H:%M:%S")
+                utc_dt = utc_dt.replace(tzinfo=timezone.utc)
+                local_hour = utc_dt.astimezone(israel_tz).hour
+                hour_counts[local_hour] = hour_counts.get(local_hour, 0) + 1
+            except (ValueError, TypeError):
+                logger.error("שגיאה בפירוש תאריך בהתפלגות שעתית: %s", r["created_at"])
+        return [{"hour": h, "message_count": hour_counts.get(h, 0)} for h in range(24)]
+
+
+def get_top_unanswered_questions(days: int = 30, limit: int = 10) -> list[dict]:
+    """שאלות שחוזרות על עצמן בפערי ידע — לזיהוי נושאים חמים."""
+    with get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT question, COUNT(*) AS ask_count,
+                   MAX(created_at) AS last_asked,
+                   MIN(status) AS status
+            FROM unanswered_questions
+            WHERE created_at >= datetime('now', ?)
+            GROUP BY question
+            ORDER BY ask_count DESC, last_asked DESC
+            LIMIT ?
+            """,
+            (f"-{days} days", limit),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def get_user_engagement_stats(days: int = 30) -> dict:
+    """סטטיסטיקות מעורבות משתמשים — ממוצע הודעות, שיחות קצרות וחוזרים."""
+    with get_connection() as conn:
+        # ממוצע הודעות למשתמש
+        row = conn.execute(
+            """
+            SELECT
+                AVG(msg_count) AS avg_messages_per_user,
+                COUNT(*) AS total_users,
+                COUNT(CASE WHEN msg_count = 1 THEN 1 END) AS single_message_users,
+                COUNT(CASE WHEN msg_count >= 5 THEN 1 END) AS engaged_users
+            FROM (
+                SELECT user_id, COUNT(*) AS msg_count
+                FROM conversations
+                WHERE role = 'user'
+                  AND created_at >= datetime('now', ?)
+                GROUP BY user_id
+            )
+            """,
+            (f"-{days} days",),
+        ).fetchone()
+        stats = dict(row) if row else {}
+        stats["avg_messages_per_user"] = round(
+            float(stats.get("avg_messages_per_user") or 0), 1
+        )
+
+        # משתמשים חוזרים — מישהו שהיה פעיל גם לפני התקופה הנוכחית
+        returning = conn.execute(
+            """
+            SELECT COUNT(DISTINCT c1.user_id) AS returning_users
+            FROM conversations c1
+            WHERE c1.role = 'user'
+              AND c1.created_at >= datetime('now', ?)
+              AND EXISTS (
+                  SELECT 1 FROM conversations c2
+                  WHERE c2.user_id = c1.user_id
+                    AND c2.role = 'user'
+                    AND c2.created_at < datetime('now', ?)
+              )
+            """,
+            (f"-{days} days", f"-{days} days"),
+        ).fetchone()
+        stats["returning_users"] = returning["returning_users"] if returning else 0
+
+        return stats
+
+
+def get_conversations_with_drop_off(days: int = 30, limit: int = 10) -> list[dict]:
+    """שיחות שבהן המשתמש שלח הודעה אחת בלבד ונטש — לאבחון drop-off.
+
+    מחזיר את ההודעה האחרונה של כל משתמש עם הודעה יחידה, כדי לאפשר drill-down.
+    """
+    with get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT c.user_id, c.username, c.message, c.created_at
+            FROM conversations c
+            INNER JOIN (
+                SELECT user_id
+                FROM conversations
+                WHERE role = 'user'
+                  AND created_at >= datetime('now', ?)
+                GROUP BY user_id
+                HAVING COUNT(*) = 1
+            ) single ON c.user_id = single.user_id
+            WHERE c.role = 'user'
+              AND c.created_at >= datetime('now', ?)
+            ORDER BY c.created_at DESC
+            LIMIT ?
+            """,
+            (f"-{days} days", f"-{days} days", limit),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def get_popular_kb_sources(days: int = 30, limit: int = 10) -> list[dict]:
+    """מקורות ידע שצוטטו הכי הרבה — לזיהוי תכנים פופולריים."""
+    with get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT sources, COUNT(*) AS cite_count
+            FROM conversations
+            WHERE role = 'assistant'
+              AND sources IS NOT NULL AND sources != ''
+              AND created_at >= datetime('now', ?)
+            GROUP BY sources
+            ORDER BY cite_count DESC
+            LIMIT ?
+            """,
+            (f"-{days} days", limit),
+        ).fetchall()
+        return [dict(r) for r in rows]
