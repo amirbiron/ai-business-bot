@@ -1612,24 +1612,36 @@ def get_daily_message_counts(days: int = 30) -> list[dict]:
 
 
 def get_hourly_distribution(days: int = 30) -> list[dict]:
-    """התפלגות הודעות לפי שעה ביום — לזיהוי שעות עומס."""
+    """התפלגות הודעות לפי שעה ביום בשעון ישראל — לזיהוי שעות עומס.
+
+    SQLite שומר UTC. ההמרה לשעון ישראל (כולל שעון קיץ) נעשית ב-Python
+    כדי לשקף את השעות האמיתיות שבהן הלקוחות פעילים.
+    """
+    from zoneinfo import ZoneInfo
+
+    israel_tz = ZoneInfo("Asia/Jerusalem")
+
     with get_connection() as conn:
         rows = conn.execute(
             """
-            SELECT
-                CAST(strftime('%H', created_at) AS INTEGER) AS hour,
-                COUNT(*) AS message_count
+            SELECT created_at
             FROM conversations
             WHERE role = 'user'
               AND created_at >= datetime('now', ?)
-            GROUP BY hour
-            ORDER BY hour
             """,
             (f"-{days} days",),
         ).fetchall()
-        # מילוי שעות חסרות ב-0
-        hour_map = {r["hour"]: r["message_count"] for r in rows}
-        return [{"hour": h, "message_count": hour_map.get(h, 0)} for h in range(24)]
+        # המרת כל timestamp לשעה מקומית וספירה
+        hour_counts: dict[int, int] = {}
+        for r in rows:
+            try:
+                utc_dt = datetime.strptime(r["created_at"], "%Y-%m-%d %H:%M:%S")
+                utc_dt = utc_dt.replace(tzinfo=timezone.utc)
+                local_hour = utc_dt.astimezone(israel_tz).hour
+                hour_counts[local_hour] = hour_counts.get(local_hour, 0) + 1
+            except (ValueError, TypeError):
+                logger.error("שגיאה בפירוש תאריך בהתפלגות שעתית: %s", r["created_at"])
+        return [{"hour": h, "message_count": hour_counts.get(h, 0)} for h in range(24)]
 
 
 def get_top_unanswered_questions(days: int = 30, limit: int = 10) -> list[dict]:
