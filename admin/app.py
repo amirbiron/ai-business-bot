@@ -913,6 +913,8 @@ def create_admin_app() -> Flask:
     @app.route("/business-hours/update", methods=["POST"])
     @login_required
     def business_hours_update():
+        # שלב 1: קריאה וולידציה של כל הימים לפני כתיבה ל-DB
+        days_data = []
         for day in range(7):
             is_closed = request.form.get(f"closed_{day}") == "on"
             open_time = request.form.get(f"open_{day}", "").strip()
@@ -921,6 +923,9 @@ def create_admin_app() -> Flask:
                 day_name = DAY_NAMES_HE.get(day, str(day))
                 flash(f"שעה לא תקינה ביום {day_name} — יש להזין בפורמט HH:MM (למשל 09:00).", "danger")
                 return redirect(url_for("business_hours"))
+            days_data.append((day, open_time, close_time, is_closed))
+        # שלב 2: כל הקלטים תקינים — כותבים ל-DB
+        for day, open_time, close_time, is_closed in days_data:
             db.upsert_business_hours(day, open_time, close_time, is_closed)
         flash("שעות הפעילות עודכנו בהצלחה!", "success")
         return redirect(url_for("business_hours"))
