@@ -68,6 +68,14 @@ VALID_APPOINTMENT_STATUSES = {"pending", "confirmed", "cancelled"}
 
 ISRAEL_TZ = ZoneInfo("Asia/Jerusalem")
 
+# ביטוי רגולרי לפורמט שעה תקין (00:00–23:59)
+_TIME_RE = re.compile(r"^([01]\d|2[0-3]):([0-5]\d)$")
+
+
+def _is_valid_time(val: str | None) -> bool:
+    """בודק אם מחרוזת היא שעה חוקית בפורמט HH:MM (00:00–23:59)."""
+    return val is None or val == "" or bool(_TIME_RE.match(val))
+
 CATEGORY_TRANSLATION = {
     "Staff": "הצוות",
     "Services": "שירותים",
@@ -909,6 +917,10 @@ def create_admin_app() -> Flask:
             is_closed = request.form.get(f"closed_{day}") == "on"
             open_time = request.form.get(f"open_{day}", "").strip()
             close_time = request.form.get(f"close_{day}", "").strip()
+            if not _is_valid_time(open_time) or not _is_valid_time(close_time):
+                day_name = DAY_NAMES_HE.get(day, str(day))
+                flash(f"שעה לא תקינה ביום {day_name} — יש להזין בפורמט HH:MM (למשל 09:00).", "danger")
+                return redirect(url_for("business_hours"))
             db.upsert_business_hours(day, open_time, close_time, is_closed)
         flash("שעות הפעילות עודכנו בהצלחה!", "success")
         return redirect(url_for("business_hours"))
@@ -925,6 +937,9 @@ def create_admin_app() -> Flask:
 
         if not date_str or not name:
             flash("תאריך ושם הם שדות חובה.", "danger")
+            return redirect(url_for("business_hours"))
+        if not _is_valid_time(open_time) or not _is_valid_time(close_time):
+            flash("שעה לא תקינה — יש להזין בפורמט HH:MM (למשל 09:00).", "danger")
             return redirect(url_for("business_hours"))
 
         db.add_special_day(date_str, name, is_closed, open_time, close_time, notes)
@@ -943,6 +958,9 @@ def create_admin_app() -> Flask:
 
         if not date_str or not name:
             flash("תאריך ושם הם שדות חובה.", "danger")
+            return redirect(url_for("business_hours"))
+        if not _is_valid_time(open_time) or not _is_valid_time(close_time):
+            flash("שעה לא תקינה — יש להזין בפורמט HH:MM (למשל 09:00).", "danger")
             return redirect(url_for("business_hours"))
 
         db.update_special_day(sd_id, date_str, name, is_closed, open_time, close_time, notes)
