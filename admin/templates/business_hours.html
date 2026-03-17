@@ -29,15 +29,23 @@
                         <tr>
                             <td class="fw-semibold">{{ day_names[day_num] }}</td>
                             <td>
-                                <input type="time" name="open_{{ day_num }}"
+                                <input type="text" name="open_{{ day_num }}"
                                        value="{{ day_hours.open_time if day_hours and day_hours.open_time else '' }}"
-                                       class="form-control form-control-sm"
+                                       class="form-control form-control-sm time-input"
+                                       inputmode="numeric"
+                                       pattern="\d{2}:\d{2}"
+                                       placeholder="HH:MM"
+                                       maxlength="5"
                                        style="max-width: 140px;">
                             </td>
                             <td>
-                                <input type="time" name="close_{{ day_num }}"
+                                <input type="text" name="close_{{ day_num }}"
                                        value="{{ day_hours.close_time if day_hours and day_hours.close_time else '' }}"
-                                       class="form-control form-control-sm"
+                                       class="form-control form-control-sm time-input"
+                                       inputmode="numeric"
+                                       pattern="\d{2}:\d{2}"
+                                       placeholder="HH:MM"
+                                       maxlength="5"
                                        style="max-width: 140px;">
                             </td>
                             <td>
@@ -83,11 +91,13 @@
                     </div>
                     <div class="form-group">
                         <label class="form-label">שעת פתיחה</label>
-                        <input type="time" name="open_time" class="form-control">
+                        <input type="text" name="open_time" class="form-control time-input"
+                               inputmode="numeric" pattern="\d{2}:\d{2}" placeholder="HH:MM" maxlength="5">
                     </div>
                     <div class="form-group">
                         <label class="form-label">שעת סגירה</label>
-                        <input type="time" name="close_time" class="form-control">
+                        <input type="text" name="close_time" class="form-control time-input"
+                               inputmode="numeric" pattern="\d{2}:\d{2}" placeholder="HH:MM" maxlength="5">
                     </div>
                     <div class="form-group">
                         <label class="form-label">הערות</label>
@@ -176,11 +186,15 @@
                                 </div>
                                 <div class="form-group" style="margin: 0;">
                                     <label class="form-label">שעת פתיחה</label>
-                                    <input type="time" name="open_time" value="{{ sd.open_time or '' }}" class="form-control form-control-sm">
+                                    <input type="text" name="open_time" value="{{ sd.open_time or '' }}"
+                                           class="form-control form-control-sm time-input"
+                                           inputmode="numeric" pattern="\d{2}:\d{2}" placeholder="HH:MM" maxlength="5">
                                 </div>
                                 <div class="form-group" style="margin: 0;">
                                     <label class="form-label">שעת סגירה</label>
-                                    <input type="time" name="close_time" value="{{ sd.close_time or '' }}" class="form-control form-control-sm">
+                                    <input type="text" name="close_time" value="{{ sd.close_time or '' }}"
+                                           class="form-control form-control-sm time-input"
+                                           inputmode="numeric" pattern="\d{2}:\d{2}" placeholder="HH:MM" maxlength="5">
                                 </div>
                                 <div class="form-group" style="margin: 0;">
                                     <label class="form-label">הערות</label>
@@ -222,5 +236,16 @@ function toggleEditRow(id) {
     var editRow = document.getElementById('edit-row-' + id);
     editRow.style.display = editRow.style.display === 'none' ? '' : 'none';
 }
+
+// הוספת נקודתיים אוטומטית אחרי שתי ספרות בשדות שעה
+document.querySelectorAll('.time-input').forEach(function(input) {
+    input.addEventListener('input', function(e) {
+        var v = e.target.value.replace(/[^\d]/g, '');
+        if (v.length >= 3) {
+            v = v.slice(0, 2) + ':' + v.slice(2, 4);
+        }
+        e.target.value = v;
+    });
+});
 </script>
 {% endblock %}
