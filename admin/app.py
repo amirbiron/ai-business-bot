@@ -1184,6 +1184,37 @@ def create_admin_app() -> Flask:
         )
         return redirect(url_for("broadcast"))
 
+    # ─── Analytics ──────────────────────────────────────────────────────────
+
+    @app.route("/analytics")
+    @login_required
+    def analytics():
+        # תקופת סינון — ברירת מחדל 30 יום
+        days = request.args.get("days", 30, type=int)
+        if days not in (7, 30, 90):
+            days = 30
+
+        summary = db.get_analytics_summary(days)
+        daily = db.get_daily_message_counts(days)
+        hourly = db.get_hourly_distribution(days)
+        engagement = db.get_user_engagement_stats(days)
+        top_unanswered = db.get_top_unanswered_questions(days)
+        drop_offs = db.get_conversations_with_drop_off(days)
+        popular_sources = db.get_popular_kb_sources(days)
+
+        return render_template(
+            "analytics.html",
+            business_name=BUSINESS_NAME,
+            days=days,
+            summary=summary,
+            daily=daily,
+            hourly=hourly,
+            engagement=engagement,
+            top_unanswered=top_unanswered,
+            drop_offs=drop_offs,
+            popular_sources=popular_sources,
+        )
+
     # ─── API Endpoints (for AJAX) ─────────────────────────────────────────
 
     @app.route("/api/stats")
