@@ -416,13 +416,36 @@ class TestAnalytics:
         assert summary["fallback_rate"] == 50.0  # 1/2 = 50%
 
     def test_daily_message_counts(self, db):
-        """ספירת הודעות יומית."""
+        """ספירת הודעות יומית — מקובצות לפי יום בשעון ישראל."""
         db.save_message("u1", "א", "user", "שלום")
         db.save_message("u1", "א", "assistant", "היי")
         daily = db.get_daily_message_counts(30)
         assert len(daily) >= 1
         assert daily[0]["user_messages"] == 1
         assert daily[0]["bot_messages"] == 1
+        assert daily[0]["unique_users"] == 1
+
+    def test_daily_message_counts_israel_timezone(self, db):
+        """הודעה ב-UTC אחרי חצות — מופיעה ביום הנכון בשעון ישראל."""
+        from datetime import datetime, timezone
+        from zoneinfo import ZoneInfo
+
+        israel_tz = ZoneInfo("Asia/Jerusalem")
+        # 01:30 UTC = 03:30/04:30 שעון ישראל (תלוי בשעון קיץ) — תמיד אותו יום
+        utc_time = datetime(2026, 3, 15, 1, 30, 0, tzinfo=timezone.utc)
+        expected_day = utc_time.astimezone(israel_tz).strftime("%Y-%m-%d")
+
+        with db.get_connection() as conn:
+            conn.execute(
+                "INSERT INTO conversations (user_id, username, role, message, created_at)"
+                " VALUES (?, ?, ?, ?, ?)",
+                ("u1", "א", "user", "הודעת לילה",
+                 utc_time.strftime("%Y-%m-%d %H:%M:%S")),
+            )
+
+        daily = db.get_daily_message_counts(30)
+        days_list = [d["day"] for d in daily]
+        assert expected_day in days_list
 
     def test_hourly_distribution(self, db):
         """התפלגות לפי שעה — תמיד 24 שעות."""
