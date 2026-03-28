@@ -88,8 +88,8 @@
     // Scroll on initial page load
     scrollToBottom();
 
-    // שמירת מצב גלילה לפני swap (מניעת הבהוב מטופלת גלובלית ב-base.html)
-    document.body.addEventListener('htmx:beforeRequest', function(e) {
+    // שמירת מצב גלילה רגע לפני ה-swap — מדויק יותר מ-beforeRequest
+    document.body.addEventListener('htmx:beforeSwap', function(e) {
         if (e.detail.target && e.detail.target.id === 'live-chat-messages') {
             _wasNearBottom = checkNearBottom();
         }

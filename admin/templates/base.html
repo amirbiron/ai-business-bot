@@ -364,11 +364,15 @@
             var newContent = xhr && (xhr.response || xhr.responseText) || '';
             if (_htmxLastResponse[target.id] !== undefined && newContent === _htmxLastResponse[target.id]) {
                 e.detail.shouldSwap = false;
-                // אירוע מותאם אישית לדפים שצריכים לוגיקה נוספת כשה-swap נחסם
                 target.dispatchEvent(new CustomEvent('htmx:swapSkipped', {bubbles: true}));
-                return;
             }
-            _htmxLastResponse[target.id] = newContent;
+        });
+        // עדכון ה-cache רק כשה-swap באמת קרה — מונע "נעילת" תוכן שנחסם
+        document.body.addEventListener('htmx:afterSwap', function(e) {
+            var target = e.detail.target;
+            if (!target || !target.id) return;
+            var xhr = e.detail.xhr;
+            _htmxLastResponse[target.id] = xhr && (xhr.response || xhr.responseText) || '';
         });
 
         // HTMX: show RAG stale warning after KB delete
