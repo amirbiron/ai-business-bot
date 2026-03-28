@@ -22,7 +22,7 @@
                 <tbody id="requests-table-body"
                        hx-get="/api/requests/rows"
                        hx-trigger="every 15s"
-                       hx-swap="innerHTML settle:0.1s">
+                       hx-swap="innerHTML">
                     {% for req in requests %}
                     {% include "partials/request_row.html" %}
                     {% endfor %}
@@ -39,6 +39,16 @@
 
 {% block scripts %}
 <script>
+/* דילוג על ריענון אם התוכן לא השתנה (מניעת הבהוב) */
+document.body.addEventListener('htmx:beforeSwap', function(e) {
+    var target = e.detail.target;
+    if (!target) return;
+    var newContent = (e.detail.serverResponse || '').trim();
+    if (newContent && target.innerHTML.trim() === newContent) {
+        e.detail.shouldSwap = false;
+    }
+});
+
 (function() {
     var table = document.getElementById('requests-table');
     var emptyState = document.getElementById('requests-empty-state');

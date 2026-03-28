@@ -11,7 +11,7 @@
          id="appointments-calendar"
          hx-get="/api/appointments/calendar?year={{ cal_year }}&month={{ cal_month }}"
          hx-trigger="every 15s"
-         hx-swap="innerHTML settle:0.1s">
+         hx-swap="innerHTML">
         {% include "partials/appointments_calendar.html" %}
     </div>
 </div>
@@ -62,7 +62,7 @@
                     <tbody id="appointments-table-body"
                            hx-get="/api/appointments/rows"
                            hx-trigger="every 15s"
-                           hx-swap="innerHTML settle:0.1s">
+                           hx-swap="innerHTML">
                         {% for appt in appointments %}
                         {% include "partials/appointment_row.html" %}
                         {% endfor %}
@@ -153,14 +153,22 @@ function toggleDayDetail(el) {
 }
 
 /* ── עדכון allAppts כשהלוח מתרענן ── */
-/* דילוג על ריענון טבלת תורים אם המשתמש מקליד בשדה קלט */
+/* דילוג על ריענון אם התוכן לא השתנה (מניעת הבהוב) או אם המשתמש מקליד */
 document.body.addEventListener('htmx:beforeSwap', function(e) {
-    if (e.detail.target && e.detail.target.id === 'appointments-table-body') {
+    var target = e.detail.target;
+    if (!target) return;
+    /* דילוג אם המשתמש מקליד בשדה קלט בתוך הטבלה */
+    if (target.id === 'appointments-table-body') {
         var focused = document.activeElement;
-        if (focused && focused.tagName === 'INPUT' && e.detail.target.contains(focused)) {
+        if (focused && focused.tagName === 'INPUT' && target.contains(focused)) {
             e.detail.shouldSwap = false;
             return;
         }
+    }
+    /* דילוג אם התוכן החדש זהה לקיים */
+    var newContent = (e.detail.serverResponse || '').trim();
+    if (newContent && target.innerHTML.trim() === newContent) {
+        e.detail.shouldSwap = false;
     }
 });
 
