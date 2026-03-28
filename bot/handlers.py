@@ -1114,9 +1114,9 @@ async def cancel_appointment_callback(update: Update, context: ContextTypes.DEFA
             if cancelled:
                 response = (
                     f"התור שלך בוטל בהצלחה ✅\n\n"
-                    f"📋 <b>שירות:</b> {appt.get('service', '')}\n"
-                    f"📅 <b>תאריך:</b> {appt.get('preferred_date', '')}\n"
-                    f"🕐 <b>שעה:</b> {appt.get('preferred_time', '')}\n\n"
+                    f"📋 <b>שירות:</b> {_html.escape(appt.get('service', ''))}\n"
+                    f"📅 <b>תאריך:</b> {_html.escape(appt.get('preferred_date', ''))}\n"
+                    f"🕐 <b>שעה:</b> {_html.escape(appt.get('preferred_time', ''))}\n\n"
                     f"לקביעת תור חדש, שלחו /book"
                 )
             else:

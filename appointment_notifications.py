@@ -10,6 +10,7 @@ appointment_notifications — התראות סטטוס אוטומטיות לתו�
 
 import logging
 from datetime import datetime, timedelta
+from html import escape as _esc
 
 from live_chat_service import send_telegram_message
 from config import BUSINESS_NAME
@@ -26,14 +27,14 @@ def _build_confirmed_message(
 ) -> str:
     """בניית הודעת אישור תור."""
     lines = [
-        f"התור שלך ב{BUSINESS_NAME} אושר ✅",
+        f"התור שלך ב{_esc(BUSINESS_NAME)} אושר ✅",
         "",
-        f"📋 <b>שירות:</b> {service}",
-        f"📅 <b>תאריך:</b> {date}",
-        f"🕐 <b>שעה:</b> {time}",
+        f"📋 <b>שירות:</b> {_esc(service)}",
+        f"📅 <b>תאריך:</b> {_esc(date)}",
+        f"🕐 <b>שעה:</b> {_esc(time)}",
     ]
     if owner_message:
-        lines += ["", f"💬 {owner_message}"]
+        lines += ["", f"💬 {_esc(owner_message)}"]
     lines += ["", "נתראה! 😊"]
     return "\n".join(lines)
 
@@ -46,14 +47,14 @@ def _build_cancelled_message(
 ) -> str:
     """בניית הודעת ביטול תור."""
     lines = [
-        f"😑 התור שלך ב{BUSINESS_NAME} בוטל",
+        f"😑 התור שלך ב{_esc(BUSINESS_NAME)} בוטל",
         "",
-        f"📋 <b>שירות:</b> {service}",
-        f"📅 <b>תאריך:</b> {date}",
-        f"🕐 <b>שעה:</b> {time}",
+        f"📋 <b>שירות:</b> {_esc(service)}",
+        f"📅 <b>תאריך:</b> {_esc(date)}",
+        f"🕐 <b>שעה:</b> {_esc(time)}",
     ]
     if owner_message:
-        lines += ["", f"💬 {owner_message}"]
+        lines += ["", f"💬 {_esc(owner_message)}"]
     lines += ["", "לקביעת תור חדש, שלחו /book"]
     return "\n".join(lines)
 
@@ -129,11 +130,11 @@ def _build_reminder_message(
 ) -> str:
     """בניית הודעת תזכורת יום לפני התור."""
     lines = [
-        f"🔔 תזכורת: יש לך תור מחר ב{BUSINESS_NAME}!",
+        f"🔔 תזכורת: יש לך תור מחר ב{_esc(BUSINESS_NAME)}!",
         "",
-        f"📋 <b>שירות:</b> {service}",
-        f"📅 <b>תאריך:</b> {date}",
-        f"🕐 <b>שעה:</b> {time}",
+        f"📋 <b>שירות:</b> {_esc(service)}",
+        f"📅 <b>תאריך:</b> {_esc(date)}",
+        f"🕐 <b>שעה:</b> {_esc(time)}",
         "",
         "נתראה! 😊",
     ]
