@@ -824,8 +824,7 @@ def create_admin_app() -> Flask:
                 appt_by_date[d].append(a)
 
         # בניית שבועות של החודש (שבוע מתחיל ביום ראשון = 6 ב-Python)
-        _cal.setfirstweekday(6)  # יום ראשון
-        month_days = _cal.monthcalendar(year, month)
+        month_days = _cal.Calendar(firstweekday=6).monthdayscalendar(year, month)
 
         he_months = [
             "", "ינואר", "פברואר", "מרץ", "אפריל", "מאי", "יוני",
