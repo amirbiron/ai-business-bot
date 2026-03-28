@@ -647,7 +647,8 @@ table tbody tr:last-child td {
 
 .form-input,
 .form-textarea,
-.form-select {
+.form-select,
+.form-control {
     width: 100%;
     padding: 0.75rem 1rem;
     background: var(--bg-darker);
@@ -662,20 +663,27 @@ table tbody tr:last-child td {
 
 .form-input:focus,
 .form-textarea:focus,
-.form-select:focus {
+.form-select:focus,
+.form-control:focus {
     outline: none;
     border-color: var(--brand-blue);
     box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
 }
 
 .form-input::placeholder,
-.form-textarea::placeholder {
+.form-textarea::placeholder,
+.form-control::placeholder {
     color: var(--text-muted);
 }
 
 .form-textarea {
     resize: vertical;
     min-height: 100px;
+}
+
+.form-control-sm {
+    padding: 0.375rem 0.625rem;
+    font-size: 0.8125rem;
 }
 
 .form-hint {
