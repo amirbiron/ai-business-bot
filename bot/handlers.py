@@ -1097,35 +1097,33 @@ async def cancel_appointment_callback(update: Update, context: ContextTypes.DEFA
     user_id, display_name, telegram_username = _get_user_info(update)
 
     if query.data == "cancel_appt_yes":
-        # ביטול ישיר — רק תורים pending (לא מאושרים)
         pending = db.get_pending_appointments_for_user(user_id)
         if pending:
             appt = pending[0]  # התור הקרוב ביותר
-            db.cancel_appointment(appt["id"], user_id)
-            # התראה לבעל העסק
-            handle = _tg_handle(telegram_username) or "(ללא שם משתמש)"
-            notification = (
-                f"❌ ביטול תור\n\n"
-                f"לקוח: {display_name}\n"
-                f"יוזר: {handle}\n"
-                f"שירות: {appt.get('service', '')}\n"
-                f"תאריך: {appt.get('preferred_date', '')}\n"
-                f"שעה: {appt.get('preferred_time', '')}"
-            )
-            await _notify_owner(context, notification)
+            cancelled = db.cancel_appointment(appt["id"], user_id)
+            if cancelled:
+                response = (
+                    f"התור שלך בוטל בהצלחה! ✅\n\n"
+                    f"📋 {appt.get('service', '')}\n"
+                    f"📅 {appt.get('preferred_date', '')}\n"
+                    f"🕐 {appt.get('preferred_time', '')}\n\n"
+                    f"לקביעת תור חדש, שלחו /book"
+                )
+            else:
+                # race condition — התור אושר/בוטל בין הבדיקה לביטול
+                response = (
+                    "לא הצלחנו לבטל את התור — ייתכן שהסטטוס שלו השתנה. 🤔\n"
+                    "נסו שוב, או לחצו על <b>👤 דברו עם נציג</b> למטה."
+                )
+        elif db.has_confirmed_appointments(user_id):
             response = (
-                f"התור שלך בוטל בהצלחה! ✅\n\n"
-                f"📋 {appt.get('service', '')}\n"
-                f"📅 {appt.get('preferred_date', '')}\n"
-                f"🕐 {appt.get('preferred_time', '')}\n\n"
-                f"לקביעת תור חדש, שלחו /book"
+                "התור שלך כבר אושר ולא ניתן לבטל אותו ישירות. ✅\n\n"
+                "כדי לבטל תור מאושר — תרצו שאעביר אתכם לנציג?"
             )
         else:
-            # אין תורים pending — אולי יש confirmed שלא ניתן לבטל ישירות
             response = (
-                "אין לך תורים ממתינים שניתן לבטל. 🤔\n\n"
-                "אם יש לך תור מאושר ואת/ה רוצה לבטל אותו — "
-                'לחצו על <b>👤 דברו עם נציג</b> למטה.'
+                "לא רשום אצלנו תור על שמך. 🤔\n\n"
+                "תרצו שאעביר אתכם לנציג כדי לברר?"
             )
     else:
         response = "בסדר גמור, התור נשאר! 👍\nאיך עוד אפשר לעזור?"

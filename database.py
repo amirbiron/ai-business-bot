@@ -804,6 +804,17 @@ def cancel_appointment(appt_id: int, user_id: str) -> bool:
         return cursor.rowcount > 0
 
 
+def has_confirmed_appointments(user_id: str) -> bool:
+    """בדיקה אם למשתמש יש תורים מאושרים עתידיים."""
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT 1 FROM appointments WHERE user_id = ? AND status = 'confirmed' "
+            "AND preferred_date >= date('now') LIMIT 1",
+            (user_id,)
+        ).fetchone()
+        return row is not None
+
+
 # ─── Live Chats ─────────────────────────────────────────────────────────────
 
 def start_live_chat(user_id: str, username: str = "") -> int:
