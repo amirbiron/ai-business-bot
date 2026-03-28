@@ -19,6 +19,10 @@
                 {% if req.telegram_username %}(@{{ req.telegram_username }}){% endif %}
                 <br>
                 <span class="text-small">{{ req.message }}</span>
+                {% if req.created_at %}
+                <br>
+                <span class="text-small text-muted">{{ req.created_at|il_datetime }}</span>
+                {% endif %}
             </div>
         </div>
         <a href="/live-chat/{{ req.user_id }}" class="btn btn-primary btn-sm">
