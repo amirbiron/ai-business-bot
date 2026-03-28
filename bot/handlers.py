@@ -759,6 +759,16 @@ async def booking_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         date = context.user_data.get("booking_date", "")
         preferred_time = context.user_data.get("booking_time", "")
 
+        # הגנה מפני עיבוד כפול — בודקים אם כבר נוצר תור זהה (race condition / double-tap)
+        existing = [
+            a for a in db.get_pending_appointments_for_user(user_id)
+            if a["preferred_date"] == date and a["preferred_time"] == preferred_time
+        ]
+        if existing:
+            logger.info("תור כפול נחסם (כבר קיים): user=%s date=%s time=%s", user_id, date, preferred_time)
+            context.user_data.clear()
+            return ConversationHandler.END
+
         # Save appointment to database
         try:
             appt_id = db.create_appointment(
@@ -770,12 +780,8 @@ async def booking_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 telegram_username=telegram_username,
             )
         except IntegrityError:
-            logger.warning("כפילות תור: user=%s date=%s time=%s", user_id, date, preferred_time)
-            await update.message.reply_text(
-                f"⚠️ כבר יש לכם בקשת תור לתאריך {date} בשעה {preferred_time}.\n"
-                "אם תרצו לשנות — בטלו את הבקשה הקיימת ונסו שוב.",
-                reply_markup=_get_main_keyboard(),
-            )
+            # רשת ביטחון — אם ה-race condition עבר את הבדיקה למעלה
+            logger.warning("כפילות תור (IntegrityError): user=%s date=%s time=%s", user_id, date, preferred_time)
             context.user_data.clear()
             return ConversationHandler.END
 
