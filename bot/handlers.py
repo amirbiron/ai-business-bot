@@ -62,7 +62,8 @@ BUTTON_BOOKING = "📅 בקשת תור"
 BUTTON_LOCATION = "📍 שליחת מיקום"
 BUTTON_SAVE_CONTACT = "📇 שמור איש קשר"
 BUTTON_AGENT = "👤 דברו עם נציג"
-ALL_BUTTON_TEXTS = [BUTTON_PRICE_LIST, BUTTON_BOOKING, BUTTON_LOCATION, BUTTON_SAVE_CONTACT, BUTTON_AGENT]
+BUTTON_REFERRAL = "🎁 קוד הפניה"
+ALL_BUTTON_TEXTS = [BUTTON_PRICE_LIST, BUTTON_BOOKING, BUTTON_LOCATION, BUTTON_SAVE_CONTACT, BUTTON_AGENT, BUTTON_REFERRAL]
 
 
 @asynccontextmanager
@@ -120,13 +121,23 @@ async def _send_html_safe(bot, chat_id: int, text: str, **kwargs):
         return await bot.send_message(chat_id=chat_id, text=text, **kwargs)
 
 
-def _get_main_keyboard() -> ReplyKeyboardMarkup:
-    """Create the main menu keyboard with action buttons."""
+def _get_main_keyboard(update: Update | None = None) -> ReplyKeyboardMarkup:
+    """Create the main menu keyboard with action buttons.
+
+    אם יש update עם user_id שיש לו קוד הפניה — מוסיף כפתור שחזור קוד.
+    """
     keyboard = [
         [KeyboardButton(BUTTON_PRICE_LIST), KeyboardButton(BUTTON_BOOKING)],
         [KeyboardButton(BUTTON_LOCATION), KeyboardButton(BUTTON_SAVE_CONTACT)],
         [KeyboardButton(BUTTON_AGENT)],
     ]
+    try:
+        if update and update.effective_user:
+            user_id = str(update.effective_user.id)
+            if db.get_user_referral_code(user_id):
+                keyboard.append([KeyboardButton(BUTTON_REFERRAL)])
+    except Exception:
+        pass  # לא חוסם — המקלדת תוצג בלי הכפתור
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
 
@@ -292,12 +303,12 @@ async def _handoff_to_human(
         await context.bot.send_message(
             chat_id=chat_id,
             text=response_text,
-            reply_markup=_get_main_keyboard(),
+            reply_markup=_get_main_keyboard(update),
         )
     else:
         await update.message.reply_text(
             response_text,
-            reply_markup=_get_main_keyboard(),
+            reply_markup=_get_main_keyboard(update),
         )
 
 
@@ -355,7 +366,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         welcome_text,
         parse_mode="HTML",
-        reply_markup=_get_main_keyboard()
+        reply_markup=_get_main_keyboard(update)
     )
 
     # Log the interaction
@@ -375,7 +386,7 @@ async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             "ההרשמה שלכם כבר בוטלה. לא תקבלו הודעות שידור.\n"
             "כדי להירשם מחדש, שלחו /subscribe",
-            reply_markup=_get_main_keyboard(),
+            reply_markup=_get_main_keyboard(update),
         )
         return
 
@@ -387,7 +398,7 @@ async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "✅ ההרשמה שלכם לקבלת הודעות שידור בוטלה.\n"
         "תמשיכו לקבל תשובות רגילות מהבוט.\n\n"
         "כדי להירשם מחדש, שלחו /subscribe",
-        reply_markup=_get_main_keyboard(),
+        reply_markup=_get_main_keyboard(update),
     )
 
 
@@ -402,7 +413,7 @@ async def subscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if db.is_user_subscribed(user_id):
         await update.message.reply_text(
             "אתם כבר רשומים לקבלת הודעות שידור.",
-            reply_markup=_get_main_keyboard(),
+            reply_markup=_get_main_keyboard(update),
         )
         return
 
@@ -413,7 +424,7 @@ async def subscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "✅ נרשמתם מחדש לקבלת הודעות שידור!\n"
         "כדי לבטל בכל עת, שלחו /stop",
-        reply_markup=_get_main_keyboard(),
+        reply_markup=_get_main_keyboard(update),
     )
 
 
@@ -442,7 +453,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         help_text,
         parse_mode="HTML",
-        reply_markup=_get_main_keyboard()
+        reply_markup=_get_main_keyboard(update)
     )
 
 
@@ -559,7 +570,7 @@ async def _save_contact_core(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await update.message.reply_document(
         document=vcard_file,
         caption="הנה כרטיס הביקור שלנו! לחצו עליו ושמרו באנשי הקשר. 👇",
-        reply_markup=_get_main_keyboard(),
+        reply_markup=_get_main_keyboard(update),
     )
 
     db.save_message(user_id, display_name, "assistant", "[כרטיס ביקור נשלח]")
@@ -614,7 +625,7 @@ async def _talk_to_agent_core(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     await update.message.reply_text(
         response_text,
-        reply_markup=_get_main_keyboard()
+        reply_markup=_get_main_keyboard(update)
     )
 
 
@@ -794,7 +805,7 @@ async def booking_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             await update.message.reply_text(
                 f"⚠️ כבר יש לכם בקשת תור לתאריך {date} בשעה {preferred_time}.\n"
                 "אם תרצו לשנות — בטלו את הבקשה הקיימת ונסו שוב.",
-                reply_markup=_get_main_keyboard(),
+                reply_markup=_get_main_keyboard(update),
             )
             context.user_data.clear()
             return ConversationHandler.END
@@ -821,7 +832,7 @@ async def booking_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             f"• שעה: {preferred_time}\n\n"
             f"העברנו את הפרטים לבית העסק. "
             f"ניצור איתכם קשר בהקדם לאישור סופי של השעה.",
-            reply_markup=_get_main_keyboard()
+            reply_markup=_get_main_keyboard(update)
         )
 
         # קוד הפניה נשלח רק כשהתור מאושר ע"י בעל העסק (ב-admin)
@@ -829,7 +840,7 @@ async def booking_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await update.message.reply_text(
             "❌ בקשת התור בוטלה. אין בעיה!\n"
             "אתם מוזמנים לבקש תור חדש בכל עת.",
-            reply_markup=_get_main_keyboard()
+            reply_markup=_get_main_keyboard(update)
         )
     
     context.user_data.clear()
@@ -843,7 +854,7 @@ async def booking_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     context.user_data.clear()
     await update.message.reply_text(
         "תהליך בקשת התור בוטל. איך עוד אפשר לעזור לכם?",
-        reply_markup=_get_main_keyboard()
+        reply_markup=_get_main_keyboard(update)
     )
     return ConversationHandler.END
 
@@ -868,12 +879,14 @@ async def booking_button_interrupt(update: Update, context: ContextTypes.DEFAULT
         await _save_contact_skip_ratelimit(update, context)
     elif user_message == BUTTON_AGENT:
         await _talk_to_agent_skip_ratelimit(update, context)
+    elif user_message == BUTTON_REFERRAL:
+        await referral_command(update, context)
     else:
         # Safety fallback — should not happen, but avoid a silent dead-end
         logger.warning("booking_button_interrupt: unexpected text %r", user_message)
         await update.message.reply_text(
             "תהליך בקשת התור בוטל. איך עוד אפשר לעזור לכם?",
-            reply_markup=_get_main_keyboard(),
+            reply_markup=_get_main_keyboard(update),
         )
 
     return ConversationHandler.END
@@ -935,9 +948,9 @@ async def _handle_rag_query(
             )
             db.save_message(user_id, display_name, "assistant", menu_msg)
             if use_direct_send:
-                await _send_html_safe(context.bot, effective_chat_id, menu_msg, reply_markup=_get_main_keyboard())
+                await _send_html_safe(context.bot, effective_chat_id, menu_msg, reply_markup=_get_main_keyboard(update))
             else:
-                await _reply_html_safe(update.message, menu_msg, reply_markup=_get_main_keyboard())
+                await _reply_html_safe(update.message, menu_msg, reply_markup=_get_main_keyboard(update))
         else:
             # ניסיון שלישי+ — העברה לנציג (התנהגות קיימת)
             context.user_data["consecutive_fallbacks"] = 0
@@ -955,9 +968,9 @@ async def _handle_rag_query(
         db.save_message(user_id, display_name, "assistant", result["answer"], ", ".join(result["sources"]))
         sanitized = sanitize_telegram_html(stripped)
         if use_direct_send:
-            await _send_html_safe(context.bot, effective_chat_id, sanitized, reply_markup=_get_main_keyboard())
+            await _send_html_safe(context.bot, effective_chat_id, sanitized, reply_markup=_get_main_keyboard(update))
         else:
-            await _reply_html_safe(update.message, sanitized, reply_markup=_get_main_keyboard())
+            await _reply_html_safe(update.message, sanitized, reply_markup=_get_main_keyboard(update))
 
         # שאלות המשך — שליחה כהודעה נפרדת עם כפתורי inline
         follow_up_qs = result.get("follow_up_questions", [])
@@ -1019,6 +1032,9 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif user_message == BUTTON_AGENT:
         context.user_data["consecutive_fallbacks"] = 0
         return await _talk_to_agent_skip_ratelimit(update, context)
+    elif user_message == BUTTON_REFERRAL:
+        context.user_data["consecutive_fallbacks"] = 0
+        return await referral_command(update, context)
 
     # ── Intent Detection ──────────────────────────────────────────────────
     intent = detect_intent(user_message)
@@ -1033,7 +1049,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         db.save_message(user_id, display_name, "user", user_message)
         response = get_direct_response(intent)
         db.save_message(user_id, display_name, "assistant", response)
-        await update.message.reply_text(response, reply_markup=_get_main_keyboard())
+        await update.message.reply_text(response, reply_markup=_get_main_keyboard(update))
         return
 
     # Business hours — respond with live status, no RAG needed
@@ -1043,7 +1059,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         schedule = get_weekly_schedule_text()
         response = f"{status['message']}\n\n{schedule}"
         db.save_message(user_id, display_name, "assistant", response)
-        await update.message.reply_text(response, reply_markup=_get_main_keyboard())
+        await update.message.reply_text(response, reply_markup=_get_main_keyboard(update))
         return
 
     # Appointment booking — guide the user to the booking button so the
@@ -1056,7 +1072,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if VacationService.is_active():
             response = VacationService.get_booking_message()
             db.save_message(user_id, display_name, "assistant", response)
-            await update.message.reply_text(response, reply_markup=_get_main_keyboard())
+            await update.message.reply_text(response, reply_markup=_get_main_keyboard(update))
             return
         response = (
             "אשמח לעזור לכם לבקש תור! 📅\n\n"
@@ -1064,7 +1080,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         db.save_message(user_id, display_name, "assistant", response)
         await _reply_html_safe(
-            update.message, response, reply_markup=_get_main_keyboard()
+            update.message, response, reply_markup=_get_main_keyboard(update)
         )
         return
 
@@ -1090,7 +1106,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if VacationService.is_active():
             response = VacationService.get_agent_message()
             db.save_message(user_id, display_name, "assistant", response)
-            await update.message.reply_text(response, reply_markup=_get_main_keyboard())
+            await update.message.reply_text(response, reply_markup=_get_main_keyboard(update))
             return
         context.user_data["_agent_real_message"] = user_message
         try:
@@ -1108,7 +1124,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         db.save_message(user_id, display_name, "assistant", response)
         await _reply_html_safe(
-            update.message, response, reply_markup=_get_main_keyboard()
+            update.message, response, reply_markup=_get_main_keyboard(update)
         )
         return
 
@@ -1204,7 +1220,7 @@ async def cancel_appointment_callback(update: Update, context: ContextTypes.DEFA
     await context.bot.send_message(
         chat_id=update.effective_chat.id,
         text="👇",
-        reply_markup=_get_main_keyboard(),
+        reply_markup=_get_main_keyboard(update),
     )
 
 
@@ -1272,7 +1288,7 @@ async def referral_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "ממשיכו להשתמש בבוט ותקבלו אחד בקרוב!"
         )
 
-    await _reply_html_safe(update.message, text, reply_markup=_get_main_keyboard())
+    await _reply_html_safe(update.message, text, reply_markup=_get_main_keyboard(update))
 
 
 # ─── Follow-up Question Callback ─────────────────────────────────────────────
@@ -1343,5 +1359,5 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.effective_message.reply_text(
             "מצטערים, משהו השתבש. אנא נסו שוב או לחצו על "
             "'👤 דברו עם נציג' כדי לדבר עם נציג אנושי.",
-            reply_markup=_get_main_keyboard()
+            reply_markup=_get_main_keyboard(update)
         )
