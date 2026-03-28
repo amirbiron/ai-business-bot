@@ -1,5 +1,9 @@
 <!DOCTYPE html>
 <html lang="he" dir="rtl">
+<script>
+/* מניעת הבזק ערכת נושא שגויה בטעינה */
+(function(){var t=localStorage.getItem('admin-theme');if(t)document.documentElement.setAttribute('data-theme',t);})();
+</script>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -111,6 +115,11 @@
             </ul>
 
             <div class="sidebar-footer">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem;padding:0 0.5rem;">
+                    <button class="theme-toggle" onclick="toggleTheme()" title="החלף ערכת נושא">
+                        <i class="bi" id="theme-icon"></i>
+                    </button>
+                </div>
                 <a href="/logout">
                     <i class="bi bi-box-arrow-right"></i> התנתקות
                 </a>
@@ -346,11 +355,45 @@
             });
         }, 5000);
 
+        // ── מניעת הבהוב גלובלית — דילוג על swap כשהתגובה זהה לקודמת ──
+        var _htmxLastResponse = {};
+        document.body.addEventListener('htmx:beforeSwap', function(e) {
+            var target = e.detail.target;
+            if (!target || !target.id) return;
+            var xhr = e.detail.xhr;
+            var newContent = xhr && (xhr.response || xhr.responseText) || '';
+            if (_htmxLastResponse[target.id] !== undefined && newContent === _htmxLastResponse[target.id]) {
+                e.detail.shouldSwap = false;
+                target.dispatchEvent(new CustomEvent('htmx:swapSkipped', {bubbles: true}));
+            }
+        });
+        // עדכון ה-cache רק כשה-swap באמת קרה — מונע "נעילת" תוכן שנחסם
+        document.body.addEventListener('htmx:afterSwap', function(e) {
+            var target = e.detail.target;
+            if (!target || !target.id) return;
+            var xhr = e.detail.xhr;
+            _htmxLastResponse[target.id] = xhr && (xhr.response || xhr.responseText) || '';
+        });
+
         // HTMX: show RAG stale warning after KB delete
         document.body.addEventListener('showStaleWarning', function() {
             var banner = document.getElementById('rag-stale-banner');
             if (banner) banner.style.display = '';
         });
+
+        // ── ערכת נושא (דארק / לייט) ──
+        function applyTheme(theme) {
+            document.documentElement.setAttribute('data-theme', theme);
+            var icon = document.getElementById('theme-icon');
+            if (icon) icon.className = 'bi ' + (theme === 'light' ? 'bi-moon-fill' : 'bi-sun-fill');
+        }
+        function toggleTheme() {
+            var current = document.documentElement.getAttribute('data-theme') || 'dark';
+            var next = current === 'dark' ? 'light' : 'dark';
+            localStorage.setItem('admin-theme', next);
+            applyTheme(next);
+        }
+        applyTheme(localStorage.getItem('admin-theme') || 'dark');
 
         // HTMX: handle expired CSRF token
         document.body.addEventListener('csrfExpired', function() {

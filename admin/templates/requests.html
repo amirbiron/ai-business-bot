@@ -22,7 +22,7 @@
                 <tbody id="requests-table-body"
                        hx-get="/api/requests/rows"
                        hx-trigger="every 15s"
-                       hx-swap="innerHTML settle:0.1s">
+                       hx-swap="innerHTML">
                     {% for req in requests %}
                     {% include "partials/request_row.html" %}
                     {% endfor %}

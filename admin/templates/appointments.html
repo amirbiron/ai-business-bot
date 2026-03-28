@@ -11,7 +11,7 @@
          id="appointments-calendar"
          hx-get="/api/appointments/calendar?year={{ cal_year }}&month={{ cal_month }}"
          hx-trigger="every 15s"
-         hx-swap="innerHTML settle:0.1s">
+         hx-swap="innerHTML">
         {% include "partials/appointments_calendar.html" %}
     </div>
 </div>
@@ -62,7 +62,7 @@
                     <tbody id="appointments-table-body"
                            hx-get="/api/appointments/rows"
                            hx-trigger="every 15s"
-                           hx-swap="innerHTML settle:0.1s">
+                           hx-swap="innerHTML">
                         {% for appt in appointments %}
                         {% include "partials/appointment_row.html" %}
                         {% endfor %}
@@ -116,7 +116,8 @@ function toggleDayDetail(el) {
     }
 
     var list = (window._apptByDate || {})[day] || [];
-    title.textContent = '📅 ' + day + ' (' + list.length + ' תורים)';
+    var dayDisplay = day.split('-').reverse().join('-');
+    title.textContent = '📅 ' + dayDisplay + ' (' + list.length + ' תורים)';
     body.innerHTML = '';
 
     list.forEach(function(a) {
@@ -152,27 +153,30 @@ function toggleDayDetail(el) {
 }
 
 /* ── עדכון allAppts כשהלוח מתרענן ── */
-/* דילוג על ריענון טבלת תורים אם המשתמש מקליד בשדה קלט */
+/* ריענון נתוני תורים מהשרת */
+function _refreshApptData() {
+    fetch('/api/appointments/data')
+        .then(function(r) { return r.json(); })
+        .then(function(data) { allAppts = data; _rebuildApptIndex(); })
+        .catch(function() {});
+}
+
+/* דילוג על ריענון אם המשתמש מקליד בשדה קלט */
 document.body.addEventListener('htmx:beforeSwap', function(e) {
-    if (e.detail.target && e.detail.target.id === 'appointments-table-body') {
+    var target = e.detail.target;
+    if (target && target.id === 'appointments-table-body') {
         var focused = document.activeElement;
-        if (focused && focused.tagName === 'INPUT' && e.detail.target.contains(focused)) {
+        if (focused && focused.tagName === 'INPUT' && target.contains(focused)) {
             e.detail.shouldSwap = false;
-            return;
         }
     }
 });
+/* כשה-swap של הלוח נחסם (תוכן זהה) — עדיין לרענן נתוני תורים לפירוט יום */
+document.getElementById('appointments-calendar').addEventListener('htmx:swapSkipped', _refreshApptData);
 
 document.body.addEventListener('htmx:afterSwap', function(e) {
     if (e.detail.target && e.detail.target.id === 'appointments-calendar') {
-        /* ריענון הלוח הצליח — צריך לרענן גם את ה-JS data לפירוט יום */
-        fetch('/api/appointments/data')
-            .then(function(r) { return r.json(); })
-            .then(function(data) {
-                allAppts = data;
-                _rebuildApptIndex();
-            })
-            .catch(function() {});
+        _refreshApptData();
     }
     /* עדכון מונה ו-empty state בטבלה */
     if (e.detail.target && e.detail.target.id === 'appointments-table-body') {
