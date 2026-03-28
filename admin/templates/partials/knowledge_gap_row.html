@@ -11,8 +11,8 @@
         <span class="badge badge-success">טופל</span>
         {% endif %}
     </td>
-    <td data-label="נוצר" class="text-small text-muted" title="{{ q.created_at|il_datetime }}">{{ q.created_at|relative_time }}</td>
-    <td data-label="פעולות">
+    <td data-label="ת. פנייה" class="text-small text-muted" title="{{ q.created_at|il_datetime }}">{{ q.created_at|relative_time }}</td>
+    <td data-label="ת. טיפול">
         {% if q.status == 'open' %}
         <div class="actions-cell">
             <a href="/kb/add?question={{ q.question|urlencode }}&gap_id={{ q.id }}"
@@ -28,7 +28,7 @@
             </button>
         </div>
         {% elif q.resolved_at %}
-        <span class="text-small text-muted">טופל ב-{{ q.resolved_at|il_datetime }}</span>
+        <span class="text-small text-muted">{{ q.resolved_at|il_datetime }}</span>
         {% endif %}
     </td>
 </tr>
