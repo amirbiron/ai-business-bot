@@ -769,7 +769,7 @@ table tbody tr:last-child td {
 }
 
 .form-control::placeholder {
-    color: #999;
+    color: var(--text-input-placeholder);
 }
 
 .form-textarea {

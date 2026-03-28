@@ -355,6 +355,22 @@
             });
         }, 5000);
 
+        // ── מניעת הבהוב גלובלית — דילוג על swap כשהתגובה זהה לקודמת ──
+        var _htmxLastResponse = {};
+        document.body.addEventListener('htmx:beforeSwap', function(e) {
+            var target = e.detail.target;
+            if (!target || !target.id) return;
+            var xhr = e.detail.xhr;
+            var newContent = xhr && (xhr.response || xhr.responseText) || '';
+            if (_htmxLastResponse[target.id] !== undefined && newContent === _htmxLastResponse[target.id]) {
+                e.detail.shouldSwap = false;
+                // אירוע מותאם אישית לדפים שצריכים לוגיקה נוספת כשה-swap נחסם
+                target.dispatchEvent(new CustomEvent('htmx:swapSkipped', {bubbles: true}));
+                return;
+            }
+            _htmxLastResponse[target.id] = newContent;
+        });
+
         // HTMX: show RAG stale warning after KB delete
         document.body.addEventListener('showStaleWarning', function() {
             var banner = document.getElementById('rag-stale-banner');

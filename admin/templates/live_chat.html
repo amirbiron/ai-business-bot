@@ -75,8 +75,6 @@
 {% block scripts %}
 <script>
     var _wasNearBottom = true;
-    // שמירת התגובה האחרונה מהשרת — להשוואה ישירה (innerHTML לא אמין כי הדפדפן מנרמל)
-    var _lastServerResponse = null;
 
     function scrollToBottom() {
         var c = document.getElementById('live-chat-messages');
@@ -90,20 +88,13 @@
     // Scroll on initial page load
     scrollToBottom();
 
-    // דילוג על swap אם התגובה מהשרת זהה לקודמת — מונע בהוב מיותר
-    document.body.addEventListener('htmx:beforeSwap', function(e) {
+    // שמירת מצב גלילה לפני swap (מניעת הבהוב מטופלת גלובלית ב-base.html)
+    document.body.addEventListener('htmx:beforeRequest', function(e) {
         if (e.detail.target && e.detail.target.id === 'live-chat-messages') {
-            var xhr = e.detail.xhr;
-            var newHtml = xhr && (xhr.response || xhr.responseText) || '';
-            if (_lastServerResponse !== null && newHtml === _lastServerResponse) {
-                e.detail.shouldSwap = false;
-                return;
-            }
-            _lastServerResponse = newHtml;
             _wasNearBottom = checkNearBottom();
         }
     });
-    // Only auto-scroll if the user was already near the bottom
+    // גלילה אוטומטית רק אם המשתמש היה קרוב לתחתית
     document.body.addEventListener('htmx:afterSwap', function(e) {
         if (e.detail.target && e.detail.target.id === 'live-chat-messages') {
             if (_wasNearBottom) scrollToBottom();
