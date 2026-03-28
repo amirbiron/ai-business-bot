@@ -135,6 +135,13 @@ allAppts.forEach(function(a) {
 var statusMap = {pending: 'ממתין', confirmed: 'מאושר', cancelled: 'בוטל', passed: 'עבר'};
 var badgeClass = {pending: 'badge-warning', confirmed: 'badge-success', cancelled: 'badge-danger', passed: 'badge-muted'};
 
+/* הגנה מפני XSS — escape של תווי HTML בשדות שמגיעים מהמשתמש */
+function esc(s) {
+    var d = document.createElement('div');
+    d.textContent = s || '';
+    return d.innerHTML;
+}
+
 function toggleDayDetail(el) {
     var day = el.dataset.day;
     var panel = document.getElementById('day-detail');
@@ -159,7 +166,7 @@ function toggleDayDetail(el) {
         var actions = '';
         if (a.status === 'pending') {
             actions =
-                '<input type="text" id="owner-msg-' + a.id + '" class="form-control form-control-sm mb-1" placeholder="הודעה אישית (אופציונלי)" style="min-width:140px;">' +
+                '<input type="text" name="owner_message" id="owner-msg-' + a.id + '" class="form-control form-control-sm mb-1" placeholder="הודעה אישית (אופציונלי)" style="min-width:140px;">' +
                 '<div class="d-flex gap-1">' +
                 '<button class="btn btn-success btn-sm" hx-post="/appointments/' + a.id + '/update" hx-vals=\'{"status":"confirmed"}\' hx-include="#owner-msg-' + a.id + '" hx-target="#appointment-row-' + a.id + '" hx-swap="outerHTML swap:0.2s"><i class="bi bi-check-lg"></i> אשר</button>' +
                 '<button class="btn btn-outline-danger btn-sm" hx-post="/appointments/' + a.id + '/update" hx-vals=\'{"status":"cancelled"}\' hx-include="#owner-msg-' + a.id + '" hx-target="#appointment-row-' + a.id + '" hx-swap="outerHTML swap:0.2s"><i class="bi bi-x-lg"></i> בטל</button>' +
@@ -167,9 +174,9 @@ function toggleDayDetail(el) {
         }
 
         tr.innerHTML =
-            '<td>' + (a.username || '') + '</td>' +
-            '<td>' + (a.service || '') + '</td>' +
-            '<td>' + (a.preferred_time || '') + '</td>' +
+            '<td>' + esc(a.username) + '</td>' +
+            '<td>' + esc(a.service) + '</td>' +
+            '<td>' + esc(a.preferred_time) + '</td>' +
             '<td>' + badge + '</td>' +
             '<td>' + actions + '</td>';
         body.appendChild(tr);
