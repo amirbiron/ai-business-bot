@@ -627,8 +627,8 @@ table tbody tr:last-child td {
 }
 
 .badge-category {
-    background: rgba(124, 58, 237, 0.15);
-    color: var(--brand-purple);
+    background: rgba(124, 58, 237, 0.18);
+    color: #a78bfa;
 }
 
 /* --- Forms --- */
