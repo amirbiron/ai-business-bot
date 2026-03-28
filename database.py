@@ -1096,7 +1096,8 @@ def get_bot_settings() -> dict:
         if row:
             return dict(row)
         # fallback — לא אמור לקרות כי init_db מכניס שורה
-        return {"id": 1, "tone": "friendly", "custom_phrases": "", "updated_at": ""}
+        return {"id": 1, "tone": "friendly", "custom_phrases": "",
+                "reminder_enabled": 1, "reminder_time": "10:00", "updated_at": ""}
 
 
 def update_bot_settings(
