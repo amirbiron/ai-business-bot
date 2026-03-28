@@ -648,7 +648,19 @@ table tbody tr:last-child td {
 
 .form-input,
 .form-textarea,
-.form-select,
+.form-select {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    background: var(--bg-darker);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-family: 'Assistant', sans-serif;
+    font-size: 0.9375rem;
+    transition: var(--transition);
+    line-height: 1.5;
+}
+
 .form-control {
     width: 100%;
     padding: 0.75rem 1rem;
@@ -672,9 +684,12 @@ table tbody tr:last-child td {
 }
 
 .form-input::placeholder,
-.form-textarea::placeholder,
-.form-control::placeholder {
+.form-textarea::placeholder {
     color: var(--text-muted);
+}
+
+.form-control::placeholder {
+    color: #999;
 }
 
 .form-textarea {
