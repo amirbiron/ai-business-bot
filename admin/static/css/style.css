@@ -657,6 +657,13 @@ table tbody tr:last-child td {
     color: var(--brand-purple-light);
 }
 
+.badge-primary {
+    background: rgba(59, 130, 246, 0.2);
+    color: var(--brand-blue);
+    font-weight: 600;
+    font-size: 0.8rem;
+}
+
 /* --- Forms --- */
 .form-group {
     margin-bottom: 1.25rem;
