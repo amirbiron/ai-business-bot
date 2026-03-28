@@ -77,10 +77,10 @@
                 var valA = (cellA.dataset.sortValue || cellA.textContent).trim();
                 var valB = (cellB.dataset.sortValue || cellB.textContent).trim();
 
-                // מספרים (עמודת מזהה)
-                var numA = parseFloat(valA);
-                var numB = parseFloat(valB);
-                if (!isNaN(numA) && !isNaN(numB)) {
+                // מספרים טהורים בלבד (עמודת מזהה) — לא תאריכים/שעות
+                var numA = Number(valA);
+                var numB = Number(valB);
+                if (!isNaN(numA) && !isNaN(numB) && valA !== '' && valB !== '') {
                     return ascending ? numA - numB : numB - numA;
                 }
                 // טקסט
