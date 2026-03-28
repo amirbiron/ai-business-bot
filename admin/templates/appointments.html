@@ -153,6 +153,14 @@ function toggleDayDetail(el) {
 }
 
 /* ── עדכון allAppts כשהלוח מתרענן ── */
+/* ריענון נתוני תורים מהשרת */
+function _refreshApptData() {
+    fetch('/api/appointments/data')
+        .then(function(r) { return r.json(); })
+        .then(function(data) { allAppts = data; _rebuildApptIndex(); })
+        .catch(function() {});
+}
+
 /* דילוג על ריענון אם המשתמש מקליד בשדה קלט */
 document.body.addEventListener('htmx:beforeSwap', function(e) {
     var target = e.detail.target;
@@ -164,23 +172,11 @@ document.body.addEventListener('htmx:beforeSwap', function(e) {
     }
 });
 /* כשה-swap של הלוח נחסם (תוכן זהה) — עדיין לרענן נתוני תורים לפירוט יום */
-document.getElementById('appointments-calendar').addEventListener('htmx:swapSkipped', function() {
-    fetch('/api/appointments/data')
-        .then(function(r) { return r.json(); })
-        .then(function(data) { allAppts = data; _rebuildApptIndex(); })
-        .catch(function() {});
-});
+document.getElementById('appointments-calendar').addEventListener('htmx:swapSkipped', _refreshApptData);
 
 document.body.addEventListener('htmx:afterSwap', function(e) {
     if (e.detail.target && e.detail.target.id === 'appointments-calendar') {
-        /* ריענון הלוח הצליח — צריך לרענן גם את ה-JS data לפירוט יום */
-        fetch('/api/appointments/data')
-            .then(function(r) { return r.json(); })
-            .then(function(data) {
-                allAppts = data;
-                _rebuildApptIndex();
-            })
-            .catch(function() {});
+        _refreshApptData();
     }
     /* עדכון מונה ו-empty state בטבלה */
     if (e.detail.target && e.detail.target.id === 'appointments-table-body') {
