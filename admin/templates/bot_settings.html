@@ -76,9 +76,6 @@
         <form method="POST" action="{{ url_for('bot_settings') }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="form_type" value="reminder">
-            <!-- שומרים את הטון הנוכחי כדי שלא ידרוס -->
-            <input type="hidden" name="tone" value="{{ settings.tone }}">
-            <input type="hidden" name="custom_phrases" value="{{ settings.custom_phrases }}">
 
             <div class="text-small text-muted" style="margin-bottom: var(--space-md);">
                 שליחת הודעת תזכורת אוטומטית ללקוח יום לפני התור (רק תורים מאושרים).

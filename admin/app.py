@@ -1018,27 +1018,31 @@ def create_admin_app() -> Flask:
     @login_required
     def bot_settings():
         if request.method == "POST":
-            tone = request.form.get("tone", "friendly").strip()
-            custom_phrases = request.form.get("custom_phrases", "").strip()
-            if tone not in TONE_DEFINITIONS:
-                flash("טון לא חוקי.", "danger")
-            else:
-                # בדיקה אם זה טופס תזכורות או טופס טון
-                form_type = request.form.get("form_type", "")
-                reminder_enabled = None
-                reminder_time = None
-                if form_type == "reminder":
-                    reminder_enabled = bool(request.form.get("reminder_enabled"))
-                    reminder_time = request.form.get("reminder_time", "10:00").strip()
-                    if not _is_valid_time(reminder_time):
-                        flash("שעה לא חוקית — יש להזין בפורמט HH:MM.", "danger")
-                        return redirect(url_for("bot_settings"))
+            form_type = request.form.get("form_type", "")
 
-                db.update_bot_settings(tone, custom_phrases, reminder_enabled, reminder_time)
-                if form_type == "reminder":
-                    _audit_log("bot_settings", f"reminder_enabled={reminder_enabled}, reminder_time={reminder_time}")
-                    flash("הגדרות תזכורת עודכנו בהצלחה!", "success")
+            if form_type == "reminder":
+                # טופס תזכורות — עדכון רק שדות תזכורת, לא דורס טון/ביטויים
+                reminder_enabled = bool(request.form.get("reminder_enabled"))
+                reminder_time = request.form.get("reminder_time", "10:00").strip()
+                if not reminder_time or not _is_valid_time(reminder_time):
+                    flash("שעה לא חוקית — יש להזין בפורמט HH:MM.", "danger")
+                    return redirect(url_for("bot_settings"))
+
+                current = db.get_bot_settings()
+                db.update_bot_settings(
+                    current["tone"], current.get("custom_phrases", ""),
+                    reminder_enabled, reminder_time,
+                )
+                _audit_log("bot_settings", f"reminder_enabled={reminder_enabled}, reminder_time={reminder_time}")
+                flash("הגדרות תזכורת עודכנו בהצלחה!", "success")
+            else:
+                # טופס טון — עדכון רק טון וביטויים
+                tone = request.form.get("tone", "friendly").strip()
+                custom_phrases = request.form.get("custom_phrases", "").strip()
+                if tone not in TONE_DEFINITIONS:
+                    flash("טון לא חוקי.", "danger")
                 else:
+                    db.update_bot_settings(tone, custom_phrases)
                     _audit_log("bot_settings", f"tone={tone}")
                     flash("הגדרות הבוט עודכנו בהצלחה!", "success")
             return redirect(url_for("bot_settings"))
