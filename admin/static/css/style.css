@@ -469,6 +469,30 @@ table th {
     white-space: nowrap;
 }
 
+th.sortable {
+    cursor: pointer;
+    user-select: none;
+    transition: color 0.2s;
+}
+
+th.sortable:hover {
+    color: var(--text-primary);
+}
+
+th.sortable.sort-active {
+    color: var(--brand-blue);
+}
+
+.sort-icon {
+    font-size: 0.7rem;
+    margin-right: 0.25rem;
+    opacity: 0.5;
+}
+
+th.sort-active .sort-icon {
+    opacity: 1;
+}
+
 table td {
     padding: 0.875rem 1rem;
     border-bottom: 1px solid var(--border);
