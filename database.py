@@ -700,6 +700,15 @@ def create_appointment(
     """Create a new appointment booking."""
     with get_connection() as conn:
         cursor = conn.cursor()
+        # מחיקת תורים ישנים (cancelled/passed) באותו מועד — כדי שה-UNIQUE index
+        # לא יחסום קביעת תור חדש אחרי ביטול/עבר.
+        if preferred_date and preferred_time:
+            cursor.execute(
+                """DELETE FROM appointments
+                   WHERE user_id = ? AND preferred_date = ? AND preferred_time = ?
+                     AND status IN ('cancelled', 'passed')""",
+                (user_id, preferred_date, preferred_time),
+            )
         cursor.execute(
             """INSERT INTO appointments (user_id, username, telegram_username, service, preferred_date, preferred_time, notes)
                VALUES (?, ?, ?, ?, ?, ?, ?)""",

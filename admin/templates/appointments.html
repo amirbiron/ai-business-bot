@@ -5,43 +5,192 @@
     <h1><i class="bi bi-calendar-check"></i> תורים</h1>
 </div>
 
-<div class="card animate-slide-up">
-    <div class="card-body" style="padding: 0;">
-        {% if appointments %}
+{# ── לוח שנה חודשי ── #}
+<div class="card animate-slide-up" style="margin-bottom: 1.5rem;">
+    <div class="card-body" style="padding: 1rem;">
+        <div class="cal-nav">
+            <a href="?year={{ prev_year }}&month={{ prev_month }}" class="btn btn-sm btn-outline-secondary">
+                <i class="bi bi-chevron-right"></i>
+            </a>
+            <h2 class="cal-title">{{ cal_month_name }} {{ cal_year }}</h2>
+            <a href="?year={{ next_year }}&month={{ next_month }}" class="btn btn-sm btn-outline-secondary">
+                <i class="bi bi-chevron-left"></i>
+            </a>
+        </div>
+
+        <div class="cal-grid">
+            {# כותרות ימים #}
+            <div class="cal-header">א׳</div>
+            <div class="cal-header">ב׳</div>
+            <div class="cal-header">ג׳</div>
+            <div class="cal-header">ד׳</div>
+            <div class="cal-header">ה׳</div>
+            <div class="cal-header">ו׳</div>
+            <div class="cal-header">ש׳</div>
+
+            {# שבועות #}
+            {% for week in cal_weeks %}
+                {% for day_num in week %}
+                    {% if day_num == 0 %}
+                    <div class="cal-cell cal-empty"></div>
+                    {% else %}
+                        {% set day_iso = "%04d-%02d-%02d"|format(cal_year, cal_month, day_num) %}
+                        {% set day_appts = appt_by_date.get(day_iso, []) %}
+                        <div class="cal-cell{% if day_iso == today_iso %} cal-today{% endif %}{% if day_appts %} cal-has-appts{% endif %}"
+                             {% if day_appts %}data-day="{{ day_iso }}" onclick="toggleDayDetail(this)"{% endif %}>
+                            <span class="cal-day-num">{{ day_num }}</span>
+                            {% if day_appts %}
+                            <span class="cal-badge">{{ day_appts|length }}</span>
+                            {% endif %}
+                            {% for a in day_appts[:3] %}
+                            <div class="cal-appt cal-appt-{{ a.status }}">
+                                <span class="cal-appt-time">{{ a.preferred_time }}</span>
+                                {{ a.username|truncate(8, True) }}
+                            </div>
+                            {% endfor %}
+                            {% if day_appts|length > 3 %}
+                            <div class="cal-more">+{{ day_appts|length - 3 }} נוספים</div>
+                            {% endif %}
+                        </div>
+                    {% endif %}
+                {% endfor %}
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+{# ── פירוט יום נבחר ── #}
+<div id="day-detail" class="card animate-slide-up" style="display:none; margin-bottom: 1.5rem;">
+    <div class="card-body" style="padding: 1rem;">
+        <h3 id="day-detail-title" style="margin: 0 0 1rem;"></h3>
         <div class="table-wrapper">
-            <table id="appointments-table">
+            <table>
                 <thead>
                     <tr>
-                        <th class="sortable" data-col="0">מזהה <i class="bi bi-chevron-expand sort-icon"></i></th>
-                        <th class="sortable" data-col="1">לקוח <i class="bi bi-chevron-expand sort-icon"></i></th>
-                        <th class="sortable" data-col="2">שירות <i class="bi bi-chevron-expand sort-icon"></i></th>
-                        <th class="sortable" data-col="3">תאריך <i class="bi bi-chevron-expand sort-icon"></i></th>
-                        <th class="sortable" data-col="4">שעה <i class="bi bi-chevron-expand sort-icon"></i></th>
-                        <th>הערות</th>
-                        <th class="sortable" data-col="6">סטטוס <i class="bi bi-chevron-expand sort-icon"></i></th>
-                        <th class="sortable" data-col="7">נוצר <i class="bi bi-chevron-expand sort-icon"></i></th>
+                        <th>לקוח</th>
+                        <th>שירות</th>
+                        <th>שעה</th>
+                        <th>סטטוס</th>
                         <th>פעולות</th>
                     </tr>
                 </thead>
-                <tbody id="appointments-table-body">
-                    {% for appt in appointments %}
-                    {% include "partials/appointment_row.html" %}
-                    {% endfor %}
-                </tbody>
+                <tbody id="day-detail-body"></tbody>
             </table>
         </div>
-        {% else %}
-        <div class="empty-state">
-            <i class="bi bi-calendar-plus"></i>
-            <p>אין עדיין תורים.</p>
-        </div>
-        {% endif %}
+    </div>
+</div>
+
+{# ── טבלה מלאה (ממוינת לפי תאריך) ── #}
+<div class="card animate-slide-up">
+    <div class="card-body" style="padding: 0;">
+        <details>
+            <summary style="padding: 1rem; cursor: pointer; color: var(--text-secondary);">
+                <i class="bi bi-table"></i> רשימה מלאה ({{ appointments|length }} תורים)
+            </summary>
+            {% if appointments %}
+            <div class="table-wrapper">
+                <table id="appointments-table">
+                    <thead>
+                        <tr>
+                            <th class="sortable" data-col="0">מזהה <i class="bi bi-chevron-expand sort-icon"></i></th>
+                            <th class="sortable" data-col="1">לקוח <i class="bi bi-chevron-expand sort-icon"></i></th>
+                            <th class="sortable" data-col="2">שירות <i class="bi bi-chevron-expand sort-icon"></i></th>
+                            <th class="sortable" data-col="3">תאריך <i class="bi bi-chevron-expand sort-icon"></i></th>
+                            <th class="sortable" data-col="4">שעה <i class="bi bi-chevron-expand sort-icon"></i></th>
+                            <th>הערות</th>
+                            <th class="sortable" data-col="6">סטטוס <i class="bi bi-chevron-expand sort-icon"></i></th>
+                            <th class="sortable" data-col="7">נוצר <i class="bi bi-chevron-expand sort-icon"></i></th>
+                            <th>פעולות</th>
+                        </tr>
+                    </thead>
+                    <tbody id="appointments-table-body">
+                        {% for appt in appointments %}
+                        {% include "partials/appointment_row.html" %}
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <i class="bi bi-calendar-plus"></i>
+                <p>אין עדיין תורים.</p>
+            </div>
+            {% endif %}
+        </details>
     </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
+/* ── פירוט יום בלחיצה ── */
+var allAppts = {{ appointments|tojson }};
+var apptByDate = {};
+allAppts.forEach(function(a) {
+    if (!a.preferred_date) return;
+    if (!apptByDate[a.preferred_date]) apptByDate[a.preferred_date] = [];
+    apptByDate[a.preferred_date].push(a);
+});
+
+var statusMap = {pending: 'ממתין', confirmed: 'מאושר', cancelled: 'בוטל', passed: 'עבר'};
+var badgeClass = {pending: 'badge-warning', confirmed: 'badge-success', cancelled: 'badge-danger', passed: 'badge-muted'};
+
+/* הגנה מפני XSS — escape של תווי HTML בשדות שמגיעים מהמשתמש */
+function esc(s) {
+    var d = document.createElement('div');
+    d.textContent = s || '';
+    return d.innerHTML;
+}
+
+function toggleDayDetail(el) {
+    var day = el.dataset.day;
+    var panel = document.getElementById('day-detail');
+    var title = document.getElementById('day-detail-title');
+    var body = document.getElementById('day-detail-body');
+
+    /* לחיצה חוזרת על אותו יום — סגירה */
+    if (panel.style.display !== 'none' && panel.dataset.activeDay === day) {
+        panel.style.display = 'none';
+        return;
+    }
+
+    var list = apptByDate[day] || [];
+    title.textContent = '📅 ' + day + ' (' + list.length + ' תורים)';
+    body.innerHTML = '';
+
+    list.forEach(function(a) {
+        var tr = document.createElement('tr');
+        tr.id = 'cal-appt-row-' + a.id;
+        var badge = '<span class="badge ' + (badgeClass[a.status]||'') + '">' + (statusMap[a.status]||a.status) + '</span>';
+
+        var actions = '';
+        if (a.status === 'pending') {
+            actions =
+                '<input type="text" name="owner_message" id="cal-msg-' + a.id + '" class="form-control form-control-sm mb-1" placeholder="הודעה אישית (אופציונלי)" style="min-width:140px;">' +
+                '<div class="d-flex gap-1">' +
+                '<button class="btn btn-success btn-sm" hx-post="/appointments/' + a.id + '/update" hx-vals=\'{"status":"confirmed"}\' hx-include="#cal-msg-' + a.id + '" hx-target="#cal-appt-row-' + a.id + '" hx-swap="delete swap:0.2s"><i class="bi bi-check-lg"></i> אשר</button>' +
+                '<button class="btn btn-outline-danger btn-sm" hx-post="/appointments/' + a.id + '/update" hx-vals=\'{"status":"cancelled"}\' hx-include="#cal-msg-' + a.id + '" hx-target="#cal-appt-row-' + a.id + '" hx-swap="delete swap:0.2s"><i class="bi bi-x-lg"></i> בטל</button>' +
+                '</div>';
+        }
+
+        tr.innerHTML =
+            '<td>' + esc(a.username) + '</td>' +
+            '<td>' + esc(a.service) + '</td>' +
+            '<td>' + esc(a.preferred_time) + '</td>' +
+            '<td>' + badge + '</td>' +
+            '<td>' + actions + '</td>';
+        body.appendChild(tr);
+    });
+
+    /* הפעלת HTMX על אלמנטים חדשים */
+    if (window.htmx) htmx.process(body);
+
+    panel.dataset.activeDay = day;
+    panel.style.display = '';
+    panel.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+}
+
+/* ── מיון טבלה (רשימה מלאה) ── */
 (function() {
     var table = document.getElementById('appointments-table');
     if (!table) return;
@@ -59,8 +208,6 @@
                 currentCol = col;
                 ascending = true;
             }
-
-            // עדכון אייקונים
             headers.forEach(function(h) {
                 h.querySelector('.sort-icon').className = 'bi bi-chevron-expand sort-icon';
                 h.classList.remove('sort-active');
@@ -69,21 +216,17 @@
                 ? 'bi bi-chevron-up sort-icon' : 'bi bi-chevron-down sort-icon';
             th.classList.add('sort-active');
 
-            // מיון שורות
             var rows = Array.from(tbody.querySelectorAll('tr'));
             rows.sort(function(a, b) {
                 var cellA = a.cells[col];
                 var cellB = b.cells[col];
                 var valA = (cellA.dataset.sortValue || cellA.textContent).trim();
                 var valB = (cellB.dataset.sortValue || cellB.textContent).trim();
-
-                // מספרים טהורים בלבד (עמודת מזהה) — לא תאריכים/שעות
                 var numA = Number(valA);
                 var numB = Number(valB);
                 if (!isNaN(numA) && !isNaN(numB) && valA !== '' && valB !== '') {
                     return ascending ? numA - numB : numB - numA;
                 }
-                // טקסט
                 var cmp = valA.localeCompare(valB, 'he');
                 return ascending ? cmp : -cmp;
             });

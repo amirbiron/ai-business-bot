@@ -443,6 +443,47 @@ class TestStartCommand:
         assert "שמחים לראות אותך שוב" in call_text
 
 
+# ── Referral command ─────────────────────────────────────────────────────────
+
+
+class TestReferralCommand:
+    @pytest.mark.asyncio
+    async def test_referral_command_with_existing_code(self, db):
+        """משתמש עם קוד הפניה מקבל את הקוד בחזרה."""
+        from bot.handlers import referral_command
+        update = _make_update(user_id=500)
+        context = _make_context()
+
+        with ExitStack() as stack:
+            for p in _handler_patches():
+                stack.enter_context(p)
+            mock_db = stack.enter_context(patch("bot.handlers.db"))
+            mock_db.get_user_referral_code = MagicMock(return_value="REF_ABCD1234")
+
+            await referral_command(update, context)
+
+        reply_text = update.message.reply_text.call_args[0][0]
+        assert "REF_ABCD1234" in reply_text
+
+    @pytest.mark.asyncio
+    async def test_referral_command_no_code(self, db):
+        """משתמש ללא קוד הפניה מקבל הודעת הסבר."""
+        from bot.handlers import referral_command
+        update = _make_update(user_id=501)
+        context = _make_context()
+
+        with ExitStack() as stack:
+            for p in _handler_patches():
+                stack.enter_context(p)
+            mock_db = stack.enter_context(patch("bot.handlers.db"))
+            mock_db.get_user_referral_code = MagicMock(return_value=None)
+
+            await referral_command(update, context)
+
+        reply_text = update.message.reply_text.call_args[0][0]
+        assert "עדיין לא" in reply_text
+
+
 # ── Booking flow ─────────────────────────────────────────────────────────────
 
 
@@ -473,7 +514,8 @@ class TestBookingFlow:
             result = await booking_date(update, context)
 
         assert result == BOOKING_TIME
-        assert context.user_data["booking_date"] == "יום שני"
+        # normalize_date ממיר "יום שני" לתאריך בפורמט YYYY-MM-DD
+        assert context.user_data["booking_date"].count("-") == 2
 
     @pytest.mark.asyncio
     async def test_booking_time_saves_and_advances(self, db):
@@ -482,7 +524,7 @@ class TestBookingFlow:
         context = _make_context()
         context.user_data = {
             "booking_service": "תספורת",
-            "booking_date": "יום שני",
+            "booking_date": "2026-04-06",
         }
 
         with ExitStack() as stack:
@@ -501,7 +543,7 @@ class TestBookingFlow:
         context = _make_context()
         context.user_data = {
             "booking_service": "תספורת",
-            "booking_date": "יום שני",
+            "booking_date": "2026-04-06",
             "booking_time": "10:00",
         }
 
@@ -512,6 +554,7 @@ class TestBookingFlow:
             stack.enter_context(patch("bot.handlers._notify_owner", new_callable=AsyncMock, return_value=True))
             mock_db.create_appointment = MagicMock(return_value=1)
             mock_db.save_message = MagicMock()
+            mock_db.get_pending_appointments_for_user = MagicMock(return_value=[])
             result = await booking_confirm(update, context)
 
         assert result == ConversationHandler.END

@@ -34,6 +34,7 @@ from ai_chatbot.bot.handlers import (
     booking_button_interrupt,
     cancel_appointment_callback,
     follow_up_callback,
+    referral_command,
     error_handler,
     BOOKING_SERVICE,
     BOOKING_DATE,
@@ -133,7 +134,8 @@ def create_bot_application():
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("stop", stop_command))
     app.add_handler(CommandHandler("subscribe", subscribe_command))
-    
+    app.add_handler(CommandHandler("referral", referral_command))
+
     # Booking conversation (must be before the general message handler)
     app.add_handler(booking_handler)
     

@@ -793,12 +793,58 @@ def create_admin_app() -> Flask:
     @app.route("/appointments")
     @login_required
     def appointments():
+        import calendar as _cal
+        from collections import defaultdict
+
         db.expire_past_appointments()
         appointments_list = db.get_appointments()
+
+        # ── חישוב חודש לתצוגה ──
+        year = request.args.get("year", type=int)
+        month = request.args.get("month", type=int)
+        today = datetime.now().date()
+        if not year or not month:
+            year, month = today.year, today.month
+
+        # ניווט חודש קודם / הבא
+        if month == 1:
+            prev_year, prev_month = year - 1, 12
+        else:
+            prev_year, prev_month = year, month - 1
+        if month == 12:
+            next_year, next_month = year + 1, 1
+        else:
+            next_year, next_month = year, month + 1
+
+        # בניית מפת תורים לפי תאריך
+        appt_by_date = defaultdict(list)
+        for a in appointments_list:
+            d = a.get("preferred_date", "")
+            if d:
+                appt_by_date[d].append(a)
+
+        # בניית שבועות של החודש (שבוע מתחיל ביום ראשון = 6 ב-Python)
+        month_days = _cal.Calendar(firstweekday=6).monthdayscalendar(year, month)
+
+        he_months = [
+            "", "ינואר", "פברואר", "מרץ", "אפריל", "מאי", "יוני",
+            "יולי", "אוגוסט", "ספטמבר", "אוקטובר", "נובמבר", "דצמבר",
+        ]
+
         return render_template(
             "appointments.html",
             business_name=BUSINESS_NAME,
             appointments=appointments_list,
+            cal_weeks=month_days,
+            cal_year=year,
+            cal_month=month,
+            cal_month_name=he_months[month],
+            prev_year=prev_year,
+            prev_month=prev_month,
+            next_year=next_year,
+            next_month=next_month,
+            appt_by_date=appt_by_date,
+            today_iso=today.isoformat(),
         )
     
     @app.route("/appointments/<int:appt_id>/update", methods=["POST"])
