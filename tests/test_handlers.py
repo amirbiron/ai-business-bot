@@ -393,6 +393,7 @@ class TestStartCommand:
             mock_db.ensure_user_subscribed = MagicMock()
             mock_db.save_message = MagicMock()
             mock_db.register_referral = MagicMock(return_value=False)
+            mock_db.is_returning_customer = MagicMock(return_value=False)
 
             await start_command(update, context)
 
@@ -413,11 +414,33 @@ class TestStartCommand:
             mock_db.ensure_user_subscribed = MagicMock()
             mock_db.save_message = MagicMock()
             mock_db.register_referral = MagicMock(return_value=True)
+            mock_db.is_returning_customer = MagicMock(return_value=False)
 
             await start_command(update, context)
 
         call_text = update.message.reply_text.call_args[0][0]
         assert "הפניה" in call_text
+
+    @pytest.mark.asyncio
+    async def test_returning_customer_greeting(self, db):
+        """לקוח חוזר מקבל הודעת 'שמחים לראות אותך שוב'."""
+        from bot.handlers import start_command
+        update = _make_update()
+        context = _make_context()
+
+        with ExitStack() as stack:
+            for p in _handler_patches():
+                stack.enter_context(p)
+            mock_db = stack.enter_context(patch("bot.handlers.db"))
+            mock_db.ensure_user_subscribed = MagicMock()
+            mock_db.save_message = MagicMock()
+            mock_db.register_referral = MagicMock(return_value=False)
+            mock_db.is_returning_customer = MagicMock(return_value=True)
+
+            await start_command(update, context)
+
+        call_text = update.message.reply_text.call_args[0][0]
+        assert "שמחים לראות אותך שוב" in call_text
 
 
 # ── Booking flow ─────────────────────────────────────────────────────────────
