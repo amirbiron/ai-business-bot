@@ -1097,24 +1097,43 @@ async def cancel_appointment_callback(update: Update, context: ContextTypes.DEFA
     user_id, display_name, telegram_username = _get_user_info(update)
 
     if query.data == "cancel_appt_yes":
-        await _create_request_and_notify_owner(
-            context,
-            user_id=user_id,
-            display_name=display_name,
-            telegram_username=telegram_username,
-            message=f"הלקוח אישר ביטול תור.",
-        )
-        response = (
-            "קיבלתי את בקשתכם לביטול התור. ✅\n\n"
-            "העברתי את הבקשה לצוות שלנו — נציג יחזור אליכם בקרוב לאשר את הביטול."
-        )
+        pending = db.get_pending_appointments_for_user(user_id)
+        if pending:
+            appt = pending[0]  # התור הקרוב ביותר
+            cancelled = db.cancel_appointment(appt["id"], user_id)
+            if cancelled:
+                response = (
+                    f"התור שלך בוטל בהצלחה! ✅\n\n"
+                    f"📋 {appt.get('service', '')}\n"
+                    f"📅 {appt.get('preferred_date', '')}\n"
+                    f"🕐 {appt.get('preferred_time', '')}\n\n"
+                    f"לקביעת תור חדש, שלחו /book"
+                )
+            else:
+                # race condition — התור אושר/בוטל בין הבדיקה לביטול
+                response = (
+                    "לא הצלחנו לבטל את התור — ייתכן שהסטטוס שלו השתנה. 🤔\n"
+                    "נסו שוב, או לחצו על <b>👤 דברו עם נציג</b> למטה."
+                )
+        elif db.has_confirmed_appointments(user_id):
+            response = (
+                "התור שלך כבר אושר ולא ניתן לבטל אותו ישירות. ✅\n\n"
+                "כדי לבטל תור מאושר — תרצו שאעביר אתכם לנציג?"
+            )
+        else:
+            response = (
+                "לא רשום אצלנו תור על שמך. 🤔\n\n"
+                "תרצו שאעביר אתכם לנציג כדי לברר?"
+            )
     else:
         response = "בסדר גמור, התור נשאר! 👍\nאיך עוד אפשר לעזור?"
 
     db.save_message(user_id, display_name, "assistant", response)
-    await query.edit_message_text(response)
-    # Re-show the main keyboard via a follow-up message so the user keeps
-    # the persistent reply keyboard visible after the inline button is resolved.
+    if "<b>" in response:
+        await query.edit_message_text(response, parse_mode="HTML")
+    else:
+        await query.edit_message_text(response)
+    # הצגת מקלדת ראשית מחדש אחרי inline button
     await context.bot.send_message(
         chat_id=update.effective_chat.id,
         text="👇",

@@ -62,8 +62,54 @@
     </div>
 </div>
 
-<!-- תצוגה מקדימה של הפרומפט -->
+<!-- תזכורות תורים -->
 <div class="card animate-slide-up stagger-2" style="margin-top: var(--space-sm);">
+    <div class="card-header">
+        <span><i class="bi bi-bell"></i> תזכורות תורים</span>
+        {% if settings.reminder_enabled %}
+        <span class="badge badge-success">פעיל</span>
+        {% else %}
+        <span class="badge badge-muted">כבוי</span>
+        {% endif %}
+    </div>
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('bot_settings') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="form_type" value="reminder">
+
+            <div class="text-small text-muted" style="margin-bottom: var(--space-md);">
+                שליחת הודעת תזכורת אוטומטית ללקוח יום לפני התור (רק תורים מאושרים).
+            </div>
+
+            <div class="form-group" style="margin-bottom: var(--space-md);">
+                <label style="display: flex; align-items: center; gap: var(--space-sm); cursor: pointer;">
+                    <input type="checkbox" name="reminder_enabled" value="1"
+                           {% if settings.reminder_enabled %}checked{% endif %}
+                           style="width: 18px; height: 18px;">
+                    <span style="font-weight: 600;">הפעלת תזכורות</span>
+                </label>
+            </div>
+
+            <div class="form-group" style="margin-bottom: var(--space-md);">
+                <label class="form-label" for="reminder_time" style="font-weight: 600;">שעת שליחה</label>
+                <div class="text-small text-muted" style="margin-bottom: var(--space-xs);">
+                    באיזו שעה לשלוח את התזכורת (שעון ישראל).
+                </div>
+                <input type="text" class="form-control" id="reminder_time"
+                       name="reminder_time" value="{{ settings.reminder_time or '10:00' }}"
+                       inputmode="numeric" pattern="\d{2}:\d{2}" placeholder="HH:MM" maxlength="5"
+                       style="max-width: 120px;">
+            </div>
+
+            <button type="submit" class="btn btn-primary">
+                <i class="bi bi-check-lg"></i> שמירת הגדרות תזכורת
+            </button>
+        </form>
+    </div>
+</div>
+
+<!-- תצוגה מקדימה של הפרומפט -->
+<div class="card animate-slide-up stagger-3" style="margin-top: var(--space-sm);">
     <div class="card-header">
         <span><i class="bi bi-eye"></i> תצוגה מקדימה — הפרומפט שנשלח למודל</span>
     </div>

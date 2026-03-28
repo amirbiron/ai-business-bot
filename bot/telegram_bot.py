@@ -18,6 +18,7 @@ from telegram.ext import (
 from ai_chatbot.config import TELEGRAM_BOT_TOKEN
 from ai_chatbot.bot_state import set_bot
 from ai_chatbot.live_chat_service import LiveChatService
+from ai_chatbot.appointment_notifications import send_appointment_reminders
 from ai_chatbot.bot.handlers import (
     start_command,
     help_command,
@@ -80,6 +81,22 @@ def create_bot_application():
             interval=1800,  # 30 דקות
             first=60,       # ריצה ראשונה אחרי דקה (לא מיד ב-startup)
             name="live_chat_cleanup",
+        )
+
+        # תזכורות תורים — בדיקה כל 30 דקות אם הגיע זמן לשלוח
+        async def _appointment_reminders_job(context) -> None:
+            try:
+                result = send_appointment_reminders()
+                if result["sent"]:
+                    logger.info("Appointment reminders job: sent %d", result["sent"])
+            except Exception as e:
+                logger.error("Appointment reminders job failed: %s", e)
+
+        application.job_queue.run_repeating(
+            _appointment_reminders_job,
+            interval=1800,  # 30 דקות
+            first=120,      # ריצה ראשונה אחרי 2 דקות
+            name="appointment_reminders",
         )
 
     # Build the application

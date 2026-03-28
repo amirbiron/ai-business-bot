@@ -204,6 +204,69 @@ class TestAppointments:
         assert db.count_appointments("pending") == 1  # u2 — עתידי
         assert db.count_appointments("confirmed") == 1  # u4 — לא משתנה
 
+    def test_get_appointments_for_reminder(self, db):
+        """רק תורים מאושרים שלא נשלחה להם תזכורת מוחזרים."""
+        # מאושר — צריך להיכלל
+        a1 = db.create_appointment("u1", "א", preferred_date="2026-04-01", preferred_time="10:00")
+        db.update_appointment_status(a1, "confirmed")
+        # ממתין — לא צריך להיכלל
+        db.create_appointment("u2", "ב", preferred_date="2026-04-01", preferred_time="11:00")
+        # מאושר אבל כבר נשלחה תזכורת
+        a3 = db.create_appointment("u3", "ג", preferred_date="2026-04-01", preferred_time="12:00")
+        db.update_appointment_status(a3, "confirmed")
+        db.mark_reminder_sent(a3)
+        # מאושר אבל תאריך אחר
+        a4 = db.create_appointment("u4", "ד", preferred_date="2026-04-02", preferred_time="10:00")
+        db.update_appointment_status(a4, "confirmed")
+
+        results = db.get_appointments_for_reminder("2026-04-01")
+        assert len(results) == 1
+        assert results[0]["user_id"] == "u1"
+
+    def test_mark_reminder_sent(self, db):
+        """סימון תזכורת שנשלחה."""
+        appt_id = db.create_appointment("u1", "א", preferred_date="2026-04-01", preferred_time="10:00")
+        db.update_appointment_status(appt_id, "confirmed")
+        assert db.get_appointment(appt_id)["reminder_sent"] == 0
+        db.mark_reminder_sent(appt_id)
+        assert db.get_appointment(appt_id)["reminder_sent"] == 1
+
+    def test_get_pending_appointments_for_user(self, db):
+        """מחזיר רק תורים pending עתידיים של המשתמש."""
+        # pending עתידי — צריך להיכלל
+        db.create_appointment("u1", "א", preferred_date="2099-01-01", preferred_time="10:00")
+        # confirmed — לא צריך להיכלל
+        a2 = db.create_appointment("u1", "א", preferred_date="2099-01-02", preferred_time="11:00")
+        db.update_appointment_status(a2, "confirmed")
+        # pending של משתמש אחר
+        db.create_appointment("u2", "ב", preferred_date="2099-01-01", preferred_time="10:00")
+        # pending שעבר
+        db.create_appointment("u1", "א", preferred_date="2020-01-01", preferred_time="10:00")
+
+        results = db.get_pending_appointments_for_user("u1")
+        assert len(results) == 1
+        assert results[0]["preferred_date"] == "2099-01-01"
+
+    def test_cancel_appointment_by_user(self, db):
+        """לקוח יכול לבטל רק תור pending שלו."""
+        a1 = db.create_appointment("u1", "א", preferred_date="2099-01-01", preferred_time="10:00")
+        # ביטול מצליח
+        assert db.cancel_appointment(a1, "u1") is True
+        assert db.get_appointment(a1)["status"] == "cancelled"
+
+    def test_cancel_appointment_wrong_user(self, db):
+        """משתמש לא יכול לבטל תור של אחר."""
+        a1 = db.create_appointment("u1", "א", preferred_date="2099-01-01", preferred_time="10:00")
+        assert db.cancel_appointment(a1, "u2") is False
+        assert db.get_appointment(a1)["status"] == "pending"
+
+    def test_cancel_confirmed_blocked(self, db):
+        """לא ניתן לבטל תור מאושר ישירות."""
+        a1 = db.create_appointment("u1", "א", preferred_date="2099-01-01", preferred_time="10:00")
+        db.update_appointment_status(a1, "confirmed")
+        assert db.cancel_appointment(a1, "u1") is False
+        assert db.get_appointment(a1)["status"] == "confirmed"
+
 
 class TestBusinessHours:
     def test_upsert_and_get(self, db):

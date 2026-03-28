@@ -9,17 +9,17 @@
     <div class="card-body" style="padding: 0;">
         {% if appointments %}
         <div class="table-wrapper">
-            <table>
+            <table id="appointments-table">
                 <thead>
                     <tr>
-                        <th>מזהה</th>
-                        <th>לקוח</th>
-                        <th>שירות</th>
-                        <th>תאריך</th>
-                        <th>שעה</th>
+                        <th class="sortable" data-col="0">מזהה <i class="bi bi-chevron-expand sort-icon"></i></th>
+                        <th class="sortable" data-col="1">לקוח <i class="bi bi-chevron-expand sort-icon"></i></th>
+                        <th class="sortable" data-col="2">שירות <i class="bi bi-chevron-expand sort-icon"></i></th>
+                        <th class="sortable" data-col="3">תאריך <i class="bi bi-chevron-expand sort-icon"></i></th>
+                        <th class="sortable" data-col="4">שעה <i class="bi bi-chevron-expand sort-icon"></i></th>
                         <th>הערות</th>
-                        <th>סטטוס</th>
-                        <th>נוצר</th>
+                        <th class="sortable" data-col="6">סטטוס <i class="bi bi-chevron-expand sort-icon"></i></th>
+                        <th class="sortable" data-col="7">נוצר <i class="bi bi-chevron-expand sort-icon"></i></th>
                         <th>פעולות</th>
                     </tr>
                 </thead>
@@ -38,4 +38,58 @@
         {% endif %}
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    var table = document.getElementById('appointments-table');
+    if (!table) return;
+    var tbody = table.querySelector('tbody');
+    var headers = table.querySelectorAll('th.sortable');
+    var currentCol = -1;
+    var ascending = true;
+
+    headers.forEach(function(th) {
+        th.addEventListener('click', function() {
+            var col = parseInt(th.dataset.col);
+            if (currentCol === col) {
+                ascending = !ascending;
+            } else {
+                currentCol = col;
+                ascending = true;
+            }
+
+            // עדכון אייקונים
+            headers.forEach(function(h) {
+                h.querySelector('.sort-icon').className = 'bi bi-chevron-expand sort-icon';
+                h.classList.remove('sort-active');
+            });
+            th.querySelector('.sort-icon').className = ascending
+                ? 'bi bi-chevron-up sort-icon' : 'bi bi-chevron-down sort-icon';
+            th.classList.add('sort-active');
+
+            // מיון שורות
+            var rows = Array.from(tbody.querySelectorAll('tr'));
+            rows.sort(function(a, b) {
+                var cellA = a.cells[col];
+                var cellB = b.cells[col];
+                var valA = (cellA.dataset.sortValue || cellA.textContent).trim();
+                var valB = (cellB.dataset.sortValue || cellB.textContent).trim();
+
+                // מספרים טהורים בלבד (עמודת מזהה) — לא תאריכים/שעות
+                var numA = Number(valA);
+                var numB = Number(valB);
+                if (!isNaN(numA) && !isNaN(numB) && valA !== '' && valB !== '') {
+                    return ascending ? numA - numB : numB - numA;
+                }
+                // טקסט
+                var cmp = valA.localeCompare(valB, 'he');
+                return ascending ? cmp : -cmp;
+            });
+            rows.forEach(function(row) { tbody.appendChild(row); });
+        });
+    });
+})();
+</script>
 {% endblock %}

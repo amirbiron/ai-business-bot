@@ -100,6 +100,7 @@ def init_db():
                 preferred_time TEXT DEFAULT '',
                 notes       TEXT DEFAULT '',
                 status      TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'confirmed', 'cancelled', 'passed')),
+                reminder_sent INTEGER DEFAULT 0,
                 created_at  TEXT DEFAULT (datetime('now'))
             );
 
@@ -225,6 +226,8 @@ def init_db():
                 tone            TEXT NOT NULL DEFAULT 'friendly'
                                     CHECK(tone IN ('friendly', 'formal', 'sales', 'luxury')),
                 custom_phrases  TEXT DEFAULT '',
+                reminder_enabled INTEGER DEFAULT 1,
+                reminder_time   TEXT DEFAULT '10:00',
                 updated_at      TEXT DEFAULT (datetime('now'))
             );
             INSERT OR IGNORE INTO bot_settings (id) VALUES (1);
@@ -751,11 +754,65 @@ def expire_past_appointments() -> int:
         return count
 
 
+def get_appointments_for_reminder(target_date: str) -> list[dict]:
+    """שליפת תורים מאושרים שצריכים תזכורת — רק confirmed (לא pending — עדיין לא סגור)."""
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT * FROM appointments "
+            "WHERE preferred_date = ? AND status = 'confirmed' "
+            "AND reminder_sent = 0",
+            (target_date,)
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def mark_reminder_sent(appt_id: int):
+    """סימון שנשלחה תזכורת לתור."""
+    with get_connection() as conn:
+        conn.execute(
+            "UPDATE appointments SET reminder_sent = 1 WHERE id = ?",
+            (appt_id,)
+        )
+
+
 def get_appointment(appt_id: int) -> Optional[dict]:
     """Get a single appointment by ID."""
     with get_connection() as conn:
         row = conn.execute("SELECT * FROM appointments WHERE id=?", (appt_id,)).fetchone()
         return dict(row) if row else None
+
+
+def get_pending_appointments_for_user(user_id: str) -> list[dict]:
+    """שליפת תורים ממתינים (pending) של משתמש — רק אלה שהלקוח יכול לשנות/לבטל."""
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT * FROM appointments WHERE user_id = ? AND status = 'pending' "
+            "AND preferred_date >= date('now') ORDER BY preferred_date, preferred_time",
+            (user_id,)
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def cancel_appointment(appt_id: int, user_id: str) -> bool:
+    """ביטול תור ע״י הלקוח — רק אם הוא pending ושייך למשתמש. מחזיר True אם בוטל."""
+    with get_connection() as conn:
+        cursor = conn.execute(
+            "UPDATE appointments SET status = 'cancelled' "
+            "WHERE id = ? AND user_id = ? AND status = 'pending'",
+            (appt_id, user_id)
+        )
+        return cursor.rowcount > 0
+
+
+def has_confirmed_appointments(user_id: str) -> bool:
+    """בדיקה אם למשתמש יש תורים מאושרים עתידיים."""
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT 1 FROM appointments WHERE user_id = ? AND status = 'confirmed' "
+            "AND preferred_date >= date('now') LIMIT 1",
+            (user_id,)
+        ).fetchone()
+        return row is not None
 
 
 # ─── Live Chats ─────────────────────────────────────────────────────────────
@@ -1072,20 +1129,31 @@ def get_bot_settings() -> dict:
         if row:
             return dict(row)
         # fallback — לא אמור לקרות כי init_db מכניס שורה
-        return {"id": 1, "tone": "friendly", "custom_phrases": "", "updated_at": ""}
+        return {"id": 1, "tone": "friendly", "custom_phrases": "",
+                "reminder_enabled": 1, "reminder_time": "10:00", "updated_at": ""}
 
 
-def update_bot_settings(tone: str, custom_phrases: str = ""):
-    """עדכון הגדרות הבוט — טון תקשורת וביטויים מותאמים."""
+def update_bot_settings(
+    tone: str,
+    custom_phrases: str = "",
+    reminder_enabled: bool | None = None,
+    reminder_time: str | None = None,
+):
+    """עדכון הגדרות הבוט — טון, ביטויים, ותזכורות תורים."""
     if tone not in VALID_TONES:
         logger.error("Invalid tone value: %s", tone)
         return
     with get_connection() as conn:
         conn.execute(
             """UPDATE bot_settings
-               SET tone = ?, custom_phrases = ?, updated_at = datetime('now')
+               SET tone = ?, custom_phrases = ?,
+                   reminder_enabled = COALESCE(?, reminder_enabled),
+                   reminder_time = COALESCE(?, reminder_time),
+                   updated_at = datetime('now')
                WHERE id = 1""",
-            (tone, custom_phrases),
+            (tone, custom_phrases,
+             int(reminder_enabled) if reminder_enabled is not None else None,
+             reminder_time),
         )
 
 

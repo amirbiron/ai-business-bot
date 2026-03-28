@@ -113,6 +113,13 @@ def run_migrations(conn) -> None:
 
     _ensure_column(conn, "referral_codes", "sent", "INTEGER DEFAULT 0")
 
+    # ─── bot_settings: עמודות תזכורת תורים ────────────────────────────────
+    _ensure_column(conn, "bot_settings", "reminder_enabled", "INTEGER DEFAULT 1")
+    _ensure_column(conn, "bot_settings", "reminder_time", "TEXT DEFAULT '10:00'")
+
+    # ─── appointments: סימון תזכורת שנשלחה ────────────────────────────────
+    _ensure_column(conn, "appointments", "reminder_sent", "INTEGER DEFAULT 0")
+
     # ─── live_chats: עמודת updated_at למעקב אחר פעילות אחרונה ─────────────
     _ensure_column(conn, "live_chats", "updated_at", "TEXT DEFAULT ''")
     # Back-fill: שורות קיימות מקבלות את started_at כ-updated_at

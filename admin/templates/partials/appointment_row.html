@@ -14,10 +14,10 @@
         </div>
     </td>
     <td data-label="שירות">{{ appt.service }}</td>
-    <td data-label="תאריך">{{ appt.preferred_date }}</td>
-    <td data-label="שעה">{{ appt.preferred_time }}</td>
+    <td data-label="תאריך" data-sort-value="{{ appt.preferred_date }}">{{ appt.preferred_date }}</td>
+    <td data-label="שעה" data-sort-value="{{ appt.preferred_time }}">{{ appt.preferred_time }}</td>
     <td data-label="הערות">{{ appt.notes }}</td>
-    <td data-label="סטטוס">
+    <td data-label="סטטוס" data-sort-value="{{ appt.status }}">
         {% if appt.status == 'pending' %}
         <span class="badge badge-warning">ממתין</span>
         {% elif appt.status == 'confirmed' %}
@@ -28,7 +28,7 @@
         <span class="badge badge-muted">עבר</span>
         {% endif %}
     </td>
-    <td data-label="נוצר" class="text-small text-muted" title="{{ appt.created_at|il_datetime }}">{{ appt.created_at|relative_time }}</td>
+    <td data-label="נוצר" class="text-small text-muted" title="{{ appt.created_at|il_datetime }}" data-sort-value="{{ appt.created_at }}">{{ appt.created_at|relative_time }}</td>
     <td data-label="פעולות">
         {% if appt.status == 'pending' %}
         <div class="actions-cell">
