@@ -9,6 +9,7 @@
     --bg-dark: #0F172A;
     --bg-darker: #020617;
     --bg-card: #1E293B;
+    --bg-input: #f5f0e8;
 
     /* Text */
     --text-primary: #F8FAFC;
@@ -651,10 +652,10 @@ table tbody tr:last-child td {
 .form-control {
     width: 100%;
     padding: 0.75rem 1rem;
-    background: var(--bg-darker);
+    background: var(--bg-input);
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
-    color: var(--text-primary);
+    color: #1a1a1a;
     font-family: 'Assistant', sans-serif;
     font-size: 0.9375rem;
     transition: var(--transition);
