@@ -12,6 +12,7 @@ Features:
 """
 
 import asyncio
+from contextlib import asynccontextmanager
 import html as _html
 import logging
 import time
@@ -61,6 +62,31 @@ BUTTON_LOCATION = "📍 שליחת מיקום"
 BUTTON_SAVE_CONTACT = "📇 שמור איש קשר"
 BUTTON_AGENT = "👤 דברו עם נציג"
 ALL_BUTTON_TEXTS = [BUTTON_PRICE_LIST, BUTTON_BOOKING, BUTTON_LOCATION, BUTTON_SAVE_CONTACT, BUTTON_AGENT]
+
+
+@asynccontextmanager
+async def _typing_indicator(bot, chat_id: int, interval: float = 4.0):
+    """שולח אינדיקציית הקלדה בלולאה כל interval שניות עד שהבלוק מסתיים."""
+    stop = asyncio.Event()
+
+    async def _loop():
+        while not stop.is_set():
+            try:
+                await bot.send_chat_action(chat_id=chat_id, action="typing")
+            except Exception as e:
+                logger.debug("typing indicator failed for chat %s: %s", chat_id, e)
+            try:
+                await asyncio.wait_for(stop.wait(), timeout=interval)
+                break  # stop נקבע — יוצאים
+            except asyncio.TimeoutError:
+                pass  # עוד סיבוב
+
+    task = asyncio.create_task(_loop())
+    try:
+        yield
+    finally:
+        stop.set()
+        await task
 
 
 async def _generate_answer_async(*args, **kwargs):
@@ -617,7 +643,8 @@ async def _booking_start_core(update: Update, context: ContextTypes.DEFAULT_TYPE
     db.save_message(user_id, display_name, "user", "📅 בקשת תור")
 
     # Get available services from KB
-    result = await _generate_answer_async("אילו שירותים אתם מציעים? פרטו בקצרה.")
+    async with _typing_indicator(context.bot, update.effective_chat.id):
+        result = await _generate_answer_async("אילו שירותים אתם מציעים? פרטו בקצרה.")
 
     stripped = strip_source_citation(result["answer"])
     if _should_handoff_to_human(stripped):
@@ -843,17 +870,16 @@ async def _handle_rag_query(
     effective_chat_id = chat_id or update.effective_chat.id
     use_direct_send = chat_id is not None and update.message is None
 
-    await context.bot.send_chat_action(chat_id=effective_chat_id, action="typing")
+    async with _typing_indicator(context.bot, effective_chat_id):
+        history = db.get_conversation_history(user_id, limit=CONTEXT_WINDOW_SIZE)
+        db.save_message(user_id, display_name, "user", user_message)
 
-    history = db.get_conversation_history(user_id, limit=CONTEXT_WINDOW_SIZE)
-    db.save_message(user_id, display_name, "user", user_message)
-
-    result = await _generate_answer_async(
-        user_query=query,
-        conversation_history=history,
-        user_id=user_id,
-        username=display_name,
-    )
+        result = await _generate_answer_async(
+            user_query=query,
+            conversation_history=history,
+            user_id=user_id,
+            username=display_name,
+        )
 
     stripped = strip_source_citation(result["answer"])
     if _should_handoff_to_human(stripped):
