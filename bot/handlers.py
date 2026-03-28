@@ -880,7 +880,7 @@ async def booking_button_interrupt(update: Update, context: ContextTypes.DEFAULT
     elif user_message == BUTTON_AGENT:
         await _talk_to_agent_skip_ratelimit(update, context)
     elif user_message == BUTTON_REFERRAL:
-        await referral_command(update, context)
+        await _referral_skip_ratelimit(update, context)
     else:
         # Safety fallback — should not happen, but avoid a silent dead-end
         logger.warning("booking_button_interrupt: unexpected text %r", user_message)
@@ -1034,7 +1034,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return await _talk_to_agent_skip_ratelimit(update, context)
     elif user_message == BUTTON_REFERRAL:
         context.user_data["consecutive_fallbacks"] = 0
-        return await referral_command(update, context)
+        return await _referral_skip_ratelimit(update, context)
 
     # ── Intent Detection ──────────────────────────────────────────────────
     intent = detect_intent(user_message)
@@ -1270,10 +1270,8 @@ async def _check_high_engagement_referral(update: Update, user_id: str):
         await _maybe_send_referral_code(update, user_id)
 
 
-@rate_limit_guard
-@live_chat_guard
-async def referral_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """פקודת /referral — שחזור קוד הפניה קיים או הסבר שעדיין אין."""
+async def _referral_core(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """לוגיקת שחזור קוד הפניה — ללא rate limit guard."""
     from ai_chatbot.referral_service import get_referral_message_text
 
     user_id, _display_name, _tg_username = _get_user_info(update)
@@ -1289,6 +1287,18 @@ async def referral_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
     await _reply_html_safe(update.message, text, reply_markup=_get_main_keyboard(update))
+
+
+@rate_limit_guard
+@live_chat_guard
+async def referral_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """פקודת /referral — שחזור קוד הפניה קיים או הסבר שעדיין אין."""
+    return await _referral_core(update, context)
+
+
+async def _referral_skip_ratelimit(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """ניתוב פנימי — מדלג על rate_limit (הקורא כבר עבר אותו)."""
+    return await _referral_core(update, context)
 
 
 # ─── Follow-up Question Callback ─────────────────────────────────────────────
