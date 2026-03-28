@@ -166,7 +166,8 @@ document.body.addEventListener('htmx:beforeSwap', function(e) {
         }
     }
     /* דילוג אם התוכן החדש זהה לקיים */
-    var newContent = (e.detail.serverResponse || '').trim();
+    var xhr = e.detail.xhr;
+    var newContent = (xhr && (xhr.response || xhr.responseText) || '').trim();
     if (newContent && target.innerHTML.trim() === newContent) {
         e.detail.shouldSwap = false;
         /* גם כשהלוח לא השתנה ויזואלית, צריך לרענן את נתוני התורים לפירוט יום */

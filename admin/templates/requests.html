@@ -43,7 +43,8 @@
 document.body.addEventListener('htmx:beforeSwap', function(e) {
     var target = e.detail.target;
     if (!target) return;
-    var newContent = (e.detail.serverResponse || '').trim();
+    var xhr = e.detail.xhr;
+    var newContent = (xhr && (xhr.response || xhr.responseText) || '').trim();
     if (newContent && target.innerHTML.trim() === newContent) {
         e.detail.shouldSwap = false;
     }
