@@ -152,6 +152,17 @@ function toggleDayDetail(el) {
 }
 
 /* ── עדכון allAppts כשהלוח מתרענן ── */
+/* דילוג על ריענון טבלת תורים אם המשתמש מקליד בשדה קלט */
+document.body.addEventListener('htmx:beforeSwap', function(e) {
+    if (e.detail.target && e.detail.target.id === 'appointments-table-body') {
+        var focused = document.activeElement;
+        if (focused && focused.tagName === 'INPUT' && e.detail.target.contains(focused)) {
+            e.detail.shouldSwap = false;
+            return;
+        }
+    }
+});
+
 document.body.addEventListener('htmx:afterSwap', function(e) {
     if (e.detail.target && e.detail.target.id === 'appointments-calendar') {
         /* ריענון הלוח הצליח — צריך לרענן גם את ה-JS data לפירוט יום */
