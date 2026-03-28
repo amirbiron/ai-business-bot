@@ -149,6 +149,37 @@ def run_migrations(conn) -> None:
         conn.execute("CREATE INDEX IF NOT EXISTS idx_referrals_code ON referrals(code)")
         logger.info("Migrated referrals: UNIQUE(referrer_id, referred_id) → UNIQUE(referred_id)")
 
+    # ─── appointments: הוספת סטטוס 'passed' ל-CHECK constraint ─────────────
+    appt_sql = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='appointments'"
+    ).fetchone()
+    if appt_sql and "'passed'" not in (appt_sql["sql"] or ""):
+        conn.execute("ALTER TABLE appointments RENAME TO _appointments_old")
+        conn.execute("""
+            CREATE TABLE appointments (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id     TEXT NOT NULL,
+                username    TEXT DEFAULT '',
+                telegram_username TEXT DEFAULT '',
+                service     TEXT DEFAULT '',
+                preferred_date TEXT DEFAULT '',
+                preferred_time TEXT DEFAULT '',
+                notes       TEXT DEFAULT '',
+                status      TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'confirmed', 'cancelled', 'passed')),
+                created_at  TEXT DEFAULT (datetime('now'))
+            )
+        """)
+        conn.execute("""
+            INSERT INTO appointments
+                (id, user_id, username, telegram_username, service,
+                 preferred_date, preferred_time, notes, status, created_at)
+            SELECT id, user_id, username, telegram_username, service,
+                   preferred_date, preferred_time, notes, status, created_at
+            FROM _appointments_old
+        """)
+        conn.execute("DROP TABLE _appointments_old")
+        logger.info("Migrated appointments: added 'passed' to CHECK constraint")
+
     # ─── appointments: UNIQUE partial index למניעת תורים כפולים ────────────
     existing_appt_idx = conn.execute(
         "SELECT name FROM sqlite_master WHERE type='index' "

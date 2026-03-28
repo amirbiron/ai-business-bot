@@ -189,6 +189,21 @@ class TestAppointments:
         db.create_appointment("u1", "ב")
         assert db.count_appointments() == 2
 
+    def test_expire_past_appointments(self, db):
+        """תורים ממתינים שהתאריך שלהם עבר מסומנים כ-passed."""
+        db.create_appointment("u1", "א", preferred_date="2020-01-01", preferred_time="10:00")
+        db.create_appointment("u2", "ב", preferred_date="2099-12-31", preferred_time="10:00")
+        db.create_appointment("u3", "ג", preferred_date="2020-06-01", preferred_time="14:00")
+        # confirmed לא צריך להשתנות גם אם עבר
+        appt_id = db.create_appointment("u4", "ד", preferred_date="2020-03-01", preferred_time="09:00")
+        db.update_appointment_status(appt_id, "confirmed")
+
+        expired = db.expire_past_appointments()
+        assert expired == 2  # רק u1 ו-u3 (pending שעברו)
+        assert db.count_appointments("passed") == 2
+        assert db.count_appointments("pending") == 1  # u2 — עתידי
+        assert db.count_appointments("confirmed") == 1  # u4 — לא משתנה
+
 
 class TestBusinessHours:
     def test_upsert_and_get(self, db):

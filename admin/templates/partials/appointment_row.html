@@ -24,6 +24,8 @@
         <span class="badge badge-success">מאושר</span>
         {% elif appt.status == 'cancelled' %}
         <span class="badge badge-danger">בוטל</span>
+        {% elif appt.status == 'passed' %}
+        <span class="badge badge-muted">עבר</span>
         {% endif %}
     </td>
     <td data-label="נוצר" class="text-small text-muted" title="{{ appt.created_at|il_datetime }}">{{ appt.created_at|relative_time }}</td>

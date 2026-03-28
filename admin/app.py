@@ -64,7 +64,7 @@ from ai_chatbot.business_hours import DAY_NAMES_HE
 logger = logging.getLogger(__name__)
 
 VALID_AGENT_REQUEST_STATUSES = {"pending", "handled", "dismissed"}
-VALID_APPOINTMENT_STATUSES = {"pending", "confirmed", "cancelled"}
+VALID_APPOINTMENT_STATUSES = {"pending", "confirmed", "cancelled", "passed"}
 
 ISRAEL_TZ = ZoneInfo("Asia/Jerusalem")
 
@@ -93,6 +93,7 @@ STATUS_TRANSLATION = {
     "dismissed": "נדחה",
     "confirmed": "מאושר",
     "cancelled": "בוטל",
+    "passed": "עבר",
 }
 
 
@@ -459,6 +460,7 @@ def create_admin_app() -> Flask:
             "completed_referrals": referral_stats["completed_referrals"],
         }
 
+        db.expire_past_appointments()
         pending_requests = db.get_agent_requests(status="pending", limit=5)
         pending_appointments = db.get_appointments(status="pending", limit=5)
         active_live_chats = LiveChatService.get_all_active()
@@ -792,6 +794,7 @@ def create_admin_app() -> Flask:
     @app.route("/appointments")
     @login_required
     def appointments():
+        db.expire_past_appointments()
         appointments_list = db.get_appointments()
         return render_template(
             "appointments.html",
