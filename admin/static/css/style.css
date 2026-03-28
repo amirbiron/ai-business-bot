@@ -18,6 +18,7 @@
     /* Brand */
     --brand-blue: #2563EB;
     --brand-purple: #7C3AED;
+    --brand-purple-light: #a78bfa;
 
     /* Status */
     --success: #10B981;
@@ -628,7 +629,7 @@ table tbody tr:last-child td {
 
 .badge-category {
     background: rgba(124, 58, 237, 0.18);
-    color: #a78bfa;
+    color: var(--brand-purple-light);
 }
 
 /* --- Forms --- */
