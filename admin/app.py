@@ -97,17 +97,17 @@ STATUS_TRANSLATION = {
 
 
 def _format_il_datetime(value: str) -> str:
-    """Format a UTC datetime string to Israel time as HH:MM  DD-MM-YYYY.
+    """Format a UTC datetime string to Israel time as DD-MM-YYYY  HH:MM.
 
     משתמש ב-non-breaking space (\\u00a0) כדי שהדפדפן לא יקרוס את הרווח בין
-    השעה לתאריך (whitespace collapse).
+    התאריך לשעה (whitespace collapse).
     """
     if not value:
         return ""
     try:
         dt = datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
         dt = dt.replace(tzinfo=timezone.utc).astimezone(ISRAEL_TZ)
-        return dt.strftime("%H:%M") + "\u00a0\u00a0" + dt.strftime("%d-%m-%Y")
+        return dt.strftime("%d-%m-%Y") + "\u00a0\u00a0" + dt.strftime("%H:%M")
     except (ValueError, TypeError):
         return value
 
@@ -115,7 +115,7 @@ def _format_il_datetime(value: str) -> str:
 def _format_relative_time(value: str) -> str:
     """המרת timestamp לזמן יחסי בעברית (לפני X דקות, אתמול, וכו').
 
-    עד שבוע — זמן יחסי. מעל שבוע — פורמט מלא HH:MM  DD-MM-YYYY.
+    עד שבוע — זמן יחסי. מעל שבוע — פורמט מלא DD-MM-YYYY HH:MM.
     """
     if not value:
         return ""
