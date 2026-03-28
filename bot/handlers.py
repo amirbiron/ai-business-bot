@@ -24,6 +24,7 @@ from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
 )
+from sqlite3 import IntegrityError
 from telegram.error import BadRequest, TimedOut, NetworkError
 from telegram.ext import ContextTypes, ConversationHandler
 
@@ -759,14 +760,24 @@ async def booking_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         preferred_time = context.user_data.get("booking_time", "")
 
         # Save appointment to database
-        appt_id = db.create_appointment(
-            user_id=user_id,
-            username=display_name,
-            service=service,
-            preferred_date=date,
-            preferred_time=preferred_time,
-            telegram_username=telegram_username,
-        )
+        try:
+            appt_id = db.create_appointment(
+                user_id=user_id,
+                username=display_name,
+                service=service,
+                preferred_date=date,
+                preferred_time=preferred_time,
+                telegram_username=telegram_username,
+            )
+        except IntegrityError:
+            logger.warning("כפילות תור: user=%s date=%s time=%s", user_id, date, preferred_time)
+            await update.message.reply_text(
+                f"⚠️ כבר יש לכם בקשת תור לתאריך {date} בשעה {preferred_time}.\n"
+                "אם תרצו לשנות — בטלו את הבקשה הקיימת ונסו שוב.",
+                reply_markup=_get_main_keyboard(),
+            )
+            context.user_data.clear()
+            return ConversationHandler.END
 
         # Notify business owner
         handle = _tg_handle(telegram_username) or "(ללא שם משתמש)"
