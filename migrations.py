@@ -6,8 +6,7 @@ UNIQUE constraint או מעבר סכימה) דורשות CREATE TABLE + INSERT +
 """
 
 import logging
-import re
-from datetime import date, timedelta
+from datetime import date
 
 logger = logging.getLogger(__name__)
 
@@ -226,7 +225,8 @@ def run_migrations(conn) -> None:
     # ─── appointments: נרמול תאריכים ישנים בפורמט עברי → YYYY-MM-DD ──────
     # תורים ישנים שנשמרו עם "מחר" / "יום שני" / "15/3" לפני שנוסף normalize_date.
     # נרמול לפי created_at כ-reference date (היום שבו המשתמש הזמין).
-    _ISO_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+    # UPDATE OR IGNORE — אם הנרמול יוצר כפילות (אותו user+date+time),
+    # שומרים על הרשומה הקיימת ומוחקים את הישנה כדי לא לקרוס.
     non_iso_rows = conn.execute(
         "SELECT id, preferred_date, created_at FROM appointments "
         "WHERE preferred_date != '' AND preferred_date NOT LIKE '____-__-__'"
@@ -235,7 +235,6 @@ def run_migrations(conn) -> None:
         from entity_extraction import normalize_date  # noqa: E402 — lazy import
         migrated = 0
         for row in non_iso_rows:
-            # חילוץ reference date מתוך created_at (היום שהמשתמש הזמין)
             ref = None
             try:
                 ref = date.fromisoformat(row["created_at"][:10])
@@ -243,11 +242,16 @@ def run_migrations(conn) -> None:
                 pass
             normalized = normalize_date(row["preferred_date"], ref_date=ref)
             if normalized:
-                conn.execute(
-                    "UPDATE appointments SET preferred_date = ? WHERE id = ?",
+                result = conn.execute(
+                    "UPDATE OR IGNORE appointments SET preferred_date = ? WHERE id = ?",
                     (normalized, row["id"]),
                 )
-                migrated += 1
+                if result.rowcount:
+                    migrated += 1
+                else:
+                    # כפילות UNIQUE — מוחקים את הרשומה הישנה (כבר קיימת רשומה מנורמלת)
+                    conn.execute("DELETE FROM appointments WHERE id = ?", (row["id"],))
+                    logger.info("Deleted duplicate appointment id=%s after normalization", row["id"])
             else:
                 logger.warning(
                     "Could not normalize appointment date id=%s: %r",
