@@ -816,12 +816,15 @@ def has_confirmed_appointments(user_id: str) -> bool:
 
 
 def is_returning_customer(user_id: str) -> bool:
-    """בדיקה אם המשתמש לקוח חוזר — יש לו תורים שאושרו או בוצעו בעבר."""
+    """בדיקה אם המשתמש לקוח חוזר — יש לו תורים שבוצעו בעבר (passed) או אושרו בעבר."""
+    from zoneinfo import ZoneInfo
+    today_il = datetime.now(ZoneInfo("Asia/Jerusalem")).strftime("%Y-%m-%d")
     with get_connection() as conn:
         row = conn.execute(
             "SELECT 1 FROM appointments WHERE user_id = ? "
-            "AND status IN ('confirmed', 'passed') LIMIT 1",
-            (user_id,)
+            "AND (status = 'passed' OR (status = 'confirmed' AND preferred_date < ?)) "
+            "LIMIT 1",
+            (user_id, today_il)
         ).fetchone()
         return row is not None
 

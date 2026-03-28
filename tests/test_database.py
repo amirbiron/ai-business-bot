@@ -291,6 +291,12 @@ class TestAppointments:
         db.update_appointment_status(a1, "cancelled")
         assert db.is_returning_customer("u1") is False
 
+    def test_is_returning_customer_future_confirmed_not_returning(self, db):
+        """לקוח עם תור עתידי מאושר בלבד לא נחשב לקוח חוזר — עדיין לא היה."""
+        a1 = db.create_appointment("u1", "א", preferred_date="2099-01-01", preferred_time="10:00")
+        db.update_appointment_status(a1, "confirmed")
+        assert db.is_returning_customer("u1") is False
+
 
 class TestBusinessHours:
     def test_upsert_and_get(self, db):
