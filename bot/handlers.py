@@ -780,8 +780,13 @@ async def booking_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 telegram_username=telegram_username,
             )
         except IntegrityError:
-            # רשת ביטחון — אם ה-race condition עבר את הבדיקה למעלה
+            # רשת ביטחון — race condition צמוד שעבר את הבדיקה למעלה
             logger.warning("כפילות תור (IntegrityError): user=%s date=%s time=%s", user_id, date, preferred_time)
+            await update.message.reply_text(
+                f"⚠️ כבר יש לכם בקשת תור לתאריך {date} בשעה {preferred_time}.\n"
+                "אם תרצו לשנות — בטלו את הבקשה הקיימת ונסו שוב.",
+                reply_markup=_get_main_keyboard(),
+            )
             context.user_data.clear()
             return ConversationHandler.END
 
