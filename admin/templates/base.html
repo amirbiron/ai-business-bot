@@ -1,5 +1,9 @@
 <!DOCTYPE html>
 <html lang="he" dir="rtl">
+<script>
+/* מניעת הבזק ערכת נושא שגויה בטעינה */
+(function(){var t=localStorage.getItem('admin-theme');if(t)document.documentElement.setAttribute('data-theme',t);})();
+</script>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -111,6 +115,11 @@
             </ul>
 
             <div class="sidebar-footer">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem;padding:0 0.5rem;">
+                    <button class="theme-toggle" onclick="toggleTheme()" title="החלף ערכת נושא">
+                        <i class="bi" id="theme-icon"></i>
+                    </button>
+                </div>
                 <a href="/logout">
                     <i class="bi bi-box-arrow-right"></i> התנתקות
                 </a>
@@ -351,6 +360,20 @@
             var banner = document.getElementById('rag-stale-banner');
             if (banner) banner.style.display = '';
         });
+
+        // ── ערכת נושא (דארק / לייט) ──
+        function applyTheme(theme) {
+            document.documentElement.setAttribute('data-theme', theme);
+            var icon = document.getElementById('theme-icon');
+            if (icon) icon.className = 'bi ' + (theme === 'light' ? 'bi-moon-fill' : 'bi-sun-fill');
+        }
+        function toggleTheme() {
+            var current = document.documentElement.getAttribute('data-theme') || 'dark';
+            var next = current === 'dark' ? 'light' : 'dark';
+            localStorage.setItem('admin-theme', next);
+            applyTheme(next);
+        }
+        applyTheme(localStorage.getItem('admin-theme') || 'dark');
 
         // HTMX: handle expired CSRF token
         document.body.addEventListener('csrfExpired', function() {

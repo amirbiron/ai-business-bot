@@ -10,11 +10,14 @@
     --bg-darker: #020617;
     --bg-card: #1E293B;
     --bg-input: #f5f0e8;
+    --bg-topbar: rgba(15, 23, 42, 0.95);
 
     /* Text */
     --text-primary: #F8FAFC;
     --text-secondary: #CBD5E1;
     --text-muted: #94A3B8;
+    --text-input: #1a1a1a;
+    --text-input-placeholder: #999;
 
     /* Brand */
     --brand-blue: #2563EB;
@@ -63,6 +66,51 @@
 
     /* Transitions */
     --transition: all 0.3s ease;
+}
+
+/* --- Light Theme Override --- */
+[data-theme="light"] {
+    --bg-dark: #F1F5F9;
+    --bg-darker: #E2E8F0;
+    --bg-card: #FFFFFF;
+    --bg-input: #FFFFFF;
+    --bg-topbar: rgba(241, 245, 249, 0.95);
+
+    --text-primary: #0F172A;
+    --text-secondary: #475569;
+    --text-muted: #64748B;
+    --text-input: #1a1a1a;
+    --text-input-placeholder: #94A3B8;
+
+    --border: #CBD5E1;
+
+    --gradient-hero: linear-gradient(180deg, #F1F5F9 0%, #E2E8F0 100%);
+    --gradient-dark: linear-gradient(135deg, #94A3B8 0%, #CBD5E1 100%);
+
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+    --shadow-glow: 0 0 20px rgba(37, 99, 235, 0.15);
+}
+
+/* כפתור טוגל ערכת נושא */
+.theme-toggle {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    width: 36px;
+    height: 36px;
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 1.1rem;
+    transition: var(--transition);
+}
+.theme-toggle:hover {
+    color: var(--text-primary);
+    background: var(--bg-card);
 }
 
 /* --- Reset & Base --- */
@@ -298,7 +346,7 @@ a:hover {
     right: 0;
     left: 0;
     height: var(--topbar-height);
-    background: rgba(15, 23, 42, 0.95);
+    background: var(--bg-topbar);
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
     border-bottom: 1px solid var(--border);
@@ -699,7 +747,7 @@ table tbody tr:last-child td {
     background: var(--bg-input);
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
-    color: #1a1a1a;
+    color: var(--text-input);
     font-family: 'Assistant', sans-serif;
     font-size: 0.9375rem;
     transition: var(--transition);
