@@ -451,6 +451,7 @@ def create_admin_app() -> Flask:
     @app.route("/")
     @login_required
     def dashboard():
+        db.expire_past_appointments()
         referral_stats = db.get_referral_stats()
         # שאילתה מאוחדת — 6 מוני DB בשאילתה אחת במקום 6 נפרדות
         counts = db.get_dashboard_counts()
@@ -459,8 +460,6 @@ def create_admin_app() -> Flask:
             "active_live_chats": LiveChatService.count_active(),
             "completed_referrals": referral_stats["completed_referrals"],
         }
-
-        db.expire_past_appointments()
         pending_requests = db.get_agent_requests(status="pending", limit=5)
         pending_appointments = db.get_appointments(status="pending", limit=5)
         active_live_chats = LiveChatService.get_all_active()

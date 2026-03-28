@@ -733,13 +733,17 @@ def update_appointment_status(appt_id: int, status: str):
 def expire_past_appointments() -> int:
     """סימון תורים ממתינים שהתאריך שלהם עבר כ-'passed'.
 
+    משתמש בשעון ישראל (UTC+2/+3) כי preferred_date מייצג תאריך מקומי.
     מחזיר את מספר התורים שעודכנו.
     """
+    from zoneinfo import ZoneInfo
+    today_il = datetime.now(ZoneInfo("Asia/Jerusalem")).strftime("%Y-%m-%d")
     with get_connection() as conn:
         cursor = conn.execute(
             "UPDATE appointments SET status='passed' "
             "WHERE status='pending' AND preferred_date != '' "
-            "AND preferred_date < date('now')"
+            "AND preferred_date < ?",
+            (today_il,)
         )
         count = cursor.rowcount
         if count:
