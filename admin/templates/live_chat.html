@@ -93,7 +93,8 @@
     // דילוג על swap אם התגובה מהשרת זהה לקודמת — מונע בהוב מיותר
     document.body.addEventListener('htmx:beforeSwap', function(e) {
         if (e.detail.target && e.detail.target.id === 'live-chat-messages') {
-            var newHtml = e.detail.serverResponse || '';
+            var xhr = e.detail.xhr;
+            var newHtml = xhr && (xhr.response || xhr.responseText) || '';
             if (_lastServerResponse !== null && newHtml === _lastServerResponse) {
                 e.detail.shouldSwap = false;
                 return;

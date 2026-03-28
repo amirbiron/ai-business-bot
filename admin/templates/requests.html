@@ -40,14 +40,17 @@
 {% block scripts %}
 <script>
 /* דילוג על ריענון אם התוכן לא השתנה (מניעת הבהוב) */
+var _lastResponse = {};
 document.body.addEventListener('htmx:beforeSwap', function(e) {
     var target = e.detail.target;
-    if (!target) return;
+    if (!target || !target.id) return;
     var xhr = e.detail.xhr;
-    var newContent = (xhr && (xhr.response || xhr.responseText) || '').trim();
-    if (newContent && target.innerHTML.trim() === newContent) {
+    var newContent = xhr && (xhr.response || xhr.responseText) || '';
+    if (_lastResponse[target.id] !== undefined && newContent === _lastResponse[target.id]) {
         e.detail.shouldSwap = false;
+        return;
     }
+    _lastResponse[target.id] = newContent;
 });
 
 (function() {

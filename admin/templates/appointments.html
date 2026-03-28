@@ -154,9 +154,10 @@ function toggleDayDetail(el) {
 
 /* ── עדכון allAppts כשהלוח מתרענן ── */
 /* דילוג על ריענון אם התוכן לא השתנה (מניעת הבהוב) או אם המשתמש מקליד */
+var _lastResponse = {};  /* שמירת תגובה אחרונה לכל target */
 document.body.addEventListener('htmx:beforeSwap', function(e) {
     var target = e.detail.target;
-    if (!target) return;
+    if (!target || !target.id) return;
     /* דילוג אם המשתמש מקליד בשדה קלט בתוך הטבלה */
     if (target.id === 'appointments-table-body') {
         var focused = document.activeElement;
@@ -165,10 +166,10 @@ document.body.addEventListener('htmx:beforeSwap', function(e) {
             return;
         }
     }
-    /* דילוג אם התוכן החדש זהה לקיים */
+    /* השוואת response לresponse — מונע הבהוב כשאין שינוי */
     var xhr = e.detail.xhr;
-    var newContent = (xhr && (xhr.response || xhr.responseText) || '').trim();
-    if (newContent && target.innerHTML.trim() === newContent) {
+    var newContent = xhr && (xhr.response || xhr.responseText) || '';
+    if (_lastResponse[target.id] !== undefined && newContent === _lastResponse[target.id]) {
         e.detail.shouldSwap = false;
         /* גם כשהלוח לא השתנה ויזואלית, צריך לרענן את נתוני התורים לפירוט יום */
         if (target.id === 'appointments-calendar') {
@@ -177,7 +178,9 @@ document.body.addEventListener('htmx:beforeSwap', function(e) {
                 .then(function(data) { allAppts = data; _rebuildApptIndex(); })
                 .catch(function() {});
         }
+        return;
     }
+    _lastResponse[target.id] = newContent;
 });
 
 document.body.addEventListener('htmx:afterSwap', function(e) {
