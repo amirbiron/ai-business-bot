@@ -7,9 +7,8 @@
 
 <div class="card animate-slide-up">
     <div class="card-body" style="padding: 0;">
-        {% if requests %}
         <div class="table-wrapper">
-            <table id="requests-table">
+            <table id="requests-table" {% if not requests %}style="display:none;"{% endif %}>
                 <thead>
                     <tr>
                         <th class="sortable" data-col="0">מזהה <i class="bi bi-chevron-expand sort-icon"></i></th>
@@ -20,19 +19,20 @@
                         <th>פעולות</th>
                     </tr>
                 </thead>
-                <tbody id="requests-table-body">
+                <tbody id="requests-table-body"
+                       hx-get="/api/requests/rows"
+                       hx-trigger="every 15s"
+                       hx-swap="innerHTML settle:0.1s">
                     {% for req in requests %}
                     {% include "partials/request_row.html" %}
                     {% endfor %}
                 </tbody>
             </table>
         </div>
-        {% else %}
-        <div class="empty-state">
+        <div id="requests-empty-state" class="empty-state" {% if requests %}style="display:none;"{% endif %}>
             <i class="bi bi-check-circle"></i>
             <p>אין עדיין בקשות נציג.</p>
         </div>
-        {% endif %}
     </div>
 </div>
 {% endblock %}
@@ -41,11 +41,33 @@
 <script>
 (function() {
     var table = document.getElementById('requests-table');
+    var emptyState = document.getElementById('requests-empty-state');
     if (!table) return;
     var tbody = table.querySelector('tbody');
     var headers = table.querySelectorAll('th.sortable');
     var currentCol = -1;
     var ascending = true;
+
+    function applySort() {
+        if (currentCol < 0) return;
+        var rows = Array.from(tbody.querySelectorAll('tr'));
+        var col = currentCol;
+        rows.sort(function(a, b) {
+            var cellA = a.cells[col];
+            var cellB = b.cells[col];
+            if (!cellA || !cellB) return 0;
+            var valA = (cellA.dataset.sortValue || cellA.textContent).trim();
+            var valB = (cellB.dataset.sortValue || cellB.textContent).trim();
+            var numA = Number(valA);
+            var numB = Number(valB);
+            if (!isNaN(numA) && !isNaN(numB) && valA !== '' && valB !== '') {
+                return ascending ? numA - numB : numB - numA;
+            }
+            var cmp = valA.localeCompare(valB, 'he');
+            return ascending ? cmp : -cmp;
+        });
+        rows.forEach(function(row) { tbody.appendChild(row); });
+    }
 
     headers.forEach(function(th) {
         th.addEventListener('click', function() {
@@ -66,26 +88,18 @@
                 ? 'bi bi-chevron-up sort-icon' : 'bi bi-chevron-down sort-icon';
             th.classList.add('sort-active');
 
-            // מיון שורות
-            var rows = Array.from(tbody.querySelectorAll('tr'));
-            rows.sort(function(a, b) {
-                var cellA = a.cells[col];
-                var cellB = b.cells[col];
-                var valA = (cellA.dataset.sortValue || cellA.textContent).trim();
-                var valB = (cellB.dataset.sortValue || cellB.textContent).trim();
-
-                // מספרים טהורים בלבד (עמודת מזהה)
-                var numA = Number(valA);
-                var numB = Number(valB);
-                if (!isNaN(numA) && !isNaN(numB) && valA !== '' && valB !== '') {
-                    return ascending ? numA - numB : numB - numA;
-                }
-                // טקסט
-                var cmp = valA.localeCompare(valB, 'he');
-                return ascending ? cmp : -cmp;
-            });
-            rows.forEach(function(row) { tbody.appendChild(row); });
+            applySort();
         });
+    });
+
+    // שמירת סדר מיון אחרי ריענון HTMX
+    document.body.addEventListener('htmx:afterSwap', function(e) {
+        if (e.detail.target && e.detail.target.id === 'requests-table-body') {
+            var hasRows = e.detail.target.querySelector('tr') !== null;
+            table.style.display = hasRows ? '' : 'none';
+            if (emptyState) emptyState.style.display = hasRows ? 'none' : '';
+            applySort();
+        }
     });
 })();
 </script>

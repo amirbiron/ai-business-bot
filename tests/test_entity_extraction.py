@@ -136,12 +136,20 @@ class TestNormalizeDate:
         assert normalize_date("1/1", self.REF) == "2027-01-01"
 
     def test_short_date_today_same_day(self):
-        # 28/03 = REF, כבר עבר (היום) → שנה הבאה
-        assert normalize_date("28/3", self.REF) == "2027-03-28"
+        # 28/03 = REF (היום) → היום עצמו תקף, לא מגלגל שנה
+        assert normalize_date("28/3", self.REF) == "2026-03-28"
+
+    def test_short_date_yesterday_rolls(self):
+        # 27/03 < REF → כבר עבר → שנה הבאה
+        assert normalize_date("27/3", self.REF) == "2027-03-27"
 
     # ── חודשים בעברית ──
     def test_hebrew_month_with_bet(self):
         assert normalize_date("14 במרץ", self.REF) == "2027-03-14"  # כבר עבר → 2027
+
+    def test_hebrew_month_today(self):
+        # 28 במרץ = REF (היום) → היום עצמו תקף
+        assert normalize_date("28 במרץ", self.REF) == "2026-03-28"
 
     def test_hebrew_month_without_bet(self):
         assert normalize_date("3 אפריל", self.REF) == "2026-04-03"

@@ -63,6 +63,7 @@
                 <li>
                     <a href="/appointments" class="{% if request.endpoint == 'appointments' %}active{% endif %}">
                         <i class="bi bi-calendar-check"></i> תורים
+                        <span id="appointments-badge" class="nav-badge" style="display:none;"></span>
                     </a>
                 </li>
                 <li>
@@ -283,6 +284,15 @@
                         liveBadge.style.display = 'flex';
                     } else {
                         liveBadge.style.display = 'none';
+                    }
+                }
+                var apptBadge = document.getElementById('appointments-badge');
+                if (apptBadge) {
+                    if (data.pending_appointments > 0) {
+                        apptBadge.textContent = data.pending_appointments;
+                        apptBadge.style.display = 'flex';
+                    } else {
+                        apptBadge.style.display = 'none';
                     }
                 }
                 var gapsBadge = document.getElementById('gaps-badge');

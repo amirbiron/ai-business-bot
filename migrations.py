@@ -6,6 +6,7 @@ UNIQUE constraint או מעבר סכימה) דורשות CREATE TABLE + INSERT +
 """
 
 import logging
+from datetime import date
 
 logger = logging.getLogger(__name__)
 
@@ -220,3 +221,41 @@ def run_migrations(conn) -> None:
                 ON appointments(user_id, preferred_date, preferred_time)
                 WHERE preferred_date != '' AND preferred_time != ''
         """)
+
+    # ─── appointments: נרמול תאריכים ישנים בפורמט עברי → YYYY-MM-DD ──────
+    # תורים ישנים שנשמרו עם "מחר" / "יום שני" / "15/3" לפני שנוסף normalize_date.
+    # נרמול לפי created_at כ-reference date (היום שבו המשתמש הזמין).
+    # UPDATE OR IGNORE — אם הנרמול יוצר כפילות (אותו user+date+time),
+    # שומרים על הרשומה הקיימת ומוחקים את הישנה כדי לא לקרוס.
+    non_iso_rows = conn.execute(
+        "SELECT id, preferred_date, created_at FROM appointments "
+        "WHERE preferred_date != '' AND preferred_date NOT LIKE '____-__-__'"
+    ).fetchall()
+    if non_iso_rows:
+        from entity_extraction import normalize_date  # noqa: E402 — lazy import
+        migrated = 0
+        for row in non_iso_rows:
+            ref = None
+            try:
+                ref = date.fromisoformat(row["created_at"][:10])
+            except (ValueError, TypeError):
+                pass
+            normalized = normalize_date(row["preferred_date"], ref_date=ref)
+            if normalized:
+                result = conn.execute(
+                    "UPDATE OR IGNORE appointments SET preferred_date = ? WHERE id = ?",
+                    (normalized, row["id"]),
+                )
+                if result.rowcount:
+                    migrated += 1
+                else:
+                    # כפילות UNIQUE — מוחקים את הרשומה הישנה (כבר קיימת רשומה מנורמלת)
+                    conn.execute("DELETE FROM appointments WHERE id = ?", (row["id"],))
+                    logger.info("Deleted duplicate appointment id=%s after normalization", row["id"])
+            else:
+                logger.warning(
+                    "Could not normalize appointment date id=%s: %r",
+                    row["id"], row["preferred_date"],
+                )
+        if migrated:
+            logger.info("Normalized %d/%d old appointment dates to YYYY-MM-DD", migrated, len(non_iso_rows))

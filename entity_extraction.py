@@ -170,8 +170,8 @@ def normalize_date(text: str, ref_date: date | None = None) -> str | None:
         d = _safe_date(ref.year, month, day)
         if d is None:
             return None
-        # אם התאריך כבר עבר (או היום) — מתכוון לשנה הבאה
-        if d <= ref:
+        # אם התאריך כבר עבר — מתכוון לשנה הבאה (היום עצמו עדיין תקף)
+        if d < ref:
             d = _safe_date(ref.year + 1, month, day)
         return d.isoformat() if d else None
 
@@ -183,7 +183,7 @@ def normalize_date(text: str, ref_date: date | None = None) -> str | None:
         d = _safe_date(ref.year, month, day)
         if d is None:
             return None
-        if d <= ref:
+        if d < ref:
             d = _safe_date(ref.year + 1, month, day)
         return d.isoformat() if d else None
 

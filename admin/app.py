@@ -790,23 +790,17 @@ def create_admin_app() -> Flask:
     
     # ─── Appointments ─────────────────────────────────────────────────────
     
-    @app.route("/appointments")
-    @login_required
-    def appointments():
+    def _build_calendar_context(appointments_list):
+        """חישוב הקשר לוח שנה — משותף לדף הראשי ול-API partial."""
         import calendar as _cal
         from collections import defaultdict
 
-        db.expire_past_appointments()
-        appointments_list = db.get_appointments()
-
-        # ── חישוב חודש לתצוגה ──
         year = request.args.get("year", type=int)
         month = request.args.get("month", type=int)
         today = datetime.now().date()
         if not year or not month:
             year, month = today.year, today.month
 
-        # ניווט חודש קודם / הבא
         if month == 1:
             prev_year, prev_month = year - 1, 12
         else:
@@ -816,25 +810,19 @@ def create_admin_app() -> Flask:
         else:
             next_year, next_month = year, month + 1
 
-        # בניית מפת תורים לפי תאריך
         appt_by_date = defaultdict(list)
         for a in appointments_list:
             d = a.get("preferred_date", "")
             if d:
                 appt_by_date[d].append(a)
 
-        # בניית שבועות של החודש (שבוע מתחיל ביום ראשון = 6 ב-Python)
         month_days = _cal.Calendar(firstweekday=6).monthdayscalendar(year, month)
-
         he_months = [
             "", "ינואר", "פברואר", "מרץ", "אפריל", "מאי", "יוני",
             "יולי", "אוגוסט", "ספטמבר", "אוקטובר", "נובמבר", "דצמבר",
         ]
 
-        return render_template(
-            "appointments.html",
-            business_name=BUSINESS_NAME,
-            appointments=appointments_list,
+        return dict(
             cal_weeks=month_days,
             cal_year=year,
             cal_month=month,
@@ -845,6 +833,20 @@ def create_admin_app() -> Flask:
             next_month=next_month,
             appt_by_date=appt_by_date,
             today_iso=today.isoformat(),
+        )
+
+    @app.route("/appointments")
+    @login_required
+    def appointments():
+        db.expire_past_appointments()
+        appointments_list = db.get_appointments()
+        cal_ctx = _build_calendar_context(appointments_list)
+
+        return render_template(
+            "appointments.html",
+            business_name=BUSINESS_NAME,
+            appointments=appointments_list,
+            **cal_ctx,
         )
     
     @app.route("/appointments/<int:appt_id>/update", methods=["POST"])
@@ -1306,6 +1308,51 @@ def create_admin_app() -> Flask:
         )
 
     # ─── API Endpoints (for AJAX) ─────────────────────────────────────────
+
+    @app.route("/api/requests/rows")
+    @login_required
+    def api_requests_rows():
+        """שורות טבלת בקשות נציג — לריענון אוטומטי עם HTMX polling."""
+        requests_list = db.get_agent_requests()
+        active_live_chats = {lc["user_id"] for lc in LiveChatService.get_all_active()}
+        html_parts = []
+        for req in requests_list:
+            html_parts.append(render_template(
+                "partials/request_row.html",
+                req=req,
+                active_live_chats=active_live_chats,
+            ))
+        return "".join(html_parts)
+
+    @app.route("/api/appointments/rows")
+    @login_required
+    def api_appointments_rows():
+        """שורות טבלת תורים — לריענון אוטומטי עם HTMX polling."""
+        db.expire_past_appointments()
+        appointments_list = db.get_appointments()
+        html_parts = []
+        for appt in appointments_list:
+            html_parts.append(render_template(
+                "partials/appointment_row.html",
+                appt=appt,
+            ))
+        return "".join(html_parts)
+
+    @app.route("/api/appointments/calendar")
+    @login_required
+    def api_appointments_calendar():
+        """לוח שנה חודשי — HTML partial לריענון אוטומטי."""
+        db.expire_past_appointments()
+        appointments_list = db.get_appointments()
+        cal_ctx = _build_calendar_context(appointments_list)
+        return render_template("partials/appointments_calendar.html", **cal_ctx)
+
+    @app.route("/api/appointments/data")
+    @login_required
+    def api_appointments_data():
+        """נתוני תורים כ-JSON — לעדכון ה-JS data אחרי ריענון הלוח."""
+        db.expire_past_appointments()
+        return jsonify(db.get_appointments())
 
     @app.route("/api/stats")
     @login_required

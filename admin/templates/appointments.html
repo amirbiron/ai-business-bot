@@ -5,57 +5,14 @@
     <h1><i class="bi bi-calendar-check"></i> תורים</h1>
 </div>
 
-{# ── לוח שנה חודשי ── #}
+{# ── לוח שנה חודשי (מתרענן אוטומטית כל 15 שניות) ── #}
 <div class="card animate-slide-up" style="margin-bottom: 1.5rem;">
-    <div class="card-body" style="padding: 1rem;">
-        <div class="cal-nav">
-            <a href="?year={{ prev_year }}&month={{ prev_month }}" class="btn btn-sm btn-outline-secondary">
-                <i class="bi bi-chevron-right"></i>
-            </a>
-            <h2 class="cal-title">{{ cal_month_name }} {{ cal_year }}</h2>
-            <a href="?year={{ next_year }}&month={{ next_month }}" class="btn btn-sm btn-outline-secondary">
-                <i class="bi bi-chevron-left"></i>
-            </a>
-        </div>
-
-        <div class="cal-grid">
-            {# כותרות ימים #}
-            <div class="cal-header">א׳</div>
-            <div class="cal-header">ב׳</div>
-            <div class="cal-header">ג׳</div>
-            <div class="cal-header">ד׳</div>
-            <div class="cal-header">ה׳</div>
-            <div class="cal-header">ו׳</div>
-            <div class="cal-header">ש׳</div>
-
-            {# שבועות #}
-            {% for week in cal_weeks %}
-                {% for day_num in week %}
-                    {% if day_num == 0 %}
-                    <div class="cal-cell cal-empty"></div>
-                    {% else %}
-                        {% set day_iso = "%04d-%02d-%02d"|format(cal_year, cal_month, day_num) %}
-                        {% set day_appts = appt_by_date.get(day_iso, []) %}
-                        <div class="cal-cell{% if day_iso == today_iso %} cal-today{% endif %}{% if day_appts %} cal-has-appts{% endif %}"
-                             {% if day_appts %}data-day="{{ day_iso }}" onclick="toggleDayDetail(this)"{% endif %}>
-                            <span class="cal-day-num">{{ day_num }}</span>
-                            {% if day_appts %}
-                            <span class="cal-badge">{{ day_appts|length }}</span>
-                            {% endif %}
-                            {% for a in day_appts[:3] %}
-                            <div class="cal-appt cal-appt-{{ a.status }}">
-                                <span class="cal-appt-time">{{ a.preferred_time }}</span>
-                                {{ a.username|truncate(8, True) }}
-                            </div>
-                            {% endfor %}
-                            {% if day_appts|length > 3 %}
-                            <div class="cal-more">+{{ day_appts|length - 3 }} נוספים</div>
-                            {% endif %}
-                        </div>
-                    {% endif %}
-                {% endfor %}
-            {% endfor %}
-        </div>
+    <div class="card-body" style="padding: 1rem;"
+         id="appointments-calendar"
+         hx-get="/api/appointments/calendar?year={{ cal_year }}&month={{ cal_month }}"
+         hx-trigger="every 15s"
+         hx-swap="innerHTML settle:0.1s">
+        {% include "partials/appointments_calendar.html" %}
     </div>
 </div>
 
@@ -85,11 +42,10 @@
     <div class="card-body" style="padding: 0;">
         <details>
             <summary style="padding: 1rem; cursor: pointer; color: var(--text-secondary);">
-                <i class="bi bi-table"></i> רשימה מלאה ({{ appointments|length }} תורים)
+                <i class="bi bi-table"></i> רשימה מלאה (<span id="appt-count">{{ appointments|length }}</span> תורים)
             </summary>
-            {% if appointments %}
             <div class="table-wrapper">
-                <table id="appointments-table">
+                <table id="appointments-table" {% if not appointments %}style="display:none;"{% endif %}>
                     <thead>
                         <tr>
                             <th class="sortable" data-col="0">מזהה <i class="bi bi-chevron-expand sort-icon"></i></th>
@@ -103,19 +59,20 @@
                             <th>פעולות</th>
                         </tr>
                     </thead>
-                    <tbody id="appointments-table-body">
+                    <tbody id="appointments-table-body"
+                           hx-get="/api/appointments/rows"
+                           hx-trigger="every 15s"
+                           hx-swap="innerHTML settle:0.1s">
                         {% for appt in appointments %}
                         {% include "partials/appointment_row.html" %}
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
-            {% else %}
-            <div class="empty-state">
+            <div id="appt-empty-state" class="empty-state" {% if appointments %}style="display:none;"{% endif %}>
                 <i class="bi bi-calendar-plus"></i>
                 <p>אין עדיין תורים.</p>
             </div>
-            {% endif %}
         </details>
     </div>
 </div>
@@ -125,12 +82,16 @@
 <script>
 /* ── פירוט יום בלחיצה ── */
 var allAppts = {{ appointments|tojson }};
-var apptByDate = {};
-allAppts.forEach(function(a) {
-    if (!a.preferred_date) return;
-    if (!apptByDate[a.preferred_date]) apptByDate[a.preferred_date] = [];
-    apptByDate[a.preferred_date].push(a);
-});
+
+function _rebuildApptIndex() {
+    window._apptByDate = {};
+    allAppts.forEach(function(a) {
+        if (!a.preferred_date) return;
+        if (!window._apptByDate[a.preferred_date]) window._apptByDate[a.preferred_date] = [];
+        window._apptByDate[a.preferred_date].push(a);
+    });
+}
+_rebuildApptIndex();
 
 var statusMap = {pending: 'ממתין', confirmed: 'מאושר', cancelled: 'בוטל', passed: 'עבר'};
 var badgeClass = {pending: 'badge-warning', confirmed: 'badge-success', cancelled: 'badge-danger', passed: 'badge-muted'};
@@ -154,7 +115,7 @@ function toggleDayDetail(el) {
         return;
     }
 
-    var list = apptByDate[day] || [];
+    var list = (window._apptByDate || {})[day] || [];
     title.textContent = '📅 ' + day + ' (' + list.length + ' תורים)';
     body.innerHTML = '';
 
@@ -190,6 +151,41 @@ function toggleDayDetail(el) {
     panel.scrollIntoView({behavior: 'smooth', block: 'nearest'});
 }
 
+/* ── עדכון allAppts כשהלוח מתרענן ── */
+/* דילוג על ריענון טבלת תורים אם המשתמש מקליד בשדה קלט */
+document.body.addEventListener('htmx:beforeSwap', function(e) {
+    if (e.detail.target && e.detail.target.id === 'appointments-table-body') {
+        var focused = document.activeElement;
+        if (focused && focused.tagName === 'INPUT' && e.detail.target.contains(focused)) {
+            e.detail.shouldSwap = false;
+            return;
+        }
+    }
+});
+
+document.body.addEventListener('htmx:afterSwap', function(e) {
+    if (e.detail.target && e.detail.target.id === 'appointments-calendar') {
+        /* ריענון הלוח הצליח — צריך לרענן גם את ה-JS data לפירוט יום */
+        fetch('/api/appointments/data')
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                allAppts = data;
+                _rebuildApptIndex();
+            })
+            .catch(function() {});
+    }
+    /* עדכון מונה ו-empty state בטבלה */
+    if (e.detail.target && e.detail.target.id === 'appointments-table-body') {
+        var table = document.getElementById('appointments-table');
+        var empty = document.getElementById('appt-empty-state');
+        var counter = document.getElementById('appt-count');
+        var hasRows = e.detail.target.querySelector('tr') !== null;
+        if (table) table.style.display = hasRows ? '' : 'none';
+        if (empty) empty.style.display = hasRows ? 'none' : '';
+        if (counter) counter.textContent = e.detail.target.querySelectorAll('tr').length;
+    }
+});
+
 /* ── מיון טבלה (רשימה מלאה) ── */
 (function() {
     var table = document.getElementById('appointments-table');
@@ -198,6 +194,27 @@ function toggleDayDetail(el) {
     var headers = table.querySelectorAll('th.sortable');
     var currentCol = -1;
     var ascending = true;
+
+    function applySort() {
+        if (currentCol < 0) return;
+        var rows = Array.from(tbody.querySelectorAll('tr'));
+        var col = currentCol;
+        rows.sort(function(a, b) {
+            var cellA = a.cells[col];
+            var cellB = b.cells[col];
+            if (!cellA || !cellB) return 0;
+            var valA = (cellA.dataset.sortValue || cellA.textContent).trim();
+            var valB = (cellB.dataset.sortValue || cellB.textContent).trim();
+            var numA = Number(valA);
+            var numB = Number(valB);
+            if (!isNaN(numA) && !isNaN(numB) && valA !== '' && valB !== '') {
+                return ascending ? numA - numB : numB - numA;
+            }
+            var cmp = valA.localeCompare(valB, 'he');
+            return ascending ? cmp : -cmp;
+        });
+        rows.forEach(function(row) { tbody.appendChild(row); });
+    }
 
     headers.forEach(function(th) {
         th.addEventListener('click', function() {
@@ -216,22 +233,15 @@ function toggleDayDetail(el) {
                 ? 'bi bi-chevron-up sort-icon' : 'bi bi-chevron-down sort-icon';
             th.classList.add('sort-active');
 
-            var rows = Array.from(tbody.querySelectorAll('tr'));
-            rows.sort(function(a, b) {
-                var cellA = a.cells[col];
-                var cellB = b.cells[col];
-                var valA = (cellA.dataset.sortValue || cellA.textContent).trim();
-                var valB = (cellB.dataset.sortValue || cellB.textContent).trim();
-                var numA = Number(valA);
-                var numB = Number(valB);
-                if (!isNaN(numA) && !isNaN(numB) && valA !== '' && valB !== '') {
-                    return ascending ? numA - numB : numB - numA;
-                }
-                var cmp = valA.localeCompare(valB, 'he');
-                return ascending ? cmp : -cmp;
-            });
-            rows.forEach(function(row) { tbody.appendChild(row); });
+            applySort();
         });
+    });
+
+    /* שמירת סדר מיון אחרי ריענון HTMX */
+    document.body.addEventListener('htmx:afterSwap', function(e) {
+        if (e.detail.target && e.detail.target.id === 'appointments-table-body') {
+            applySort();
+        }
     });
 })();
 </script>
