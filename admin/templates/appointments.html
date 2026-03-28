@@ -116,7 +116,8 @@ function toggleDayDetail(el) {
     }
 
     var list = (window._apptByDate || {})[day] || [];
-    title.textContent = '📅 ' + day + ' (' + list.length + ' תורים)';
+    var dayDisplay = day.split('-').reverse().join('-');
+    title.textContent = '📅 ' + dayDisplay + ' (' + list.length + ' תורים)';
     body.innerHTML = '';
 
     list.forEach(function(a) {
