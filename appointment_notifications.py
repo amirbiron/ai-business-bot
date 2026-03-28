@@ -46,7 +46,7 @@ def _build_cancelled_message(
 ) -> str:
     """בניית הודעת ביטול תור."""
     lines = [
-        f"התור שלך ב{BUSINESS_NAME} בוטל",
+        f"😑 התור שלך ב{BUSINESS_NAME} בוטל",
         "",
         f"📋 <b>שירות:</b> {service}",
         f"📅 <b>תאריך:</b> {date}",
