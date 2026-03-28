@@ -103,7 +103,10 @@
                             <th>פעולות</th>
                         </tr>
                     </thead>
-                    <tbody id="appointments-table-body">
+                    <tbody id="appointments-table-body"
+                           hx-get="/api/appointments/rows"
+                           hx-trigger="every 15s"
+                           hx-swap="innerHTML settle:0.1s">
                         {% for appt in appointments %}
                         {% include "partials/appointment_row.html" %}
                         {% endfor %}

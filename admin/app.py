@@ -1307,6 +1307,35 @@ def create_admin_app() -> Flask:
 
     # ─── API Endpoints (for AJAX) ─────────────────────────────────────────
 
+    @app.route("/api/requests/rows")
+    @login_required
+    def api_requests_rows():
+        """שורות טבלת בקשות נציג — לריענון אוטומטי עם HTMX polling."""
+        requests_list = db.get_agent_requests()
+        active_live_chats = {lc["user_id"] for lc in LiveChatService.get_all_active()}
+        html_parts = []
+        for req in requests_list:
+            html_parts.append(render_template(
+                "partials/request_row.html",
+                req=req,
+                active_live_chats=active_live_chats,
+            ))
+        return "".join(html_parts)
+
+    @app.route("/api/appointments/rows")
+    @login_required
+    def api_appointments_rows():
+        """שורות טבלת תורים — לריענון אוטומטי עם HTMX polling."""
+        db.expire_past_appointments()
+        appointments_list = db.get_appointments()
+        html_parts = []
+        for appt in appointments_list:
+            html_parts.append(render_template(
+                "partials/appointment_row.html",
+                appt=appt,
+            ))
+        return "".join(html_parts)
+
     @app.route("/api/stats")
     @login_required
     def api_stats():
