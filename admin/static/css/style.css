@@ -9,6 +9,7 @@
     --bg-dark: #0F172A;
     --bg-darker: #020617;
     --bg-card: #1E293B;
+    --bg-input: #f5f0e8;
 
     /* Text */
     --text-primary: #F8FAFC;
@@ -18,6 +19,7 @@
     /* Brand */
     --brand-blue: #2563EB;
     --brand-purple: #7C3AED;
+    --brand-purple-light: #a78bfa;
 
     /* Status */
     --success: #10B981;
@@ -627,8 +629,8 @@ table tbody tr:last-child td {
 }
 
 .badge-category {
-    background: rgba(124, 58, 237, 0.15);
-    color: var(--brand-purple);
+    background: rgba(124, 58, 237, 0.18);
+    color: var(--brand-purple-light);
 }
 
 /* --- Forms --- */
@@ -659,9 +661,23 @@ table tbody tr:last-child td {
     line-height: 1.5;
 }
 
+.form-control {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: #1a1a1a;
+    font-family: 'Assistant', sans-serif;
+    font-size: 0.9375rem;
+    transition: var(--transition);
+    line-height: 1.5;
+}
+
 .form-input:focus,
 .form-textarea:focus,
-.form-select:focus {
+.form-select:focus,
+.form-control:focus {
     outline: none;
     border-color: var(--brand-blue);
     box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
@@ -672,9 +688,18 @@ table tbody tr:last-child td {
     color: var(--text-muted);
 }
 
+.form-control::placeholder {
+    color: #999;
+}
+
 .form-textarea {
     resize: vertical;
     min-height: 100px;
+}
+
+.form-control-sm {
+    padding: 0.375rem 0.625rem;
+    font-size: 0.8125rem;
 }
 
 .form-hint {
