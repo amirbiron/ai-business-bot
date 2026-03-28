@@ -826,7 +826,7 @@ def is_returning_customer(user_id: str) -> bool:
     with get_connection() as conn:
         row = conn.execute(
             "SELECT 1 FROM appointments WHERE user_id = ? "
-            "AND status = 'confirmed' AND preferred_date < ? "
+            "AND status = 'confirmed' AND preferred_date != '' AND preferred_date < ? "
             "LIMIT 1",
             (user_id, today_il)
         ).fetchone()

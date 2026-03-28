@@ -26,11 +26,11 @@ def _build_confirmed_message(
 ) -> str:
     """בניית הודעת אישור תור."""
     lines = [
-        f"התור שלך ב{BUSINESS_NAME} אושר! ✅",
+        f"התור שלך ב{BUSINESS_NAME} אושר ✅",
         "",
-        f"📋 שירות: {service}",
-        f"📅 תאריך: {date}",
-        f"🕐 שעה: {time}",
+        f"📋 <b>שירות:</b> {service}",
+        f"📅 <b>תאריך:</b> {date}",
+        f"🕐 <b>שעה:</b> {time}",
     ]
     if owner_message:
         lines += ["", f"💬 {owner_message}"]
@@ -46,11 +46,11 @@ def _build_cancelled_message(
 ) -> str:
     """בניית הודעת ביטול תור."""
     lines = [
-        f"התור שלך ב{BUSINESS_NAME} בוטל ❌",
+        f"התור שלך ב{BUSINESS_NAME} בוטל",
         "",
-        f"📋 שירות: {service}",
-        f"📅 תאריך: {date}",
-        f"🕐 שעה: {time}",
+        f"📋 <b>שירות:</b> {service}",
+        f"📅 <b>תאריך:</b> {date}",
+        f"🕐 <b>שעה:</b> {time}",
     ]
     if owner_message:
         lines += ["", f"💬 {owner_message}"]
@@ -105,7 +105,7 @@ def notify_appointment_status(appt: dict, owner_message: str = "") -> bool:
         owner_message=owner_message.strip(),
     )
 
-    success = send_telegram_message(user_id, text)
+    success = send_telegram_message(user_id, text, parse_mode="HTML")
     if success:
         logger.info(
             "Sent %s notification to user %s for appointment #%s",
@@ -131,9 +131,9 @@ def _build_reminder_message(
     lines = [
         f"🔔 תזכורת: יש לך תור מחר ב{BUSINESS_NAME}!",
         "",
-        f"📋 שירות: {service}",
-        f"📅 תאריך: {date}",
-        f"🕐 שעה: {time}",
+        f"📋 <b>שירות:</b> {service}",
+        f"📅 <b>תאריך:</b> {date}",
+        f"🕐 <b>שעה:</b> {time}",
         "",
         "נתראה! 😊",
     ]
@@ -181,7 +181,7 @@ def send_appointment_reminders() -> dict:
                 date=appt.get("preferred_date", ""),
                 time=appt.get("preferred_time", ""),
             )
-            success = send_telegram_message(appt["user_id"], text)
+            success = send_telegram_message(appt["user_id"], text, parse_mode="HTML")
             if success:
                 db.mark_reminder_sent(appt["id"])
                 sent += 1
