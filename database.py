@@ -782,6 +782,28 @@ def get_appointment(appt_id: int) -> Optional[dict]:
         return dict(row) if row else None
 
 
+def get_pending_appointments_for_user(user_id: str) -> list[dict]:
+    """שליפת תורים ממתינים (pending) של משתמש — רק אלה שהלקוח יכול לשנות/לבטל."""
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT * FROM appointments WHERE user_id = ? AND status = 'pending' "
+            "AND preferred_date >= date('now') ORDER BY preferred_date, preferred_time",
+            (user_id,)
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def cancel_appointment(appt_id: int, user_id: str) -> bool:
+    """ביטול תור ע״י הלקוח — רק אם הוא pending ושייך למשתמש. מחזיר True אם בוטל."""
+    with get_connection() as conn:
+        cursor = conn.execute(
+            "UPDATE appointments SET status = 'cancelled' "
+            "WHERE id = ? AND user_id = ? AND status = 'pending'",
+            (appt_id, user_id)
+        )
+        return cursor.rowcount > 0
+
+
 # ─── Live Chats ─────────────────────────────────────────────────────────────
 
 def start_live_chat(user_id: str, username: str = "") -> int:
