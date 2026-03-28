@@ -42,23 +42,32 @@
 (function() {
     var table = document.getElementById('requests-table');
     var emptyState = document.getElementById('requests-empty-state');
-
-    // הצגה/הסתרה אוטומטית של טבלה ו-empty state לפי תוכן
-    if (table) {
-        document.body.addEventListener('htmx:afterSwap', function(e) {
-            if (e.detail.target && e.detail.target.id === 'requests-table-body') {
-                var hasRows = e.detail.target.querySelector('tr') !== null;
-                table.style.display = hasRows ? '' : 'none';
-                if (emptyState) emptyState.style.display = hasRows ? 'none' : '';
-            }
-        });
-    }
-
     if (!table) return;
     var tbody = table.querySelector('tbody');
     var headers = table.querySelectorAll('th.sortable');
     var currentCol = -1;
     var ascending = true;
+
+    function applySort() {
+        if (currentCol < 0) return;
+        var rows = Array.from(tbody.querySelectorAll('tr'));
+        var col = currentCol;
+        rows.sort(function(a, b) {
+            var cellA = a.cells[col];
+            var cellB = b.cells[col];
+            if (!cellA || !cellB) return 0;
+            var valA = (cellA.dataset.sortValue || cellA.textContent).trim();
+            var valB = (cellB.dataset.sortValue || cellB.textContent).trim();
+            var numA = Number(valA);
+            var numB = Number(valB);
+            if (!isNaN(numA) && !isNaN(numB) && valA !== '' && valB !== '') {
+                return ascending ? numA - numB : numB - numA;
+            }
+            var cmp = valA.localeCompare(valB, 'he');
+            return ascending ? cmp : -cmp;
+        });
+        rows.forEach(function(row) { tbody.appendChild(row); });
+    }
 
     headers.forEach(function(th) {
         th.addEventListener('click', function() {
@@ -79,26 +88,18 @@
                 ? 'bi bi-chevron-up sort-icon' : 'bi bi-chevron-down sort-icon';
             th.classList.add('sort-active');
 
-            // מיון שורות
-            var rows = Array.from(tbody.querySelectorAll('tr'));
-            rows.sort(function(a, b) {
-                var cellA = a.cells[col];
-                var cellB = b.cells[col];
-                var valA = (cellA.dataset.sortValue || cellA.textContent).trim();
-                var valB = (cellB.dataset.sortValue || cellB.textContent).trim();
-
-                // מספרים טהורים בלבד (עמודת מזהה)
-                var numA = Number(valA);
-                var numB = Number(valB);
-                if (!isNaN(numA) && !isNaN(numB) && valA !== '' && valB !== '') {
-                    return ascending ? numA - numB : numB - numA;
-                }
-                // טקסט
-                var cmp = valA.localeCompare(valB, 'he');
-                return ascending ? cmp : -cmp;
-            });
-            rows.forEach(function(row) { tbody.appendChild(row); });
+            applySort();
         });
+    });
+
+    // שמירת סדר מיון אחרי ריענון HTMX
+    document.body.addEventListener('htmx:afterSwap', function(e) {
+        if (e.detail.target && e.detail.target.id === 'requests-table-body') {
+            var hasRows = e.detail.target.querySelector('tr') !== null;
+            table.style.display = hasRows ? '' : 'none';
+            if (emptyState) emptyState.style.display = hasRows ? 'none' : '';
+            applySort();
+        }
     });
 })();
 </script>
