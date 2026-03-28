@@ -169,6 +169,13 @@ document.body.addEventListener('htmx:beforeSwap', function(e) {
     var newContent = (e.detail.serverResponse || '').trim();
     if (newContent && target.innerHTML.trim() === newContent) {
         e.detail.shouldSwap = false;
+        /* גם כשהלוח לא השתנה ויזואלית, צריך לרענן את נתוני התורים לפירוט יום */
+        if (target.id === 'appointments-calendar') {
+            fetch('/api/appointments/data')
+                .then(function(r) { return r.json(); })
+                .then(function(data) { allAppts = data; _rebuildApptIndex(); })
+                .catch(function() {});
+        }
     }
 });
 
