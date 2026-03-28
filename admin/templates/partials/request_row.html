@@ -14,7 +14,7 @@
         </div>
     </td>
     <td data-label="הודעה">{{ req.message }}</td>
-    <td data-label="סטטוס">
+    <td data-label="סטטוס" data-sort-value="{{ req.status }}">
         {% if req.status == 'pending' and active_live_chats is defined and req.user_id in active_live_chats %}
         <span class="badge badge-success">בשיחה חיה</span>
         {% elif req.status == 'pending' %}
@@ -27,7 +27,7 @@
         <span class="badge badge-muted">{{ req.status }}</span>
         {% endif %}
     </td>
-    <td data-label="נוצר" class="text-small text-muted" title="{{ req.created_at|il_datetime }}">{{ req.created_at|relative_time }}</td>
+    <td data-label="נוצר" class="text-small text-muted" title="{{ req.created_at|il_datetime }}" data-sort-value="{{ req.created_at }}">{{ req.created_at|relative_time }}</td>
     <td data-label="פעולות">
         {% if req.status == 'pending' and active_live_chats is defined and req.user_id in active_live_chats %}
         <div class="actions-cell">
