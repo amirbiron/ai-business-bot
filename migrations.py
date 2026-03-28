@@ -6,6 +6,8 @@ UNIQUE constraint או מעבר סכימה) דורשות CREATE TABLE + INSERT +
 """
 
 import logging
+import re
+from datetime import date, timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -220,3 +222,36 @@ def run_migrations(conn) -> None:
                 ON appointments(user_id, preferred_date, preferred_time)
                 WHERE preferred_date != '' AND preferred_time != ''
         """)
+
+    # ─── appointments: נרמול תאריכים ישנים בפורמט עברי → YYYY-MM-DD ──────
+    # תורים ישנים שנשמרו עם "מחר" / "יום שני" / "15/3" לפני שנוסף normalize_date.
+    # נרמול לפי created_at כ-reference date (היום שבו המשתמש הזמין).
+    _ISO_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+    non_iso_rows = conn.execute(
+        "SELECT id, preferred_date, created_at FROM appointments "
+        "WHERE preferred_date != '' AND preferred_date NOT LIKE '____-__-__'"
+    ).fetchall()
+    if non_iso_rows:
+        from entity_extraction import normalize_date  # noqa: E402 — lazy import
+        migrated = 0
+        for row in non_iso_rows:
+            # חילוץ reference date מתוך created_at (היום שהמשתמש הזמין)
+            ref = None
+            try:
+                ref = date.fromisoformat(row["created_at"][:10])
+            except (ValueError, TypeError):
+                pass
+            normalized = normalize_date(row["preferred_date"], ref_date=ref)
+            if normalized:
+                conn.execute(
+                    "UPDATE appointments SET preferred_date = ? WHERE id = ?",
+                    (normalized, row["id"]),
+                )
+                migrated += 1
+            else:
+                logger.warning(
+                    "Could not normalize appointment date id=%s: %r",
+                    row["id"], row["preferred_date"],
+                )
+        if migrated:
+            logger.info("Normalized %d/%d old appointment dates to YYYY-MM-DD", migrated, len(non_iso_rows))

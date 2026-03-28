@@ -1,0 +1,49 @@
+{# לוח שנה חודשי — partial לריענון אוטומטי #}
+<div class="cal-nav">
+    <a href="?year={{ prev_year }}&month={{ prev_month }}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-chevron-right"></i>
+    </a>
+    <h2 class="cal-title">{{ cal_month_name }} {{ cal_year }}</h2>
+    <a href="?year={{ next_year }}&month={{ next_month }}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-chevron-left"></i>
+    </a>
+</div>
+
+<div class="cal-grid">
+    {# כותרות ימים #}
+    <div class="cal-header">א׳</div>
+    <div class="cal-header">ב׳</div>
+    <div class="cal-header">ג׳</div>
+    <div class="cal-header">ד׳</div>
+    <div class="cal-header">ה׳</div>
+    <div class="cal-header">ו׳</div>
+    <div class="cal-header">ש׳</div>
+
+    {# שבועות #}
+    {% for week in cal_weeks %}
+        {% for day_num in week %}
+            {% if day_num == 0 %}
+            <div class="cal-cell cal-empty"></div>
+            {% else %}
+                {% set day_iso = "%04d-%02d-%02d"|format(cal_year, cal_month, day_num) %}
+                {% set day_appts = appt_by_date.get(day_iso, []) %}
+                <div class="cal-cell{% if day_iso == today_iso %} cal-today{% endif %}{% if day_appts %} cal-has-appts{% endif %}"
+                     {% if day_appts %}data-day="{{ day_iso }}" onclick="toggleDayDetail(this)"{% endif %}>
+                    <span class="cal-day-num">{{ day_num }}</span>
+                    {% if day_appts %}
+                    <span class="cal-badge">{{ day_appts|length }}</span>
+                    {% endif %}
+                    {% for a in day_appts[:3] %}
+                    <div class="cal-appt cal-appt-{{ a.status }}">
+                        <span class="cal-appt-time">{{ a.preferred_time }}</span>
+                        {{ a.username|truncate(8, True) }}
+                    </div>
+                    {% endfor %}
+                    {% if day_appts|length > 3 %}
+                    <div class="cal-more">+{{ day_appts|length - 3 }} נוספים</div>
+                    {% endif %}
+                </div>
+            {% endif %}
+        {% endfor %}
+    {% endfor %}
+</div>

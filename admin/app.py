@@ -1336,6 +1336,64 @@ def create_admin_app() -> Flask:
             ))
         return "".join(html_parts)
 
+    @app.route("/api/appointments/calendar")
+    @login_required
+    def api_appointments_calendar():
+        """לוח שנה חודשי — HTML partial לריענון אוטומטי."""
+        import calendar as _cal
+        from collections import defaultdict
+
+        db.expire_past_appointments()
+        appointments_list = db.get_appointments()
+
+        year = request.args.get("year", type=int)
+        month = request.args.get("month", type=int)
+        today = datetime.now().date()
+        if not year or not month:
+            year, month = today.year, today.month
+
+        if month == 1:
+            prev_year, prev_month = year - 1, 12
+        else:
+            prev_year, prev_month = year, month - 1
+        if month == 12:
+            next_year, next_month = year + 1, 1
+        else:
+            next_year, next_month = year, month + 1
+
+        appt_by_date = defaultdict(list)
+        for a in appointments_list:
+            d = a.get("preferred_date", "")
+            if d:
+                appt_by_date[d].append(a)
+
+        month_days = _cal.Calendar(firstweekday=6).monthdayscalendar(year, month)
+        he_months = [
+            "", "ינואר", "פברואר", "מרץ", "אפריל", "מאי", "יוני",
+            "יולי", "אוגוסט", "ספטמבר", "אוקטובר", "נובמבר", "דצמבר",
+        ]
+
+        return render_template(
+            "partials/appointments_calendar.html",
+            cal_weeks=month_days,
+            cal_year=year,
+            cal_month=month,
+            cal_month_name=he_months[month],
+            prev_year=prev_year,
+            prev_month=prev_month,
+            next_year=next_year,
+            next_month=next_month,
+            appt_by_date=appt_by_date,
+            today_iso=today.isoformat(),
+        )
+
+    @app.route("/api/appointments/data")
+    @login_required
+    def api_appointments_data():
+        """נתוני תורים כ-JSON — לעדכון ה-JS data אחרי ריענון הלוח."""
+        db.expire_past_appointments()
+        return jsonify(db.get_appointments())
+
     @app.route("/api/stats")
     @login_required
     def api_stats():
