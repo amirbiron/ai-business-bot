@@ -815,6 +815,17 @@ def has_confirmed_appointments(user_id: str) -> bool:
         return row is not None
 
 
+def is_returning_customer(user_id: str) -> bool:
+    """בדיקה אם המשתמש לקוח חוזר — יש לו תורים שאושרו או בוצעו בעבר."""
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT 1 FROM appointments WHERE user_id = ? "
+            "AND status IN ('confirmed', 'passed') LIMIT 1",
+            (user_id,)
+        ).fetchone()
+        return row is not None
+
+
 # ─── Live Chats ─────────────────────────────────────────────────────────────
 
 def start_live_chat(user_id: str, username: str = "") -> int:
