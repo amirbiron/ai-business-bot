@@ -1023,9 +1023,24 @@ def create_admin_app() -> Flask:
             if tone not in TONE_DEFINITIONS:
                 flash("טון לא חוקי.", "danger")
             else:
-                db.update_bot_settings(tone, custom_phrases)
-                _audit_log("bot_settings", f"tone={tone}")
-                flash("הגדרות הבוט עודכנו בהצלחה!", "success")
+                # בדיקה אם זה טופס תזכורות או טופס טון
+                form_type = request.form.get("form_type", "")
+                reminder_enabled = None
+                reminder_time = None
+                if form_type == "reminder":
+                    reminder_enabled = bool(request.form.get("reminder_enabled"))
+                    reminder_time = request.form.get("reminder_time", "10:00").strip()
+                    if not _is_valid_time(reminder_time):
+                        flash("שעה לא חוקית — יש להזין בפורמט HH:MM.", "danger")
+                        return redirect(url_for("bot_settings"))
+
+                db.update_bot_settings(tone, custom_phrases, reminder_enabled, reminder_time)
+                if form_type == "reminder":
+                    _audit_log("bot_settings", f"reminder_enabled={reminder_enabled}, reminder_time={reminder_time}")
+                    flash("הגדרות תזכורת עודכנו בהצלחה!", "success")
+                else:
+                    _audit_log("bot_settings", f"tone={tone}")
+                    flash("הגדרות הבוט עודכנו בהצלחה!", "success")
             return redirect(url_for("bot_settings"))
 
         settings = db.get_bot_settings()

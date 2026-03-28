@@ -204,6 +204,33 @@ class TestAppointments:
         assert db.count_appointments("pending") == 1  # u2 — עתידי
         assert db.count_appointments("confirmed") == 1  # u4 — לא משתנה
 
+    def test_get_appointments_for_reminder(self, db):
+        """רק תורים מאושרים שלא נשלחה להם תזכורת מוחזרים."""
+        # מאושר — צריך להיכלל
+        a1 = db.create_appointment("u1", "א", preferred_date="2026-04-01", preferred_time="10:00")
+        db.update_appointment_status(a1, "confirmed")
+        # ממתין — לא צריך להיכלל
+        db.create_appointment("u2", "ב", preferred_date="2026-04-01", preferred_time="11:00")
+        # מאושר אבל כבר נשלחה תזכורת
+        a3 = db.create_appointment("u3", "ג", preferred_date="2026-04-01", preferred_time="12:00")
+        db.update_appointment_status(a3, "confirmed")
+        db.mark_reminder_sent(a3)
+        # מאושר אבל תאריך אחר
+        a4 = db.create_appointment("u4", "ד", preferred_date="2026-04-02", preferred_time="10:00")
+        db.update_appointment_status(a4, "confirmed")
+
+        results = db.get_appointments_for_reminder("2026-04-01")
+        assert len(results) == 1
+        assert results[0]["user_id"] == "u1"
+
+    def test_mark_reminder_sent(self, db):
+        """סימון תזכורת שנשלחה."""
+        appt_id = db.create_appointment("u1", "א", preferred_date="2026-04-01", preferred_time="10:00")
+        db.update_appointment_status(appt_id, "confirmed")
+        assert db.get_appointment(appt_id)["reminder_sent"] == 0
+        db.mark_reminder_sent(appt_id)
+        assert db.get_appointment(appt_id)["reminder_sent"] == 1
+
 
 class TestBusinessHours:
     def test_upsert_and_get(self, db):
