@@ -160,16 +160,16 @@ function toggleDayDetail(el) {
 
     list.forEach(function(a) {
         var tr = document.createElement('tr');
-        tr.id = 'appointment-row-' + a.id;
+        tr.id = 'cal-appt-row-' + a.id;
         var badge = '<span class="badge ' + (badgeClass[a.status]||'') + '">' + (statusMap[a.status]||a.status) + '</span>';
 
         var actions = '';
         if (a.status === 'pending') {
             actions =
-                '<input type="text" name="owner_message" id="owner-msg-' + a.id + '" class="form-control form-control-sm mb-1" placeholder="הודעה אישית (אופציונלי)" style="min-width:140px;">' +
+                '<input type="text" name="owner_message" id="cal-msg-' + a.id + '" class="form-control form-control-sm mb-1" placeholder="הודעה אישית (אופציונלי)" style="min-width:140px;">' +
                 '<div class="d-flex gap-1">' +
-                '<button class="btn btn-success btn-sm" hx-post="/appointments/' + a.id + '/update" hx-vals=\'{"status":"confirmed"}\' hx-include="#owner-msg-' + a.id + '" hx-target="#appointment-row-' + a.id + '" hx-swap="outerHTML swap:0.2s"><i class="bi bi-check-lg"></i> אשר</button>' +
-                '<button class="btn btn-outline-danger btn-sm" hx-post="/appointments/' + a.id + '/update" hx-vals=\'{"status":"cancelled"}\' hx-include="#owner-msg-' + a.id + '" hx-target="#appointment-row-' + a.id + '" hx-swap="outerHTML swap:0.2s"><i class="bi bi-x-lg"></i> בטל</button>' +
+                '<button class="btn btn-success btn-sm" hx-post="/appointments/' + a.id + '/update" hx-vals=\'{"status":"confirmed"}\' hx-include="#cal-msg-' + a.id + '" hx-target="#cal-appt-row-' + a.id + '" hx-swap="delete swap:0.2s"><i class="bi bi-check-lg"></i> אשר</button>' +
+                '<button class="btn btn-outline-danger btn-sm" hx-post="/appointments/' + a.id + '/update" hx-vals=\'{"status":"cancelled"}\' hx-include="#cal-msg-' + a.id + '" hx-target="#cal-appt-row-' + a.id + '" hx-swap="delete swap:0.2s"><i class="bi bi-x-lg"></i> בטל</button>' +
                 '</div>';
         }
 
