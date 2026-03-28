@@ -25,14 +25,17 @@ logger = logging.getLogger(__name__)
 # ── Telegram & Username Helpers ──────────────────────────────────────────────
 
 
-def send_telegram_message(chat_id: str, text: str) -> bool:
+def send_telegram_message(chat_id: str, text: str, parse_mode: str = "") -> bool:
     """Send a message to a Telegram user via the Bot HTTP API."""
     if not TELEGRAM_BOT_TOKEN:
         return False
     try:
+        payload: dict = {"chat_id": chat_id, "text": text}
+        if parse_mode:
+            payload["parse_mode"] = parse_mode
         resp = http_requests.post(
             f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
-            json={"chat_id": chat_id, "text": text},
+            json=payload,
             timeout=10,
         )
         return resp.ok

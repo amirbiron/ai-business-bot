@@ -18,6 +18,7 @@
 
     /* Brand */
     --brand-blue: #2563EB;
+    --brand-blue-light: #60a5fa;
     --brand-purple: #7C3AED;
     --brand-purple-light: #a78bfa;
 
@@ -659,7 +660,7 @@ table tbody tr:last-child td {
 
 .badge-primary {
     background: rgba(59, 130, 246, 0.2);
-    color: var(--brand-blue);
+    color: var(--brand-blue-light);
     font-weight: 600;
     font-size: 0.8rem;
 }

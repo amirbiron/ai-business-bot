@@ -297,16 +297,26 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if referral_registered:
                 logger.info("Referral registered: user %s via code %s", user_id, arg)
 
+    # בדיקה אם לקוח חוזר (יש לו תורים שאושרו/בוצעו בעבר)
+    returning = db.is_returning_customer(user_id)
+
     # _html.escape לערכי קונפיג בודדים; sanitize_telegram_html לפלט LLM שלם
-    welcome_text = (
-        f"👋 ברוכים הבאים ל-<b>{_html.escape(BUSINESS_NAME)}</b>!\n\n"
-        f"אני העוזר הווירטואלי שלכם. אני יכול לעזור לכם עם:\n"
-        f"• מידע על השירותים והמחירים שלנו\n"
-        f"• בקשת תורים\n"
-        f"• מענה על שאלות\n"
-        f"• חיבור לנציג אנושי\n\n"
-        f"פשוט כתבו את השאלה שלכם או השתמשו בכפתורים למטה! 👇"
-    )
+    if returning:
+        welcome_text = (
+            f"😊 שמחים לראות אותך שוב ב-<b>{_html.escape(BUSINESS_NAME)}</b>!\n\n"
+            f"איך אפשר לעזור הפעם?\n"
+            f"פשוט כתבו את השאלה שלכם או השתמשו בכפתורים למטה! 👇"
+        )
+    else:
+        welcome_text = (
+            f"👋 ברוכים הבאים ל-<b>{_html.escape(BUSINESS_NAME)}</b>!\n\n"
+            f"אני העוזר הווירטואלי שלכם. אני יכול לעזור לכם עם:\n"
+            f"• מידע על השירותים והמחירים שלנו\n"
+            f"• בקשת תורים\n"
+            f"• מענה על שאלות\n"
+            f"• חיבור לנציג אנושי\n\n"
+            f"פשוט כתבו את השאלה שלכם או השתמשו בכפתורים למטה! 👇"
+        )
 
     if referral_registered:
         welcome_text += (
@@ -1103,10 +1113,10 @@ async def cancel_appointment_callback(update: Update, context: ContextTypes.DEFA
             cancelled = db.cancel_appointment(appt["id"], user_id)
             if cancelled:
                 response = (
-                    f"התור שלך בוטל בהצלחה! ✅\n\n"
-                    f"📋 {appt.get('service', '')}\n"
-                    f"📅 {appt.get('preferred_date', '')}\n"
-                    f"🕐 {appt.get('preferred_time', '')}\n\n"
+                    f"התור שלך בוטל בהצלחה ✅\n\n"
+                    f"📋 <b>שירות:</b> {_html.escape(appt.get('service', ''))}\n"
+                    f"📅 <b>תאריך:</b> {_html.escape(appt.get('preferred_date', ''))}\n"
+                    f"🕐 <b>שעה:</b> {_html.escape(appt.get('preferred_time', ''))}\n\n"
                     f"לקביעת תור חדש, שלחו /book"
                 )
             else:

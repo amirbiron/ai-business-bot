@@ -815,6 +815,24 @@ def has_confirmed_appointments(user_id: str) -> bool:
         return row is not None
 
 
+def is_returning_customer(user_id: str) -> bool:
+    """בדיקה אם המשתמש לקוח חוזר — יש לו תורים מאושרים שתאריכם כבר עבר.
+
+    passed לבד לא מספיק כי expire_past_appointments מסמן pending כ-passed
+    (תורים שמעולם לא אושרו). רק confirmed עם תאריך שעבר = לקוח שבאמת הגיע.
+    """
+    from zoneinfo import ZoneInfo
+    today_il = datetime.now(ZoneInfo("Asia/Jerusalem")).strftime("%Y-%m-%d")
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT 1 FROM appointments WHERE user_id = ? "
+            "AND status = 'confirmed' AND preferred_date != '' AND preferred_date < ? "
+            "LIMIT 1",
+            (user_id, today_il)
+        ).fetchone()
+        return row is not None
+
+
 # ─── Live Chats ─────────────────────────────────────────────────────────────
 
 def start_live_chat(user_id: str, username: str = "") -> int:

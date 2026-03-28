@@ -267,6 +267,35 @@ class TestAppointments:
         assert db.cancel_appointment(a1, "u1") is False
         assert db.get_appointment(a1)["status"] == "confirmed"
 
+    def test_is_returning_customer_with_confirmed(self, db):
+        """לקוח עם תור מאושר מזוהה כלקוח חוזר."""
+        assert db.is_returning_customer("u1") is False
+        db.create_appointment("u1", "א", preferred_date="2025-01-01", preferred_time="10:00")
+        # תור ממתין — עדיין לא לקוח חוזר
+        assert db.is_returning_customer("u1") is False
+        # אישור התור — עכשיו לקוח חוזר
+        appts = db.get_appointments()
+        db.update_appointment_status(appts[0]["id"], "confirmed")
+        assert db.is_returning_customer("u1") is True
+
+    def test_is_returning_customer_expired_pending_not_returning(self, db):
+        """תור pending שפג תוקפו (passed) לא נחשב לקוח חוזר — מעולם לא אושר."""
+        a1 = db.create_appointment("u1", "א", preferred_date="2020-01-01", preferred_time="10:00")
+        db.update_appointment_status(a1, "passed")
+        assert db.is_returning_customer("u1") is False
+
+    def test_is_returning_customer_cancelled_not_returning(self, db):
+        """לקוח עם תור מבוטל בלבד לא נחשב לקוח חוזר."""
+        a1 = db.create_appointment("u1", "א", preferred_date="2025-06-01", preferred_time="10:00")
+        db.update_appointment_status(a1, "cancelled")
+        assert db.is_returning_customer("u1") is False
+
+    def test_is_returning_customer_future_confirmed_not_returning(self, db):
+        """לקוח עם תור עתידי מאושר בלבד לא נחשב לקוח חוזר — עדיין לא היה."""
+        a1 = db.create_appointment("u1", "א", preferred_date="2099-01-01", preferred_time="10:00")
+        db.update_appointment_status(a1, "confirmed")
+        assert db.is_returning_customer("u1") is False
+
 
 class TestBusinessHours:
     def test_upsert_and_get(self, db):
