@@ -1254,6 +1254,27 @@ async def _check_high_engagement_referral(update: Update, user_id: str):
         await _maybe_send_referral_code(update, user_id)
 
 
+@rate_limit_guard
+@live_chat_guard
+async def referral_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """פקודת /referral — שחזור קוד הפניה קיים או הסבר שעדיין אין."""
+    from ai_chatbot.referral_service import get_referral_message_text
+
+    user_id, _display_name, _tg_username = _get_user_info(update)
+    code = db.get_user_referral_code(user_id)
+
+    if code:
+        text = get_referral_message_text(code)
+    else:
+        text = (
+            "🎁 עדיין לא קיבלתם קוד הפניה.\n\n"
+            "קוד הפניה נשלח לאחר אישור תור או מעורבות גבוהה — "
+            "ממשיכו להשתמש בבוט ותקבלו אחד בקרוב!"
+        )
+
+    await _reply_html_safe(update.message, text, reply_markup=_get_main_keyboard())
+
+
 # ─── Follow-up Question Callback ─────────────────────────────────────────────
 
 async def follow_up_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
