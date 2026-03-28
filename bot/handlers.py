@@ -42,7 +42,7 @@ from ai_chatbot.config import (
     CONTEXT_WINDOW_SIZE,
     FOLLOW_UP_ENABLED,
 )
-from ai_chatbot.entity_extraction import extract_dates
+from ai_chatbot.entity_extraction import extract_dates, normalize_date
 from ai_chatbot.live_chat_service import live_chat_guard, live_chat_guard_booking
 from ai_chatbot.rate_limiter import rate_limit_guard, rate_limit_guard_booking, check_rate_limit, record_message
 from ai_chatbot.vacation_service import (
@@ -707,20 +707,29 @@ async def booking_service(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 async def booking_date(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Receive the preferred date."""
     user_text = update.message.text
-    context.user_data["booking_date"] = user_text
 
-    # אימות רך — אם לא זוהה תאריך מובנה, מוסיפים רמז (לא חוסמים)
-    dates = extract_dates(user_text)
-    hint = ""
-    if not dates:
-        hint = "\n\n💡 <i>טיפ: ניתן לכתוב תאריך כמו 15/03 או '14 במרץ'.</i>"
+    normalized = normalize_date(user_text)
+    if normalized is None:
+        # לא הצלחנו לפרסר — מבקשים מהמשתמש לנסות שוב
+        await _reply_html_safe(
+            update.message,
+            "🤔 לא הצלחתי לזהות תאריך.\n\n"
+            "אפשר לכתוב למשל:\n"
+            "• <b>מחר</b> / <b>מחרתיים</b>\n"
+            "• <b>יום ראשון</b> / <b>ביום שלישי</b>\n"
+            "• <b>15/03</b> / <b>14 במרץ</b>\n\n"
+            "הקלידו /cancel כדי לחזור.",
+        )
+        return BOOKING_DATE  # נשאר באותו שלב — מחכים לקלט חדש
+
+    context.user_data["booking_date"] = normalized
 
     await _reply_html_safe(
         update.message,
+        f"📅 תאריך: <b>{normalized}</b>\n\n"
         "🕐 איזו <b>שעה</b> מתאימה לכם?\n"
         "(לדוגמה, '10:00', 'אחר הצהריים', '14:00')\n\n"
-        "הקלידו /cancel כדי לחזור."
-        + hint,
+        "הקלידו /cancel כדי לחזור.",
     )
     return BOOKING_TIME
 
